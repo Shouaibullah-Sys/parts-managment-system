@@ -1,15 +1,19 @@
+// app/parts/page.tsx
 "use client";
 
 import { PartsTable } from "@/components/parts/parts-table";
+import { CreatePartDialog } from "@/components/parts/create-part-dialog";
 import { Button } from "@/components/ui/button";
-import { Plus, Download, Upload } from "lucide-react";
-import Link from "next/link";
+import { Plus, Download, Upload, RefreshCw } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function PartsPage() {
   const { data: session } = authClient.useSession();
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (session?.user) {
@@ -21,6 +25,14 @@ export default function PartsPage() {
   }, [session?.user]);
 
   const isAdmin = userRole === "admin";
+
+  const handlePartCreated = () => {
+    setIsCreateDialogOpen(false);
+  };
+
+  const handleRefresh = () => {
+    queryClient.invalidateQueries({ queryKey: ["parts"] });
+  };
 
   return (
     <div className="container mx-auto py-6">
@@ -35,6 +47,12 @@ export default function PartsPage() {
         </div>
 
         <div className="flex gap-2">
+          {/* Refresh Button */}
+          <Button variant="outline" size="sm" onClick={handleRefresh}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Refresh
+          </Button>
+
           {/* Import/Export Buttons - Admin Only */}
           {isAdmin && (
             <>
@@ -51,17 +69,15 @@ export default function PartsPage() {
 
           {/* Create Part Button - Admin Only */}
           {isAdmin && (
-            <Link href="/parts/new">
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Create Part
-              </Button>
-            </Link>
+            <Button onClick={() => setIsCreateDialogOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create Part
+            </Button>
           )}
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Simple Stats Placeholder - You can implement proper stats later */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-card border rounded-lg p-4">
           <div className="flex items-center justify-between">
@@ -121,6 +137,13 @@ export default function PartsPage() {
       </div>
 
       <PartsTable />
+
+      {/* Create Part Dialog */}
+      <CreatePartDialog
+        open={isCreateDialogOpen}
+        onOpenChange={setIsCreateDialogOpen}
+        onPartCreated={handlePartCreated}
+      />
     </div>
   );
 }

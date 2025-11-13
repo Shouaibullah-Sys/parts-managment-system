@@ -36,6 +36,7 @@ import { partFormSchema, PartFormData } from "@/lib/validations/part";
 import { z } from "zod";
 import { usePart, useUpdatePart } from "@/hooks/use-parts";
 import Link from "next/link";
+import Loader from "../loader";
 
 interface EditPartFormProps {
   partId: number;
@@ -107,7 +108,11 @@ export function EditPartForm({ partId }: EditPartFormProps) {
   if (isLoadingPart) {
     return (
       <div className="container max-w-2xl mx-auto py-6 flex justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
+        <Loader
+          title="در حال بارگذاری اطلاعات قطعه..."
+          subtitle="لطفاً منتظر بمانید"
+          size="sm"
+        />
       </div>
     );
   }

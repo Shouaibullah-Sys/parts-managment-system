@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { authClient } from "@/lib/auth-client";
+import Loader from "../loader";
 
 interface Part {
   id: number;
@@ -156,7 +157,11 @@ export function PartsList({ initialParts, initialPagination }: PartsListProps) {
 
       {loading ? (
         <div className="flex justify-center items-center h-32">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <Loader
+            title="در حال بارگذاری قطعات..."
+            subtitle="لطفاً منتظر بمانید"
+            size="sm"
+          />
         </div>
       ) : (
         <>

@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { toast } from "sonner";
+import Loader from "@/components/loader";
 
 interface User {
   id: string;
@@ -225,10 +226,11 @@ export default function AdminDashboard() {
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-96">
-        <div className="text-center">
-          <Loader2 className="size-8 animate-spin mx-auto text-primary" />
-          <p className="mt-4 text-muted-foreground">Loading dashboard...</p>
-        </div>
+        <Loader
+          title="در حال بارگذاری دشبورد ادمین..."
+          subtitle="لطفاً منتظر بمانید"
+          size="md"
+        />
       </div>
     );
   }

@@ -26,9 +26,9 @@ import { z } from "zod";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Loader2 } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import Link from "next/link";
+import Loader from "../loader";
 
 const formSchema = z.object({
   username: z.string().min(3),
@@ -78,6 +78,26 @@ export function SignupForm({
     }
 
     setIsLoading(false);
+  }
+
+  if (isLoading) {
+    return (
+      <div className={cn("flex flex-col gap-6", className)} {...props}>
+        <Card>
+          <CardHeader className="text-center">
+            <CardTitle className="text-xl">خوش آمدید</CardTitle>
+            <CardDescription>با حساب گوگل تان ثبت نام کنید</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Loader
+              title="در حال ایجاد حساب..."
+              subtitle="لطفاً منتظر بمانید"
+              size="sm"
+            />
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   return (
@@ -169,12 +189,8 @@ export function SignupForm({
                       </Link>
                     </div>
                   </div>
-                  <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : (
-                      "ثبت نام"
-                    )}
+                  <Button type="submit" className="w-full">
+                    ثبت نام
                   </Button>
                 </div>
                 <div className="text-center text-sm">

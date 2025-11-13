@@ -1,5 +1,3 @@
-// hooks/use-parts.ts
-
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Part,
@@ -31,6 +29,49 @@ export function useParts(params?: {
       const response = await fetch(`/api/parts?${searchParams}`);
       if (!response.ok) throw new Error("Failed to fetch parts");
       return response.json();
+    },
+    placeholderData: (previousData) => previousData, // Replaces keepPreviousData in v5
+  });
+}
+
+// Fetch parts statistics
+export function usePartsStats() {
+  return useQuery({
+    queryKey: ["parts", "stats"],
+    queryFn: async (): Promise<{
+      total: number;
+      active: number;
+      lowStock: number;
+      outOfStock: number;
+    }> => {
+      try {
+        const [allResponse, activeResponse, lowStockResponse] =
+          await Promise.all([
+            fetch("/api/parts?limit=1"),
+            fetch("/api/parts?active=true&limit=1"),
+            fetch("/api/parts/low-stock"),
+          ]);
+
+        if (!allResponse.ok || !activeResponse.ok || !lowStockResponse.ok) {
+          throw new Error("Failed to fetch parts statistics");
+        }
+
+        const [allData, activeData, lowStockData] = await Promise.all([
+          allResponse.json(),
+          activeResponse.json(),
+          lowStockResponse.json(),
+        ]);
+
+        return {
+          total: allData.pagination?.total || 0,
+          active: activeData.pagination?.total || 0,
+          lowStock: lowStockData.data?.length || 0,
+          outOfStock: 0, // Placeholder - you can implement this later
+        };
+      } catch (error) {
+        console.error("Error fetching parts stats:", error);
+        throw error;
+      }
     },
   });
 }
@@ -76,8 +117,15 @@ export function useCreatePart() {
       if (!response.ok) throw new Error(data.error || "Failed to create part");
       return data.data;
     },
-    onSuccess: () => {
+    onSuccess: (newPart) => {
+      // Invalidate parts list
       queryClient.invalidateQueries({ queryKey: ["parts"] });
+
+      // Invalidate stats
+      queryClient.invalidateQueries({ queryKey: ["parts", "stats"] });
+    },
+    onError: (error: Error) => {
+      console.error("Error creating part:", error);
     },
   });
 }
@@ -105,9 +153,19 @@ export function useUpdatePart() {
         throw new Error(result.error || "Failed to update part");
       return result.data;
     },
-    onSuccess: (_, variables) => {
+    onSuccess: (updatedPart, variables) => {
+      // Update the specific part in cache
+      queryClient.setQueryData(["part", variables.id], {
+        success: true,
+        data: updatedPart,
+      });
+
+      // Invalidate parts list and related queries
       queryClient.invalidateQueries({ queryKey: ["parts"] });
-      queryClient.invalidateQueries({ queryKey: ["part", variables.id] });
+      queryClient.invalidateQueries({ queryKey: ["parts", "stats"] });
+    },
+    onError: (error: Error, variables) => {
+      console.error(`Error updating part ${variables.id}:`, error);
     },
   });
 }
@@ -127,8 +185,53 @@ export function useDeletePart() {
         throw new Error(data.error || "Failed to delete part");
       }
     },
-    onSuccess: () => {
+    onSuccess: (_, id) => {
+      // Remove the part from cache
+      queryClient.removeQueries({ queryKey: ["part", id] });
+
+      // Invalidate parts list and stats
       queryClient.invalidateQueries({ queryKey: ["parts"] });
+      queryClient.invalidateQueries({ queryKey: ["parts", "stats"] });
+    },
+    onError: (error: Error, id) => {
+      console.error(`Error deleting part ${id}:`, error);
+    },
+  });
+}
+
+// Toggle part active status (simplified version)
+export function useTogglePartActive() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      id,
+      active,
+    }: {
+      id: number;
+      active: boolean;
+    }): Promise<Part> => {
+      const response = await fetch(`/api/parts/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ active }),
+      });
+
+      const result = await response.json();
+      if (!response.ok)
+        throw new Error(result.error || "Failed to update part status");
+      return result.data;
+    },
+    onSuccess: (updatedPart) => {
+      // Update the part in cache
+      queryClient.setQueryData(["part", updatedPart.id], {
+        success: true,
+        data: updatedPart,
+      });
+
+      // Invalidate parts list and stats
+      queryClient.invalidateQueries({ queryKey: ["parts"] });
+      queryClient.invalidateQueries({ queryKey: ["parts", "stats"] });
     },
   });
 }

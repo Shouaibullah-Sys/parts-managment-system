@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { authClient } from "@/lib/auth-client";
+import Loader from "../loader";
 
 interface PartDetailsProps {
   partId: number;
@@ -46,7 +47,11 @@ export function PartDetails({ partId }: PartDetailsProps) {
   if (isLoading) {
     return (
       <div className="container max-w-4xl mx-auto py-6 flex justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
+        <Loader
+          title="در حال بارگذاری جزئیات قطعه..."
+          subtitle="لطفاً منتظر بمانید"
+          size="sm"
+        />
       </div>
     );
   }

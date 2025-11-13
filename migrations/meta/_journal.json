@@ -15,6 +15,13 @@
       "when": 1731510331911,
       "tag": "0001_user_approval",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1763057119282,
+      "tag": "0002_last_lightspeed",
+      "breakpoints": true
     }
   ]
 }

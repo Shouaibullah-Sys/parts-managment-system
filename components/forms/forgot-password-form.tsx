@@ -25,9 +25,9 @@ import {
 import { z } from "zod";
 import { toast } from "sonner";
 import { useState } from "react";
-import { Loader2 } from "lucide-react";
 import Link from "next/link";
 import { authClient } from "@/lib/auth-client";
+import Loader from "../loader";
 
 const formSchema = z.object({
   email: z.email().meta({ description: "لطفاً یک ایمیل معتبر وارد کنید" }),
@@ -63,6 +63,30 @@ export function ForgotPasswordForm({
     setIsLoading(false);
   }
 
+  if (isLoading) {
+    return (
+      <div className={cn("flex flex-col gap-6", className)} {...props}>
+        <Card>
+          <CardHeader className="text-center">
+            <CardTitle className="text-xl">
+              رمز عبور را فراموش کرده اید
+            </CardTitle>
+            <CardDescription>
+              ایمیل خود را وارد کنید تا رمز عبور را بازنشانی کنید
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Loader
+              title="در حال ارسال ایمیل..."
+              subtitle="لطفاً منتظر بمانید"
+              size="sm"
+            />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card>
@@ -91,12 +115,8 @@ export function ForgotPasswordForm({
                     )}
                   />
                 </div>
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    "بازنشانی رمز عبور"
-                  )}
+                <Button type="submit" className="w-full">
+                  بازنشانی رمز عبور
                 </Button>
               </div>
               <div className="text-center text-sm">

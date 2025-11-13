@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { Header } from "@/components/header";
 import { authClient } from "@/lib/auth-client";
-import { Loader2 } from "lucide-react";
+import Loader from "@/components/loader";
 
 interface User {
   id: string;
@@ -84,10 +84,11 @@ export default function DashboardLayout({
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-96">
-        <div className="text-center">
-          <Loader2 className="size-8 animate-spin mx-auto" />
-          <p className="mt-4 text-gray-600">Loading...</p>
-        </div>
+        <Loader
+          title="در حال بارگذاری دشبورد..."
+          subtitle="لطفاً منتظر بمانید"
+          size="md"
+        />
       </div>
     );
   }

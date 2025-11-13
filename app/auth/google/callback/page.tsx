@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
-import { Loader2 } from "lucide-react";
+import Loader from "@/components/loader";
 
 export default function GoogleCallback() {
   const router = useRouter();
@@ -52,10 +52,11 @@ export default function GoogleCallback() {
 
   return (
     <div className="flex justify-center items-center min-h-96">
-      <div className="text-center">
-        <Loader2 className="size-8 animate-spin mx-auto" />
-        <p className="mt-4 text-gray-600">Completing sign in...</p>
-      </div>
+      <Loader
+        title="در حال تکمیل ورود..."
+        subtitle="لطفاً منتظر بمانید"
+        size="sm"
+      />
     </div>
   );
 }
