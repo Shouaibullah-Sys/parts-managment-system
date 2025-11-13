@@ -75,9 +75,35 @@ export function LoginForm({
 
     if (error) {
       toast.error(error.message);
-    } else {
+      setIsLoading(false);
+      return;
+    }
+
+    // Check if user is approved before redirecting
+    try {
+      const session = await authClient.getSession();
+      if (session?.data?.user) {
+        // Check if user is approved
+        const approvalResponse = await fetch("/api/user/approval-status");
+        if (approvalResponse.ok) {
+          const { approved } = await approvalResponse.json();
+
+          if (!approved) {
+            await authClient.signOut();
+            toast.error(
+              "حساب شما هنوز تأیید نشده است. لطفاً با مدیر تماس بگیرید."
+            );
+            setIsLoading(false);
+            return;
+          }
+        }
+      }
+
       toast.success("موفقانه وارد شدید!");
       router.push("/dashboard");
+    } catch (err) {
+      console.error("Error checking user approval:", err);
+      toast.error("خطا در بررسی وضعیت حساب. لطفاً دوباره تلاش کنید.");
     }
 
     setIsLoading(false);

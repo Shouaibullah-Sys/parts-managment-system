@@ -28,6 +28,9 @@ export const user = pgTable("user", {
     .notNull(),
   image: text("image"),
   role: role("role").default("staff").notNull(),
+  approved: boolean("approved")
+    .$defaultFn(() => false)
+    .notNull(),
   createdAt: timestamp("created_at")
     .$defaultFn(() => new Date())
     .notNull(),

@@ -38,29 +38,38 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { MoreHorizontal, ArrowUpDown, Search } from "lucide-react";
+import {
+  MoreHorizontal,
+  ArrowUpDown,
+  Search,
+  Edit,
+  Trash2,
+  Copy,
+  Eye,
+  Package,
+  Plus,
+} from "lucide-react";
 import { Part } from "@/types/parts";
 import { useParts, useDeletePart } from "@/hooks/use-parts";
 import { authClient } from "@/lib/auth-client";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 
-interface PartsTableProps {
-  onEdit?: (part: Part) => void;
-}
-
-export function PartsTable({ onEdit }: PartsTableProps) {
+export function PartsTable() {
+  const router = useRouter();
   const { data: session } = authClient.useSession();
   const [userRole, setUserRole] = useState<string | null>(null);
-  const isAdmin = userRole === "admin";
 
-  // Fetch user role
   useEffect(() => {
     if (session?.user) {
       fetch("/api/user/role")
         .then((res) => res.json())
         .then((data) => setUserRole(data.role))
-        .catch((err) => console.error("Error fetching user role:", err));
+        .catch((error) => console.error("Error fetching user role:", error));
     }
   }, [session?.user]);
+
+  const isAdmin = userRole === "admin";
 
   // State for table
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -72,20 +81,21 @@ export function PartsTable({ onEdit }: PartsTableProps) {
     pageIndex: 0,
     pageSize: 10,
   });
-  const [sectionFilter, setSectionFilter] = useState<string>("all");
-  const [activeFilter, setActiveFilter] = useState<string>("all");
+  const [sectionFilter, setSectionFilter] = useState<string>("");
+  const [activeFilter, setActiveFilter] = useState<string>("");
 
   // Fetch parts with current filters
   const {
     data: partsResponse,
     isLoading,
     error,
+    refetch,
   } = useParts({
     page: pagination.pageIndex + 1,
     limit: pagination.pageSize,
     search: globalFilter || undefined,
-    section: sectionFilter === "all" ? undefined : sectionFilter,
-    active: activeFilter === "all" ? undefined : activeFilter === "true",
+    section: sectionFilter || undefined,
+    active: activeFilter ? activeFilter === "true" : undefined,
   });
 
   const deletePartMutation = useDeletePart();
@@ -106,25 +116,37 @@ export function PartsTable({ onEdit }: PartsTableProps) {
         );
       },
       cell: ({ row }) => (
-        <div className="font-medium">{row.getValue("partNumber")}</div>
+        <div className="font-medium">
+          <div className="flex items-center gap-2">
+            <Package className="h-4 w-4 text-muted-foreground" />
+            {row.getValue("partNumber")}
+          </div>
+        </div>
       ),
     },
     {
       accessorKey: "name",
       header: "Name",
+      cell: ({ row }) => (
+        <div className="max-w-[200px] truncate" title={row.getValue("name")}>
+          {row.getValue("name")}
+        </div>
+      ),
     },
     {
       accessorKey: "section",
       header: "Section",
       cell: ({ row }) => (
-        <Badge variant="outline">{row.getValue("section")}</Badge>
+        <Badge variant="outline" className="capitalize">
+          {row.getValue("section")}
+        </Badge>
       ),
     },
     {
       accessorKey: "minStock",
       header: "Min Stock",
       cell: ({ row }) => (
-        <div className="text-right">{row.getValue("minStock")}</div>
+        <div className="text-right font-mono">{row.getValue("minStock")}</div>
       ),
     },
     {
@@ -133,7 +155,7 @@ export function PartsTable({ onEdit }: PartsTableProps) {
       cell: ({ row }) => {
         const costPrice = row.getValue("costPrice") as string;
         return (
-          <div className="text-right">
+          <div className="text-right font-mono">
             {costPrice ? `$${parseFloat(costPrice).toFixed(2)}` : "-"}
           </div>
         );
@@ -145,7 +167,7 @@ export function PartsTable({ onEdit }: PartsTableProps) {
       cell: ({ row }) => {
         const salePrice = row.getValue("salePrice") as string;
         return (
-          <div className="text-right">
+          <div className="text-right font-mono">
             {salePrice ? `$${parseFloat(salePrice).toFixed(2)}` : "-"}
           </div>
         );
@@ -168,43 +190,94 @@ export function PartsTable({ onEdit }: PartsTableProps) {
       cell: ({ row }) => {
         const part = row.original;
 
+        const handleDelete = async () => {
+          if (
+            confirm(
+              `Are you sure you want to delete part "${part.partNumber}"?`
+            )
+          ) {
+            try {
+              await deletePartMutation.mutateAsync(part.id);
+              // Refetch parts to update the list
+              refetch();
+            } catch (error) {
+              console.error("Error deleting part:", error);
+            }
+          }
+        };
+
+        const handleCopyPartNumber = () => {
+          navigator.clipboard.writeText(part.partNumber);
+        };
+
         return (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 w-8 p-0">
-                <span className="sr-only">Open menu</span>
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              <DropdownMenuItem
-                onClick={() => navigator.clipboard.writeText(part.partNumber)}
+          <div className="flex items-center gap-2">
+            {/* Quick View Button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => router.push(`/parts/${part.id}`)}
+              title="View details"
+            >
+              <Eye className="h-4 w-4" />
+            </Button>
+
+            {/* Edit Button - Always visible for quick access */}
+            {isAdmin && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => router.push(`/parts/${part.id}/edit`)}
+                title="Edit part"
               >
-                Copy part number
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              {isAdmin && (
-                <>
-                  <DropdownMenuItem onClick={() => onEdit?.(part)}>
-                    Edit part
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      if (
-                        confirm("Are you sure you want to delete this part?")
-                      ) {
-                        deletePartMutation.mutate(part.id);
-                      }
-                    }}
-                    className="text-red-600"
-                  >
-                    Delete part
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                <Edit className="h-4 w-4" />
+              </Button>
+            )}
+
+            {/* Dropdown for additional actions */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="h-8 w-8 p-0">
+                  <span className="sr-only">Open menu</span>
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+
+                <DropdownMenuItem onClick={handleCopyPartNumber}>
+                  <Copy className="mr-2 h-4 w-4" />
+                  Copy part number
+                </DropdownMenuItem>
+
+                <DropdownMenuItem
+                  onClick={() => router.push(`/parts/${part.id}`)}
+                >
+                  <Eye className="mr-2 h-4 w-4" />
+                  View details
+                </DropdownMenuItem>
+
+                {isAdmin && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => router.push(`/parts/${part.id}/edit`)}
+                    >
+                      <Edit className="mr-2 h-4 w-4" />
+                      Edit part
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={handleDelete}
+                      className="text-red-600"
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete part
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         );
       },
     },
@@ -233,10 +306,13 @@ export function PartsTable({ onEdit }: PartsTableProps) {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-32">
+      <div className="flex flex-col items-center justify-center h-32 gap-2">
         <div className="text-red-600">
           Error loading parts: {(error as Error).message}
         </div>
+        <Button variant="outline" onClick={() => refetch()}>
+          Try Again
+        </Button>
       </div>
     );
   }
@@ -244,44 +320,55 @@ export function PartsTable({ onEdit }: PartsTableProps) {
   return (
     <div className="space-y-4">
       {/* Filters */}
-      <div className="flex items-center gap-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 bg-muted/50 rounded-lg">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search parts..."
+            placeholder="Search by part number or name..."
             value={globalFilter ?? ""}
             onChange={(event) => setGlobalFilter(event.target.value)}
-            className="pl-8"
+            className="pl-8 bg-background"
           />
         </div>
 
         <Select value={sectionFilter} onValueChange={setSectionFilter}>
-          <SelectTrigger className="w-32">
+          <SelectTrigger className="w-32 bg-background">
             <SelectValue placeholder="Section" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All</SelectItem>
-            <SelectItem value="E">E</SelectItem>
-            <SelectItem value="D">D</SelectItem>
-            <SelectItem value="F">F</SelectItem>
-            <SelectItem value="G">G</SelectItem>
+            <SelectItem value="">All Sections</SelectItem>
+            <SelectItem value="E">Section E</SelectItem>
+            <SelectItem value="D">Section D</SelectItem>
+            <SelectItem value="F">Section F</SelectItem>
+            <SelectItem value="G">Section G</SelectItem>
             <SelectItem value="OLD">OLD</SelectItem>
           </SelectContent>
         </Select>
 
         <Select value={activeFilter} onValueChange={setActiveFilter}>
-          <SelectTrigger className="w-32">
+          <SelectTrigger className="w-32 bg-background">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All</SelectItem>
+            <SelectItem value="">All Status</SelectItem>
             <SelectItem value="true">Active</SelectItem>
             <SelectItem value="false">Inactive</SelectItem>
           </SelectContent>
         </Select>
 
-        {isAdmin && (
-          <Button onClick={() => onEdit?.({} as Part)}>Create Part</Button>
+        {/* Clear Filters */}
+        {(globalFilter || sectionFilter || activeFilter) && (
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setGlobalFilter("");
+              setSectionFilter("");
+              setActiveFilter("");
+            }}
+            className="text-sm"
+          >
+            Clear Filters
+          </Button>
         )}
       </div>
 
@@ -311,7 +398,10 @@ export function PartsTable({ onEdit }: PartsTableProps) {
                   colSpan={columns.length}
                   className="h-24 text-center"
                 >
-                  Loading...
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                    Loading parts...
+                  </div>
                 </TableCell>
               </TableRow>
             ) : table.getRowModel().rows?.length ? (
@@ -319,6 +409,7 @@ export function PartsTable({ onEdit }: PartsTableProps) {
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
+                  className="group hover:bg-muted/50"
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
@@ -336,7 +427,28 @@ export function PartsTable({ onEdit }: PartsTableProps) {
                   colSpan={columns.length}
                   className="h-24 text-center"
                 >
-                  No parts found.
+                  <div className="flex flex-col items-center gap-2">
+                    <Package className="h-8 w-8 text-muted-foreground" />
+                    <div>
+                      <p className="font-medium">No parts found</p>
+                      <p className="text-sm text-muted-foreground">
+                        {globalFilter || sectionFilter || activeFilter
+                          ? "Try changing your filters"
+                          : "Get started by creating your first part"}
+                      </p>
+                    </div>
+                    {isAdmin &&
+                      !globalFilter &&
+                      !sectionFilter &&
+                      !activeFilter && (
+                        <Link href="/parts/new">
+                          <Button className="mt-2">
+                            <Plus className="mr-2 h-4 w-4" />
+                            Create Part
+                          </Button>
+                        </Link>
+                      )}
+                  </div>
                 </TableCell>
               </TableRow>
             )}
@@ -345,10 +457,10 @@ export function PartsTable({ onEdit }: PartsTableProps) {
       </div>
 
       {/* Pagination */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="text-sm text-muted-foreground">
-          Page {pagination.pageIndex + 1} of {table.getPageCount()} (
-          {partsResponse?.pagination.total || 0} total parts)
+          Showing {table.getRowModel().rows.length} of{" "}
+          {partsResponse?.pagination.total || 0} parts
         </div>
         <div className="flex items-center space-x-2">
           <Button
@@ -359,6 +471,12 @@ export function PartsTable({ onEdit }: PartsTableProps) {
           >
             Previous
           </Button>
+          <div className="flex items-center gap-1">
+            <span className="text-sm">Page</span>
+            <strong className="text-sm">
+              {pagination.pageIndex + 1} of {table.getPageCount()}
+            </strong>
+          </div>
           <Button
             variant="outline"
             size="sm"
