@@ -32,8 +32,11 @@ import Link from "next/link";
 import { Badge } from "../ui/badge";
 
 const formSchema = z.object({
-  email: z.email(),
-  password: z.string().min(8),
+  email: z.email().meta({ description: "لطفاً یک ایمیل معتبر وارد کنید" }),
+  password: z
+    .string()
+    .min(8)
+    .meta({ description: "رمز عبور باید حداقل 8 کاراکتر باشد" }),
 });
 
 export function LoginForm({
@@ -57,7 +60,7 @@ export function LoginForm({
     try {
       await authClient.signIn.social({
         provider: "google",
-        callbackURL: "/dashboard",
+        callbackURL: "/auth/google/callback",
       });
     } catch (error) {
       console.error("Google sign-in error:", error);
@@ -71,6 +74,7 @@ export function LoginForm({
     const { error } = await authClient.signIn.email({
       email: values.email,
       password: values.password,
+      callbackURL: "/dashboard",
     });
 
     if (error) {
@@ -79,33 +83,9 @@ export function LoginForm({
       return;
     }
 
-    // Check if user is approved before redirecting
-    try {
-      const session = await authClient.getSession();
-      if (session?.data?.user) {
-        // Check if user is approved
-        const approvalResponse = await fetch("/api/user/approval-status");
-        if (approvalResponse.ok) {
-          const { approved } = await approvalResponse.json();
-
-          if (!approved) {
-            await authClient.signOut();
-            toast.error(
-              "حساب شما هنوز تأیید نشده است. لطفاً با مدیر تماس بگیرید."
-            );
-            setIsLoading(false);
-            return;
-          }
-        }
-      }
-
-      toast.success("موفقانه وارد شدید!");
-      router.push("/dashboard");
-    } catch (err) {
-      console.error("Error checking user approval:", err);
-      toast.error("خطا در بررسی وضعیت حساب. لطفاً دوباره تلاش کنید.");
-    }
-
+    // Don't redirect manually - let the callback URL handle it
+    // The server-side dashboard logic will properly redirect based on role
+    toast.success("موفقانه وارد شدید!");
     setIsLoading(false);
   }
 

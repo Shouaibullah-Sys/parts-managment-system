@@ -20,7 +20,7 @@ export default function LoginPage() {
               priority
             />
           </div>
-          Better Auth Starter
+          Diplomasi ltd
         </Link>
         <ForgotPasswordForm />
       </div>

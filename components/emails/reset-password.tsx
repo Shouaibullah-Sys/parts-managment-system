@@ -23,52 +23,52 @@ const ForgotPasswordEmail = (props: ForgotPasswordEmailProps) => {
   const { username, resetUrl, userEmail } = props;
 
   return (
-    <Html lang="en" dir="ltr">
+    <Html lang="fa" dir="rtl">
       <Tailwind>
         <Head />
-        <Preview>Reset your password - Action required</Preview>
-        <Body className="bg-gray-100 font-sans py-[40px]">
-          <Container className="bg-white rounded-[8px] shadow-sm max-w-[600px] mx-auto p-[40px]">
+        <Preview>بازنشانی رمز عبور - اقدام لازم</Preview>
+        <Body className="bg-gray-100 font-sans py-10">
+          <Container className="bg-white rounded-xl shadow-sm max-w-[600px] mx-auto p-10">
             {/* Header */}
-            <Section className="text-center mb-[32px]">
-              <Heading className="text-[28px] font-bold text-gray-900 m-0 mb-[8px]">
-                Reset Your Password
+            <Section className="text-center mb-8">
+              <Heading className="text-[28px] font-bold text-gray-900 m-0 mb-2">
+                رمز عبور خود را بازنشانی کنید
               </Heading>
               <Text className="text-[16px] text-gray-600 m-0">
-                We received a request to reset your password
+                ما یک درخواست برای بازنشانی رمز عبور شما دریافت کردیم
               </Text>
             </Section>
 
             {/* Main Content */}
-            <Section className="mb-[32px]">
-              <Text className="text-[16px] text-gray-700 leading-[24px] m-0 mb-[16px]">
-                Hello, {username}
+            <Section className="mb-8">
+              <Text className="text-[16px] text-gray-700 leading-6 m-0 mb-4">
+                سلام، {username}
               </Text>
-              <Text className="text-[16px] text-gray-700 leading-[24px] m-0 mb-[16px]">
-                We received a password reset request for your account associated
-                with <strong>{userEmail}</strong>.
+              <Text className="text-[16px] text-gray-700 leading-6 m-0 mb-4">
+                ما یک درخواست بازنشانی رمز عبور برای حساب شما مرتبط با{" "}
+                <strong>{userEmail}</strong> دریافت کردیم.
               </Text>
-              <Text className="text-[16px] text-gray-700 leading-[24px] m-0 mb-[24px]">
-                Click the button below to create a new password. This link will
-                expire in 24 hours for security reasons.
+              <Text className="text-[16px] text-gray-700 leading-6 m-0 mb-6">
+                برای ایجاد یک رمز عبور جدید، روی دکمه زیر کلیک کنید. این لینک به
+                دلایل امنیتی پس از ۲۴ ساعت منقضی می‌شود.
               </Text>
             </Section>
 
             {/* Reset Button */}
-            <Section className="text-center mb-[32px]">
+            <Section className="text-center mb-8">
               <Button
                 href={resetUrl}
-                className="bg-blue-600 text-white px-[32px] py-[16px] rounded-[8px] text-[16px] font-semibold no-underline box-border inline-block"
+                className="bg-blue-600 text-white px-8 py-4 rounded-xl text-[16px] font-semibold no-underline box-border inline-block"
               >
-                Reset Password
+                بازنشانی رمز عبور
               </Button>
             </Section>
 
             {/* Alternative Link */}
-            <Section className="mb-[32px]">
-              <Text className="text-[14px] text-gray-600 leading-[20px] m-0 mb-[8px]">
-                If the button doesn&apos;t work, copy and paste this link into
-                your browser:
+            <Section className="mb-8">
+              <Text className="text-[14px] text-gray-600 leading-5 m-0 mb-2">
+                اگر دکمه کار نکرد، این لینک را در مرورگر خود کپی و جایگذاری
+                کنید:
               </Text>
               <Link
                 href={resetUrl}
@@ -79,47 +79,48 @@ const ForgotPasswordEmail = (props: ForgotPasswordEmailProps) => {
             </Section>
 
             {/* Security Notice */}
-            <Section className="bg-gray-50 p-[20px] rounded-[8px] mb-[32px]">
-              <Text className="text-[14px] text-gray-700 leading-[20px] m-0 mb-[8px] font-semibold">
-                Security Notice:
+            <Section className="bg-gray-50 p-5 rounded-xl mb-8">
+              <Text className="text-[14px] text-gray-700 leading-5 m-0 mb-2 font-semibold">
+                توجه امنیتی:
               </Text>
-              <Text className="text-[14px] text-gray-600 leading-[20px] m-0 mb-[8px]">
-                • If you didn&apos;t request this password reset, please ignore
-                this email
+              <Text className="text-[14px] text-gray-600 leading-5 m-0 mb-2">
+                • اگر شما این درخواست بازنشانی رمز عبور را نداده‌اید، لطفاً این
+                ایمیل را نادیده بگیرید
               </Text>
-              <Text className="text-[14px] text-gray-600 leading-[20px] m-0 mb-[8px]">
-                • This link will expire in 24 hours
+              <Text className="text-[14px] text-gray-600 leading-5 m-0 mb-2">
+                • این لینک پس از ۲۴ ساعت منقضی می‌شود
               </Text>
-              <Text className="text-[14px] text-gray-600 leading-[20px] m-0">
-                • For security, never share this link with anyone
+              <Text className="text-[14px] text-gray-600 leading-5 m-0">
+                • به دلایل امنیتی، این لینک را با هیچکس شریک نشوید
               </Text>
             </Section>
 
             {/* Help Section */}
-            <Section className="mb-[32px]">
-              <Text className="text-[14px] text-gray-600 leading-[20px] m-0">
-                Need help? Contact our support team at{" "}
+            <Section className="mb-8">
+              <Text className="text-[14px] text-gray-600 leading-5 m-0">
+                نیاز به کمک دارید؟ با تیم پشتیبانی ما در{" "}
                 <Link
                   href="mailto:support@company.com"
                   className="text-blue-600"
                 >
                   support@company.com
-                </Link>
+                </Link>{" "}
+                تماس بگیرید
               </Text>
             </Section>
 
             {/* Footer */}
-            <Section className="border-t border-gray-200 pt-[24px]">
-              <Text className="text-[12px] text-gray-500 leading-[16px] m-0 mb-[8px]">
-                This email was sent to {userEmail}
+            <Section className="border-t border-gray-200 pt-6">
+              <Text className="text-[12px] text-gray-500 leading-4 m-0 mb-2">
+                این ایمیل به {userEmail} ارسال شد
               </Text>
-              <Text className="text-[12px] text-gray-500 leading-[16px] m-0 mb-[8px]">
-                Company Name, 123 Business Street, City, State 12345
+              <Text className="text-[12px] text-gray-500 leading-4 m-0 mb-2">
+                Diplomasi ltd ، بین پروان ۳ و پروان ۲ ، کابل ، افغانستان
               </Text>
-              <Text className="text-[12px] text-gray-500 leading-[16px] m-0">
-                © 2025 Company Name. All rights reserved.{" "}
+              <Text className="text-[12px] text-gray-500 leading-4 m-0">
+                © ۲۰۲۵ Diplomasi ltd . تمام حقوق محفوظ است.{" "}
                 <Link href="#" className="text-gray-500">
-                  Unsubscribe
+                  لغو اشتراک
                 </Link>
               </Text>
             </Section>

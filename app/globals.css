@@ -113,66 +113,248 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
-
-    @layer base {
-      :root {
-        --background: 0 0% 100%;
-        --foreground: 240 10% 3.9%;
-        --card: 0 0% 100%;
-        --card-foreground: 240 10% 3.9%;
-        --popover: 0 0% 100%;
-        --popover-foreground: 240 10% 3.9%;
-        --primary: 346.8 77.2% 49.8%;
-        --primary-foreground: 355.7 100% 97.3%;
-        --secondary: 240 4.8% 95.9%;
-        --secondary-foreground: 240 5.9% 10%;
-        --muted: 240 4.8% 95.9%;
-        --muted-foreground: 240 3.8% 46.1%;
-        --accent: 240 4.8% 95.9%;
-        --accent-foreground: 240 5.9% 10%;
-        --destructive: 0 84.2% 60.2%;
-        --destructive-foreground: 0 0% 98%;
-        --border: 240 5.9% 90%;
-        --input: 240 5.9% 90%;
-        --ring: 346.8 77.2% 49.8%;
-        --radius: 0.5rem;
-        --chart-1: 12 76% 61%;
-        --chart-2: 173 58% 39%;
-        --chart-3: 197 37% 24%;
-        --chart-4: 43 74% 66%;
-        --chart-5: 27 87% 67%;
-      }
-
-      .dark {
-        --background: 20 14.3% 4.1%;
-        --foreground: 0 0% 95%;
-        --card: 24 9.8% 10%;
-        --card-foreground: 0 0% 95%;
-        --popover: 0 0% 9%;
-        --popover-foreground: 0 0% 95%;
-        --primary: 346.8 77.2% 49.8%;
-        --primary-foreground: 355.7 100% 97.3%;
-        --secondary: 240 3.7% 15.9%;
-        --secondary-foreground: 0 0% 98%;
-        --muted: 0 0% 15%;
-        --muted-foreground: 240 5% 64.9%;
-        --accent: 12 6.5% 15.1%;
-        --accent-foreground: 0 0% 98%;
-        --destructive: 0 62.8% 30.6%;
-        --destructive-foreground: 0 85.7% 97.3%;
-        --border: 240 3.7% 15.9%;
-        --input: 240 3.7% 15.9%;
-        --ring: 346.8 77.2% 49.8%;
-        --chart-1: 220 70% 50%;
-        --chart-2: 160 60% 45%;
-        --chart-3: 30 80% 55%;
-        --chart-4: 280 65% 60%;
-        --chart-5: 340 75% 55%;
-      }
-    }
+    @apply border-border;
   }
+
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 346.8 77.2% 49.8%;
+    --primary-foreground: 355.7 100% 97.3%;
+    --secondary: 220 14.3% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 220 14.3% 95.9%;
+    --muted-foreground: 220 8.9% 46.1%;
+    --accent: 220 14.3% 95.9%;
+    --accent-foreground: 220 14.3% 15.9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 346.8 77.2% 49.8%;
+    --radius: 0.65rem;
+    --chart-1: 346.8 77.2% 49.8%;
+    --chart-2: 220 14.3% 25.9%;
+    --chart-3: 346.8 77.2% 65.8%;
+    --chart-4: 220 14.3% 35.9%;
+    --chart-5: 346.8 77.2% 35.8%;
+  }
+
+  .dark {
+    --background: 220 14.3% 8.9%;
+    --foreground: 0 0% 98%;
+    --card: 220 14.3% 11.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 220 14.3% 8.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 346.8 77.2% 49.8%;
+    --primary-foreground: 355.7 100% 97.3%;
+    --secondary: 220 14.3% 25.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 220 14.3% 15.9%;
+    --muted-foreground: 220 8.9% 70.1%;
+    --accent: 220 14.3% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 220 14.3% 25.9%;
+    --input: 220 14.3% 25.9%;
+    --ring: 346.8 77.2% 49.8%;
+    --chart-1: 346.8 77.2% 49.8%;
+    --chart-2: 220 14.3% 70.9%;
+    --chart-3: 346.8 77.2% 65.8%;
+    --chart-4: 220 14.3% 55.9%;
+    --chart-5: 346.8 77.2% 35.8%;
+  }
+
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+/* Custom component styling for car parts shop */
+@layer components {
+  /* Alert styling */
+  .alert {
+    @apply border border-border bg-background text-foreground;
+  }
+
+  .alert-destructive {
+    @apply bg-destructive text-white border-destructive;
+  }
+
+  /* Badge styling */
+  .badge {
+    @apply border border-border bg-secondary text-secondary-foreground;
+  }
+
+  .badge-primary {
+    @apply bg-primary text-white border-primary;
+  }
+
+  .badge-destructive {
+    @apply bg-destructive text-white border-destructive;
+  }
+
+  .badge-outline {
+    @apply text-foreground border-border bg-transparent;
+  }
+
+  /* Button styling */
+  .button {
+    @apply bg-primary text-white border border-primary hover:bg-primary/90;
+  }
+
+  .button-secondary {
+    @apply bg-secondary text-secondary-foreground border border-border hover:bg-secondary/80;
+  }
+
+  .button-outline {
+    @apply border border-border bg-background text-foreground hover:bg-accent;
+  }
+
+  .button-destructive {
+    @apply bg-destructive text-white border border-destructive hover:bg-destructive/90;
+  }
+
+  .button-ghost {
+    @apply hover:bg-accent text-foreground;
+  }
+
+  /* Card styling */
+  .card {
+    @apply bg-card text-card-foreground border border-border;
+  }
+
+  /* Dialog styling */
+  .dialog {
+    @apply bg-background text-foreground border border-border;
+  }
+
+  .dialog-overlay {
+    @apply bg-black/50;
+  }
+
+  /* Dropdown menu styling */
+  .dropdown-menu {
+    @apply bg-popover text-popover-foreground border border-border;
+  }
+
+  .dropdown-menu-item {
+    @apply hover:bg-accent hover:text-accent-foreground;
+  }
+
+  /* Form styling */
+  .form-label {
+    @apply text-foreground;
+  }
+
+  .form-description {
+    @apply text-muted-foreground;
+  }
+
+  .form-error {
+    @apply text-destructive;
+  }
+
+  /* Input styling */
+  .input {
+    @apply bg-background text-foreground border border-border placeholder:text-muted-foreground;
+  }
+
+  .input:focus {
+    @apply border-primary ring-2 ring-primary/20;
+  }
+
+  /* Select styling */
+  .select {
+    @apply bg-background text-foreground border border-border;
+  }
+
+  .select-trigger {
+    @apply hover:bg-accent;
+  }
+
+  /* Sonner toast styling */
+  .sonner-toast {
+    @apply bg-background text-foreground border border-border;
+  }
+
+  .sonner-toast-success {
+    @apply border-primary bg-primary/10 text-primary;
+  }
+
+  .sonner-toast-error {
+    @apply border-destructive bg-destructive/10 text-destructive;
+  }
+
+  /* Switch styling */
+  .switch {
+    @apply bg-muted border border-border;
+  }
+
+  .switch-checked {
+    @apply bg-primary border-primary;
+  }
+
+  /* Table styling */
+  .table {
+    @apply bg-background text-foreground border border-border;
+  }
+
+  .table-header {
+    @apply bg-muted text-muted-foreground;
+  }
+
+  .table-row {
+    @apply border-b border-border hover:bg-accent/50;
+  }
+
+  .table-cell {
+    @apply border-r border-border last:border-r-0;
+  }
+
+  /* Chart styling */
+  .chart {
+    @apply bg-card text-card-foreground border border-border;
+  }
+
+  .chart-tooltip {
+    @apply bg-popover text-popover-foreground border border-border;
+  }
+
+  .chart-legend {
+    @apply text-muted-foreground;
+  }
+}
+
+/* Custom utility classes for car parts shop */
+@layer utilities {
+  .bg-mechanical {
+    background: linear-gradient(
+      135deg,
+      hsl(346.8 77.2% 49.8% / 0.1) 0%,
+      hsl(220 14.3% 15.9% / 0.05) 100%
+    );
+  }
+
+  .border-mechanical {
+    border-color: hsl(220 13% 91%);
+  }
+
+  .text-mechanical-primary {
+    color: hsl(346.8 77.2% 49.8%);
+  }
+
+  .bg-mechanical-dark {
+    background: linear-gradient(
+      135deg,
+      hsl(346.8 77.2% 49.8% / 0.15) 0%,
+      hsl(220 14.3% 25.9% / 0.1) 100%
+    );
   }
 }

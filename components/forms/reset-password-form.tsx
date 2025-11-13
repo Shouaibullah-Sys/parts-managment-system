@@ -30,10 +30,19 @@ import Link from "next/link";
 import { authClient } from "@/lib/auth-client";
 import { useRouter, useSearchParams } from "next/navigation";
 
-const formSchema = z.object({
-  password: z.string().min(8),
-  confirmPassword: z.string().min(8),
-});
+const formSchema = z
+  .object({
+    password: z.string().min(8, {
+      message: "رمز عبور باید حداقل ۸ حرف باشد",
+    }),
+    confirmPassword: z.string().min(8, {
+      message: "تأیید رمز عبور باید حداقل ۸ حرف باشد",
+    }),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "رمزهای عبور مطابقت ندارند",
+    path: ["confirmPassword"],
+  });
 
 export function ResetPasswordForm({
   className,
@@ -57,12 +66,6 @@ export function ResetPasswordForm({
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
 
-    if (values.password !== values.confirmPassword) {
-      toast.error("Passwords do not match");
-      setIsLoading(false);
-      return;
-    }
-
     const { error } = await authClient.resetPassword({
       newPassword: values.password,
       token,
@@ -71,7 +74,7 @@ export function ResetPasswordForm({
     if (error) {
       toast.error(error.message);
     } else {
-      toast.success("Password reset successfully");
+      toast.success("رمز عبور با موفقیت بازنشانی شد");
       router.push("/login");
     }
 
@@ -82,8 +85,8 @@ export function ResetPasswordForm({
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card>
         <CardHeader className="text-center">
-          <CardTitle className="text-xl">Reset Password</CardTitle>
-          <CardDescription>Enter your new password</CardDescription>
+          <CardTitle className="text-xl">بازنشانی رمز عبور</CardTitle>
+          <CardDescription>رمز عبور جدید خود را وارد کنید</CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>
@@ -95,9 +98,13 @@ export function ResetPasswordForm({
                     name="password"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Password</FormLabel>
+                        <FormLabel>رمز عبور</FormLabel>
                         <FormControl>
-                          <Input {...field} type="password" />
+                          <Input
+                            {...field}
+                            type="password"
+                            placeholder="رمز عبور جدید خود را وارد کنید"
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -110,9 +117,13 @@ export function ResetPasswordForm({
                     name="confirmPassword"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Confirm Password</FormLabel>
+                        <FormLabel>تأیید رمز عبور</FormLabel>
                         <FormControl>
-                          <Input {...field} type="password" />
+                          <Input
+                            {...field}
+                            type="password"
+                            placeholder="رمز عبور را دوباره وارد کنید"
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -123,14 +134,14 @@ export function ResetPasswordForm({
                   {isLoading ? (
                     <Loader2 className="size-4 animate-spin" />
                   ) : (
-                    "Reset Password"
+                    "بازنشانی رمز عبور"
                   )}
                 </Button>
               </div>
               <div className="text-center text-sm">
-                Don&apos;t have an account?{" "}
+                حساب کاربری ندارید؟{" "}
                 <Link href="/signup" className="underline underline-offset-4">
-                  Sign up
+                  ثبت نام کنید
                 </Link>
               </div>
             </form>
@@ -138,9 +149,8 @@ export function ResetPasswordForm({
         </CardContent>
       </Card>
       <div className="text-muted-foreground *:[a]:hover:text-primary text-center text-xs text-balance *:[a]:underline *:[a]:underline-offset-4">
-        By clicking continue, you agree to our{" "}
-        <Link href="#">Terms of Service</Link> and{" "}
-        <Link href="#">Privacy Policy</Link>.
+        با ادامه دادن، شما با <Link href="#">شرایط استفاده</Link> و{" "}
+        <Link href="#">خط مشی رازداری</Link> ما موافقت می‌کنید.
       </div>
     </div>
   );

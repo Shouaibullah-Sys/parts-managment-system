@@ -331,12 +331,17 @@ export function PartsTable() {
           />
         </div>
 
-        <Select value={sectionFilter} onValueChange={setSectionFilter}>
+        <Select
+          value={sectionFilter || "all-sections"}
+          onValueChange={(value) =>
+            setSectionFilter(value === "all-sections" ? "" : value)
+          }
+        >
           <SelectTrigger className="w-32 bg-background">
             <SelectValue placeholder="Section" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All Sections</SelectItem>
+            <SelectItem value="all-sections">All Sections</SelectItem>
             <SelectItem value="E">Section E</SelectItem>
             <SelectItem value="D">Section D</SelectItem>
             <SelectItem value="F">Section F</SelectItem>
@@ -345,12 +350,17 @@ export function PartsTable() {
           </SelectContent>
         </Select>
 
-        <Select value={activeFilter} onValueChange={setActiveFilter}>
+        <Select
+          value={activeFilter || "all-status"}
+          onValueChange={(value) =>
+            setActiveFilter(value === "all-status" ? "" : value)
+          }
+        >
           <SelectTrigger className="w-32 bg-background">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All Status</SelectItem>
+            <SelectItem value="all-status">All Status</SelectItem>
             <SelectItem value="true">Active</SelectItem>
             <SelectItem value="false">Inactive</SelectItem>
           </SelectContent>

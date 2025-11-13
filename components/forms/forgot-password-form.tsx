@@ -30,7 +30,7 @@ import Link from "next/link";
 import { authClient } from "@/lib/auth-client";
 
 const formSchema = z.object({
-  email: z.string().email(),
+  email: z.email().meta({ description: "لطفاً یک ایمیل معتبر وارد کنید" }),
 });
 
 export function ForgotPasswordForm({
@@ -57,7 +57,7 @@ export function ForgotPasswordForm({
     if (error) {
       toast.error(error.message);
     } else {
-      toast.success("Password reset email sent");
+      toast.success("ایمیل بازنشانی رمز عبور ارسال شد");
     }
 
     setIsLoading(false);
@@ -67,9 +67,9 @@ export function ForgotPasswordForm({
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card>
         <CardHeader className="text-center">
-          <CardTitle className="text-xl">Forgot Password</CardTitle>
+          <CardTitle className="text-xl">رمز عبور را فراموش کرده اید</CardTitle>
           <CardDescription>
-            Enter your email to reset your password
+            ایمیل خود را وارد کنید تا رمز عبور را بازنشانی کنید
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -82,7 +82,7 @@ export function ForgotPasswordForm({
                     name="email"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Email</FormLabel>
+                        <FormLabel>ایمیل</FormLabel>
                         <FormControl>
                           <Input placeholder="m@example.com" {...field} />
                         </FormControl>
@@ -95,14 +95,14 @@ export function ForgotPasswordForm({
                   {isLoading ? (
                     <Loader2 className="size-4 animate-spin" />
                   ) : (
-                    "Reset Password"
+                    "بازنشانی رمز عبور"
                   )}
                 </Button>
               </div>
               <div className="text-center text-sm">
-                Don&apos;t have an account?{" "}
+                حساب کاربری ندارید؟{" "}
                 <Link href="/signup" className="underline underline-offset-4">
-                  Sign up
+                  ثبت نام کنید
                 </Link>
               </div>
             </form>
@@ -110,9 +110,8 @@ export function ForgotPasswordForm({
         </CardContent>
       </Card>
       <div className="text-muted-foreground *:[a]:hover:text-primary text-center text-xs text-balance *:[a]:underline *:[a]:underline-offset-4">
-        By clicking continue, you agree to our{" "}
-        <Link href="#">Terms of Service</Link> and{" "}
-        <Link href="#">Privacy Policy</Link>.
+        با ادامه دادن، شما با <Link href="#">شرایط استفاده</Link> و{" "}
+        <Link href="#">خط مشی رازداری</Link> ما موافقت می‌کنید.
       </div>
     </div>
   );

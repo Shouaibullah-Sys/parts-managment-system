@@ -9,7 +9,6 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { lastLoginMethod } from "better-auth/plugins";
 import { Resend } from "resend";
-import { admin, staff } from "./auth/permissions";
 
 const resend = new Resend(process.env.RESEND_API_KEY as string);
 

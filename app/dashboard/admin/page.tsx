@@ -13,7 +13,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Users, UserCheck, Shield, Trash2, Loader2 } from "lucide-react";
+import {
+  Users,
+  UserCheck,
+  Shield,
+  Trash2,
+  Loader2,
+  RefreshCw,
+} from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { toast } from "sonner";
 
@@ -174,10 +181,14 @@ export default function AdminDashboard() {
 
   const getStatusBadge = (user: User) => {
     if (!user.approved) {
-      return <Badge variant="destructive">Pending</Badge>;
+      return <Badge variant="destructive">Pending Approval</Badge>;
     }
     if (user.role === "admin") {
-      return <Badge variant="default">Admin</Badge>;
+      return (
+        <Badge className="bg-primary text-primary-foreground border-primary">
+          Admin
+        </Badge>
+      );
     }
     return <Badge variant="secondary">Staff</Badge>;
   };
@@ -187,7 +198,7 @@ export default function AdminDashboard() {
       return (
         <Badge
           variant="outline"
-          className="text-green-600 dark:text-green-400 border-green-600 dark:border-green-400"
+          className="text-green-600 border-green-600 dark:text-green-400 dark:border-green-400"
         >
           Verified
         </Badge>
@@ -196,7 +207,7 @@ export default function AdminDashboard() {
     return (
       <Badge
         variant="outline"
-        className="text-red-600 dark:text-red-400 border-red-600 dark:border-red-400"
+        className="text-amber-600 border-amber-600 dark:text-amber-400 dark:border-amber-400"
       >
         Unverified
       </Badge>
@@ -216,7 +227,7 @@ export default function AdminDashboard() {
       <div className="flex justify-center items-center min-h-96">
         <div className="text-center">
           <Loader2 className="size-8 animate-spin mx-auto text-primary" />
-          <p className="mt-4 text-muted-foreground">Loading...</p>
+          <p className="mt-4 text-muted-foreground">Loading dashboard...</p>
         </div>
       </div>
     );
@@ -225,13 +236,14 @@ export default function AdminDashboard() {
   if (error && userRole !== "admin") {
     return (
       <div className="flex justify-center items-center min-h-96">
-        <div className="text-center">
-          <Shield className="h-12 w-12 mx-auto mb-4 text-destructive" />
-          <h2 className="text-xl font-semibold mb-2">Access Denied</h2>
-          <p className="text-muted-foreground mb-4">{error}</p>
+        <div className="text-center max-w-md">
+          <Shield className="h-16 w-16 mx-auto mb-4 text-destructive" />
+          <h2 className="text-2xl font-bold mb-2">Access Denied</h2>
+          <p className="text-muted-foreground mb-6">{error}</p>
           <Button
             onClick={() => router.push("/dashboard/staff")}
             variant="outline"
+            className="border-primary text-primary hover:bg-primary hover:text-primary-foreground"
           >
             Go to Staff Dashboard
           </Button>
@@ -241,69 +253,148 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Admin Dashboard</h1>
-        <p className="text-muted-foreground">
-          Manage users, roles, and system permissions
+    <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+      {/* Header */}
+      <div className="mb-8 text-center">
+        <h1 className="text-4xl font-bold mb-3 bg-linear-to-r from-primary to-primary/80 bg-clip-text text-shadow-gray-500">
+          Admin Dashboard
+        </h1>
+        <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+          Manage users, roles, and system permissions for your car parts shop
         </p>
       </div>
 
       {/* Alerts */}
       {error && (
         <Alert className="mb-6 border-destructive/50 bg-destructive/10">
-          <AlertDescription className="text-destructive">
+          <AlertDescription className="text-destructive font-medium">
             {error}
           </AlertDescription>
         </Alert>
       )}
 
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <Card className="bg-mechanical border-mechanical">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">
+                  Total Users
+                </p>
+                <p className="text-3xl font-bold text-foreground">
+                  {users.length}
+                </p>
+              </div>
+              <div className="p-3 rounded-full bg-primary/10">
+                <Users className="h-6 w-6 text-primary" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-mechanical border-mechanical">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">
+                  Pending Approval
+                </p>
+                <p className="text-3xl font-bold text-amber-600 dark:text-amber-400">
+                  {users.filter((u) => !u.approved).length}
+                </p>
+              </div>
+              <div className="p-3 rounded-full bg-amber-100 dark:bg-amber-950">
+                <UserCheck className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-mechanical border-mechanical">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">
+                  Administrators
+                </p>
+                <p className="text-3xl font-bold text-primary">
+                  {users.filter((u) => u.role === "admin").length}
+                </p>
+              </div>
+              <div className="p-3 rounded-full bg-primary/10">
+                <Shield className="h-6 w-6 text-primary" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* User Management Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            User Management
-          </CardTitle>
+      <Card className="border-mechanical">
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-3 text-2xl">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Users className="h-6 w-6 text-primary" />
+              </div>
+              User Management
+            </CardTitle>
+            <Button
+              onClick={fetchUsers}
+              variant="outline"
+              size="sm"
+              className="border-primary text-primary hover:bg-primary hover:text-primary-foreground"
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="mb-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold">
-                All Users ({users.length})
-              </h3>
-              <Button onClick={fetchUsers} variant="outline" size="sm">
-                Refresh
-              </Button>
-            </div>
+          <div className="mb-2">
+            <h3 className="text-lg font-semibold text-foreground mb-4">
+              System Users ({users.length})
+            </h3>
 
             <div className="space-y-4">
               {users.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>No users found</p>
+                <div className="text-center py-12 text-muted-foreground">
+                  <Users className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg">No users found in the system</p>
+                  <p className="text-sm mt-2">
+                    Users will appear here once they register
+                  </p>
                 </div>
               ) : (
                 users.map((user) => (
                   <div
                     key={user.id}
-                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors"
+                    className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border border-border rounded-lg hover:bg-accent/30 transition-all duration-200 bg-card"
                   >
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h4 className="font-medium">{user.name}</h4>
-                        {getStatusBadge(user)}
-                        {getVerificationBadge(user)}
+                    <div className="flex-1 mb-4 sm:mb-0">
+                      <div className="flex flex-wrap items-center gap-2 mb-3">
+                        <h4 className="font-semibold text-foreground text-lg">
+                          {user.name}
+                        </h4>
+                        <div className="flex flex-wrap gap-2">
+                          {getStatusBadge(user)}
+                          {getVerificationBadge(user)}
+                        </div>
                       </div>
-                      <p className="text-sm text-muted-foreground">
-                        {user.email}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Created: {formatDate(user.createdAt)}
-                      </p>
+                      <div className="space-y-1">
+                        <p className="text-sm text-muted-foreground">
+                          <span className="font-medium">Email:</span>{" "}
+                          {user.email}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          <span className="font-medium">Joined:</span>{" "}
+                          {formatDate(user.createdAt)}
+                        </p>
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
                       {/* Role Change */}
                       <Select
                         value={user.role}
@@ -311,12 +402,16 @@ export default function AdminDashboard() {
                           handleUpdateRole(user.id, value)
                         }
                       >
-                        <SelectTrigger className="w-32">
+                        <SelectTrigger className="w-32 border-border focus:ring-primary">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="staff">Staff</SelectItem>
-                          <SelectItem value="admin">Admin</SelectItem>
+                        <SelectContent className="border-border bg-popover">
+                          <SelectItem value="staff" className="focus:bg-accent">
+                            Staff
+                          </SelectItem>
+                          <SelectItem value="admin" className="focus:bg-accent">
+                            Admin
+                          </SelectItem>
                         </SelectContent>
                       </Select>
 
@@ -324,11 +419,11 @@ export default function AdminDashboard() {
                       {!user.approved && (
                         <Button
                           size="sm"
-                          variant="default"
+                          className="bg-green-600 hover:bg-green-700 text-white border-green-600"
                           onClick={() => handleApproveUser(user.id)}
-                          className="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600 text-white"
                         >
-                          <UserCheck className="h-4 w-4" />
+                          <UserCheck className="h-4 w-4 mr-1" />
+                          Approve
                         </Button>
                       )}
 
@@ -337,6 +432,7 @@ export default function AdminDashboard() {
                         size="sm"
                         variant="destructive"
                         onClick={() => handleDeleteUser(user.id)}
+                        className="hover:bg-destructive/90"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -349,53 +445,13 @@ export default function AdminDashboard() {
         </CardContent>
       </Card>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">
-                  Total Users
-                </p>
-                <p className="text-2xl font-bold">{users.length}</p>
-              </div>
-              <Users className="h-8 w-8 text-blue-600 dark:text-blue-400" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">
-                  Pending Approval
-                </p>
-                <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">
-                  {users.filter((u) => !u.approved).length}
-                </p>
-              </div>
-              <UserCheck className="h-8 w-8 text-orange-600 dark:text-orange-400" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">
-                  Administrators
-                </p>
-                <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                  {users.filter((u) => u.role === "admin").length}
-                </p>
-              </div>
-              <Shield className="h-8 w-8 text-purple-600 dark:text-purple-400" />
-            </div>
-          </CardContent>
-        </Card>
+      {/* Footer Stats */}
+      <div className="mt-8 text-center">
+        <p className="text-sm text-muted-foreground">
+          Managing {users.length} users •{" "}
+          {users.filter((u) => u.approved).length} approved •{" "}
+          {users.filter((u) => u.emailVerified).length} verified
+        </p>
       </div>
     </div>
   );
