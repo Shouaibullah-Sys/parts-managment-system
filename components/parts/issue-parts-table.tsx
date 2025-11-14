@@ -21,6 +21,10 @@ import {
   Calendar,
   Eye,
   Download,
+  Phone,
+  MapPin,
+  FileText as InvoiceIcon,
+  MessageSquare,
 } from "lucide-react";
 import { SmartSearchEngine } from "./smart-search-engine";
 
@@ -44,6 +48,13 @@ export function IssuePartsTable() {
   const router = useRouter();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [customerAddress, setCustomerAddress] = useState("");
+  const [invoiceDate, setInvoiceDate] = useState(
+    new Date().toISOString().split("T")[0]
+  );
+  const [invoiceNumber, setInvoiceNumber] = useState("");
+  const [notes, setNotes] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -122,6 +133,11 @@ export function IssuePartsTable() {
         },
         body: JSON.stringify({
           customerName: customerName.trim(),
+          customerPhone: customerPhone.trim(),
+          customerAddress: customerAddress.trim(),
+          invoiceDate: invoiceDate,
+          invoiceNumber: invoiceNumber.trim(),
+          notes: notes.trim(),
           items: cart.map((item) => ({
             partId: item.part.id,
             quantity: item.quantity,
@@ -137,6 +153,11 @@ export function IssuePartsTable() {
         // Reset form
         setCart([]);
         setCustomerName("");
+        setCustomerPhone("");
+        setCustomerAddress("");
+        setInvoiceDate(new Date().toISOString().split("T")[0]);
+        setInvoiceNumber("");
+        setNotes("");
         // Redirect to records page
         router.push("/issue-records");
       } else {
@@ -172,6 +193,11 @@ export function IssuePartsTable() {
         },
         body: JSON.stringify({
           customerName: customerName.trim(),
+          customerPhone: customerPhone.trim(),
+          customerAddress: customerAddress.trim(),
+          invoiceDate: invoiceDate,
+          invoiceNumber: invoiceNumber.trim(),
+          notes: notes.trim(),
           items: cart.map((item) => ({
             partId: item.part.id,
             quantity: item.quantity,
@@ -187,6 +213,11 @@ export function IssuePartsTable() {
         alert("سند برای تأیید مدیر ارسال شد");
         setCart([]);
         setCustomerName("");
+        setCustomerPhone("");
+        setCustomerAddress("");
+        setInvoiceDate(new Date().toISOString().split("T")[0]);
+        setInvoiceNumber("");
+        setNotes("");
       } else {
         setError(result.message || "خطا در ارسال به مدیر");
       }
@@ -216,14 +247,67 @@ export function IssuePartsTable() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center gap-2">
-            <User className="h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="نام مشتری"
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-              disabled={isLoading}
-            />
+          {/* Customer Information */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex items-center gap-2">
+              <User className="h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="نام مشتری"
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                disabled={isLoading}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Phone className="h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="شماره تماس"
+                value={customerPhone}
+                onChange={(e) => setCustomerPhone(e.target.value)}
+                disabled={isLoading}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <MapPin className="h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="آدرس"
+                value={customerAddress}
+                onChange={(e) => setCustomerAddress(e.target.value)}
+                disabled={isLoading}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <Input
+                type="date"
+                placeholder="تاریخ صدور"
+                value={invoiceDate}
+                onChange={(e) => setInvoiceDate(e.target.value)}
+                disabled={isLoading}
+              />
+            </div>
+          </div>
+
+          {/* Invoice Information */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex items-center gap-2">
+              <InvoiceIcon className="h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="شماره فاکتور (اختیاری)"
+                value={invoiceNumber}
+                onChange={(e) => setInvoiceNumber(e.target.value)}
+                disabled={isLoading}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <MessageSquare className="h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="توضیحات (اختیاری)"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                disabled={isLoading}
+              />
+            </div>
           </div>
 
           {cart.length === 0 ? (
