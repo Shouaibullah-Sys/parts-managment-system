@@ -49,16 +49,30 @@ import {
   Eye,
   Package,
   Plus,
+  RotateCcw,
+  Smartphone,
+  Monitor,
 } from "lucide-react";
 import { Part, PartsResponse } from "@/types/parts";
 import { useParts, useDeletePart } from "@/hooks/use-parts";
 import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
+import { EditPartDialog } from "./edit-part-dialog";
 
 export function PartsTable() {
   const router = useRouter();
   const { data: session } = authClient.useSession();
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [editingPart, setEditingPart] = useState<Part | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   useEffect(() => {
     if (session?.user) {
@@ -79,7 +93,7 @@ export function PartsTable() {
   // State for pagination and filters
   const [pagination, setPagination] = useState({
     pageIndex: 0,
-    pageSize: 10,
+    pageSize: isMobile ? 5 : 10,
   });
   const [sectionFilter, setSectionFilter] = useState<string>("");
   const [activeFilter, setActiveFilter] = useState<string>("");
@@ -114,20 +128,90 @@ export function PartsTable() {
     limit: 10,
   };
 
-  // Debug logging
-  useEffect(() => {
-    console.log("Parts Response:", partsResponse);
-    console.log("Parts Data:", partsData);
-    console.log("Pagination Data:", paginationData);
-  }, [partsResponse, partsData, paginationData]);
-
   // Calculate summary statistics
   const totalParts = paginationData.total || 0;
   const activeParts = partsData.filter((part) => part.active).length;
   const inactiveParts = totalParts - activeParts;
 
-  // Define columns
-  const columns: ColumnDef<Part>[] = [
+  // Define columns for mobile and desktop
+  const mobileColumns: ColumnDef<Part>[] = [
+    {
+      accessorKey: "partNumber",
+      header: "قطعه",
+      cell: ({ row }) => {
+        const part = row.original;
+        return (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Package className="h-4 w-4 text-primary" />
+              <span className="font-medium">{part.partNumber}</span>
+            </div>
+            <div className="text-sm text-muted-foreground truncate">
+              {part.name}
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-xs">
+                {part.section}
+              </Badge>
+              <Badge
+                variant={part.active ? "default" : "secondary"}
+                className="text-xs"
+              >
+                {part.active ? "فعال" : "غیرفعال"}
+              </Badge>
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      id: "prices",
+      header: "قیمت‌ها",
+      cell: ({ row }) => {
+        const part = row.original;
+        return (
+          <div className="space-y-1 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">خرید:</span>
+              <span className="font-mono">
+                {part.costPrice ? `AFN ${parseFloat(part.costPrice)}` : "-"}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">فروش:</span>
+              <span className="font-mono">
+                {part.salePrice ? `AFN ${parseFloat(part.salePrice)}` : "-"}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">حداقل:</span>
+              <span className="font-mono">{part.minStock}</span>
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      id: "actions",
+      header: "عملیات",
+      cell: ({ row }) => {
+        const part = row.original;
+        return (
+          <ActionMenu
+            part={part}
+            isAdmin={isAdmin}
+            onEdit={() => {
+              setEditingPart(part);
+              setIsEditDialogOpen(true);
+            }}
+            onRefetch={refetch}
+          />
+        );
+      },
+    },
+  ];
+
+  const desktopColumns: ColumnDef<Part>[] = [
     {
       accessorKey: "partNumber",
       header: ({ column }) => {
@@ -135,8 +219,9 @@ export function PartsTable() {
           <Button
             variant="ghost"
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="hover:bg-accent hover:text-accent-foreground"
           >
-            شماره قطعه
+            پارت نمبر
             <ArrowUpDown className="ml-2 h-4 w-4" />
           </Button>
         );
@@ -144,7 +229,7 @@ export function PartsTable() {
       cell: ({ row }) => (
         <div className="font-medium">
           <div className="flex items-center gap-2">
-            <Package className="h-4 w-4 text-muted-foreground" />
+            <Package className="h-4 w-4 text-primary" />
             {row.getValue("partNumber")}
           </div>
         </div>
@@ -163,7 +248,7 @@ export function PartsTable() {
       accessorKey: "section",
       header: "بخش",
       cell: ({ row }) => (
-        <Badge variant="outline" className="capitalize">
+        <Badge variant="outline" className="capitalize border-primary/30">
           {row.getValue("section")}
         </Badge>
       ),
@@ -172,7 +257,7 @@ export function PartsTable() {
       accessorKey: "minStock",
       header: "حداقل موجودی",
       cell: ({ row }) => (
-        <div className="text-right font-mono">{row.getValue("minStock")}</div>
+        <div className="font-mono text-center">{row.getValue("minStock")}</div>
       ),
     },
     {
@@ -181,8 +266,8 @@ export function PartsTable() {
       cell: ({ row }) => {
         const costPrice = row.getValue("costPrice") as string;
         return (
-          <div className="text-right font-mono">
-            {costPrice ? `$${parseFloat(costPrice).toFixed(2)}` : "-"}
+          <div className="text-Left font-mono">
+            {costPrice ? `AFN ${parseFloat(costPrice)}` : "-"}
           </div>
         );
       },
@@ -193,8 +278,8 @@ export function PartsTable() {
       cell: ({ row }) => {
         const salePrice = row.getValue("salePrice") as string;
         return (
-          <div className="text-right font-mono">
-            {salePrice ? `$${parseFloat(salePrice).toFixed(2)}` : "-"}
+          <div className="text-Left font-mono">
+            {salePrice ? `AFN ${parseFloat(salePrice)}` : "-"}
           </div>
         );
       },
@@ -205,7 +290,10 @@ export function PartsTable() {
       cell: ({ row }) => {
         const isActive = row.getValue("active") as boolean;
         return (
-          <Badge variant={isActive ? "default" : "secondary"}>
+          <Badge
+            variant={isActive ? "default" : "secondary"}
+            className={isActive ? "bg-primary" : ""}
+          >
             {isActive ? "فعال" : "غیرفعال"}
           </Badge>
         );
@@ -215,110 +303,22 @@ export function PartsTable() {
       id: "actions",
       cell: ({ row }) => {
         const part = row.original;
-
-        const handleDelete = async () => {
-          // Check if user is admin - this check is redundant since delete button only shows for admin
-          // but we keep it for additional security
-          if (!isAdmin) {
-            alert(
-              "شما اجازه حذف قطعات را ندارید. فقط ادمین می‌تواند قطعات را حذف کند."
-            );
-            return;
-          }
-
-          if (
-            confirm(
-              `آیا مطمئن هستید که می‌خواهید قطعه "${part.partNumber}" را حذف کنید؟`
-            )
-          ) {
-            try {
-              await deletePartMutation.mutateAsync(part.id);
-              // Refetch parts to update the list
-              refetch();
-            } catch (error) {
-              console.error("Error deleting part:", error);
-              alert("خطا در حذف قطعه. لطفاً دوباره تلاش کنید.");
-            }
-          }
-        };
-
-        const handleCopyPartNumber = () => {
-          navigator.clipboard.writeText(part.partNumber);
-        };
-
         return (
-          <div className="flex items-center gap-2">
-            {/* Quick View Button */}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => router.push(`/parts/${part.id}`)}
-              title="مشاهده جزئیات"
-            >
-              <Eye className="h-4 w-4" />
-            </Button>
-
-            {/* Edit Button - Only visible for admin */}
-            {isAdmin && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => router.push(`/parts/${part.id}/edit`)}
-                title="ویرایش قطعه"
-              >
-                <Edit className="h-4 w-4" />
-              </Button>
-            )}
-
-            {/* Dropdown for additional actions */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="h-8 w-8 p-0">
-                  <span className="sr-only">باز کردن منو</span>
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>عملیات</DropdownMenuLabel>
-
-                <DropdownMenuItem onClick={handleCopyPartNumber}>
-                  <Copy className="mr-2 h-4 w-4" />
-                  کپی شماره قطعه
-                </DropdownMenuItem>
-
-                <DropdownMenuItem
-                  onClick={() => router.push(`/parts/${part.id}`)}
-                >
-                  <Eye className="mr-2 h-4 w-4" />
-                  مشاهده جزئیات
-                </DropdownMenuItem>
-
-                {/* Only show admin options for admin users */}
-                {isAdmin && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={() => router.push(`/parts/${part.id}/edit`)}
-                    >
-                      <Edit className="mr-2 h-4 w-4" />
-                      ویرایش قطعه
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={handleDelete}
-                      className="text-red-600"
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      حذف قطعه
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+          <ActionMenu
+            part={part}
+            isAdmin={isAdmin}
+            onEdit={() => {
+              setEditingPart(part);
+              setIsEditDialogOpen(true);
+            }}
+            onRefetch={refetch}
+          />
         );
       },
     },
   ];
+
+  const columns = isMobile ? mobileColumns : desktopColumns;
 
   const table = useReactTable({
     data: partsData,
@@ -341,13 +341,150 @@ export function PartsTable() {
     pageCount: paginationData.totalPages || -1,
   });
 
+  // Action Menu Component
+  function ActionMenu({
+    part,
+    isAdmin,
+    onEdit,
+    onRefetch,
+  }: {
+    part: Part;
+    isAdmin: boolean;
+    onEdit: () => void;
+    onRefetch: () => void;
+  }) {
+    const deletePartMutation = useDeletePart();
+
+    const handleDelete = async () => {
+      if (!isAdmin) {
+        alert(
+          "شما اجازه حذف پرزه را ندارید. فقط ادمین می‌تواند پرزه را حذف کند."
+        );
+        return;
+      }
+
+      if (
+        confirm(
+          `آیا مطمئن هستید که می‌خواهید قطعه "${part.partNumber}" را حذف کنید؟`
+        )
+      ) {
+        try {
+          await deletePartMutation.mutateAsync(part.id);
+          onRefetch();
+        } catch (error) {
+          console.error("Error deleting part:", error);
+          alert("خطا در حذف قطعه. لطفاً دوباره تلاش کنید.");
+        }
+      }
+    };
+
+    const handleReactivate = async () => {
+      if (!isAdmin) {
+        alert("شما اجازه فعال‌سازی مجدد پرزه را ندارید.");
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/parts/${part.id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ active: true }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to reactivate part");
+        }
+
+        onRefetch();
+      } catch (error) {
+        console.error("Error reactivating part:", error);
+        alert("خطا در فعال‌سازی مجدد قطعه. لطفاً دوباره تلاش کنید.");
+      }
+    };
+
+    const handleCopyPartNumber = () => {
+      navigator.clipboard.writeText(part.partNumber);
+    };
+
+    return (
+      <div className="flex items-center gap-1">
+        <Button
+          variant="ghost"
+          size={isMobile ? "sm" : "icon"}
+          onClick={onEdit}
+          title="مشاهده و ویرایش"
+          className={isMobile ? "text-xs px-2" : ""}
+        >
+          <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
+          {isMobile && <span className="mr-1">مشاهده</span>}
+        </Button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              className={`p-0 ${isMobile ? "h-8 w-8" : "h-8 w-8"}`}
+            >
+              <MoreHorizontal className="h-3 w-3 sm:h-4 sm:w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="border-border bg-popover">
+            <DropdownMenuLabel>عملیات</DropdownMenuLabel>
+
+            <DropdownMenuItem
+              onClick={handleCopyPartNumber}
+              className="focus:bg-accent"
+            >
+              <Copy className="mr-2 h-4 w-4" />
+              کپی شماره قطعه
+            </DropdownMenuItem>
+
+            <DropdownMenuItem onClick={onEdit} className="focus:bg-accent">
+              <Eye className="mr-2 h-4 w-4" />
+              مشاهده و ویرایش
+            </DropdownMenuItem>
+
+            {isAdmin && (
+              <>
+                <DropdownMenuSeparator />
+                {!part.active ? (
+                  <DropdownMenuItem
+                    onClick={handleReactivate}
+                    className="text-green-600 focus:bg-green-50 dark:focus:bg-green-950"
+                  >
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    فعال‌سازی مجدد
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem
+                    onClick={handleDelete}
+                    className="text-red-600 focus:bg-red-50 dark:focus:bg-red-950"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    حذف قطعه
+                  </DropdownMenuItem>
+                )}
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    );
+  }
+
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center h-32 gap-2">
-        <div className="text-red-600">
-          خطا در بارگیری قطعات: {(error as Error).message}
+        <div className="text-destructive text-center">
+          خطا در بارگیری پرزه: {(error as Error).message}
         </div>
-        <Button variant="outline" onClick={() => refetch()}>
+        <Button
+          variant="outline"
+          onClick={() => refetch()}
+          className="border-primary text-primary hover:bg-primary hover:text-primary-foreground"
+        >
           دوباره تلاش کنید
         </Button>
       </div>
@@ -356,64 +493,88 @@ export function PartsTable() {
 
   return (
     <div className="space-y-4">
+      {/* View Toggle */}
+      <div className="flex items-center justify-end">
+        <div className="flex items-center gap-2 bg-muted/50 rounded-lg p-1">
+          <Button
+            variant={isMobile ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setIsMobile(true)}
+            className={`${isMobile ? "bg-primary text-primary-foreground" : "text-muted-foreground"} px-3`}
+          >
+            <Smartphone className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={!isMobile ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setIsMobile(false)}
+            className={`${!isMobile ? "bg-primary text-primary-foreground" : "text-muted-foreground"} px-3`}
+          >
+            <Monitor className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
       {/* Summary Statistics */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-card border rounded-lg p-4">
+        <div className="bg-mechanical border-mechanical rounded-lg p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-muted-foreground">
-                مجموع قطعات
+                مجموع پرزه
               </p>
-              <p className="text-2xl font-bold">
+              <p className="text-2xl font-bold text-foreground">
                 {totalParts.toLocaleString()}
               </p>
             </div>
-            <Package className="h-8 w-8 text-muted-foreground" />
+            <div className="p-2 rounded-full bg-primary/10">
+              <Package className="h-5 w-5 text-primary" />
+            </div>
           </div>
         </div>
 
-        <div className="bg-card border rounded-lg p-4">
+        <div className="bg-mechanical border-mechanical rounded-lg p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-muted-foreground">
-                قطعات فعال
+                پرزه فعال
               </p>
               <p className="text-2xl font-bold text-green-600">
                 {activeParts.toLocaleString()}
               </p>
             </div>
-            <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center">
+            <div className="p-2 rounded-full bg-green-100 dark:bg-green-950">
               <div className="h-3 w-3 rounded-full bg-green-600"></div>
             </div>
           </div>
         </div>
 
-        <div className="bg-card border rounded-lg p-4">
+        <div className="bg-mechanical border-mechanical rounded-lg p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-muted-foreground">
-                قطعات غیرفعال
+                پرزه غیرفعال
               </p>
-              <p className="text-2xl font-bold text-gray-600">
+              <p className="text-2xl font-bold text-amber-600">
                 {inactiveParts.toLocaleString()}
               </p>
             </div>
-            <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center">
-              <div className="h-3 w-3 rounded-full bg-gray-600"></div>
+            <div className="p-2 rounded-full bg-amber-100 dark:bg-amber-950">
+              <div className="h-3 w-3 rounded-full bg-amber-600"></div>
             </div>
           </div>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 bg-muted/50 rounded-lg">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-4 bg-mechanical rounded-lg border-mechanical">
+        <div className="relative flex-1 w-full sm:max-w-sm">
+          <Search className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="بر اساس شماره قطعه یا نام جستجو کنید..."
+            placeholder="بر اساس پارت نمبر یا نام پرزه جستجو کنید..."
             value={globalFilter ?? ""}
             onChange={(event) => setGlobalFilter(event.target.value)}
-            className="pl-8 bg-background"
+            className="pr-8 bg-background border-border"
           />
         </div>
 
@@ -423,10 +584,10 @@ export function PartsTable() {
             setSectionFilter(value === "all-sections" ? "" : value)
           }
         >
-          <SelectTrigger className="w-32 bg-background">
+          <SelectTrigger className="w-full sm:w-32 bg-background border-border">
             <SelectValue placeholder="بخش" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="border-border bg-popover">
             <SelectItem value="all-sections">همه بخش‌ها</SelectItem>
             <SelectItem value="E">بخش E</SelectItem>
             <SelectItem value="D">بخش D</SelectItem>
@@ -442,17 +603,16 @@ export function PartsTable() {
             setActiveFilter(value === "all-status" ? "" : value)
           }
         >
-          <SelectTrigger className="w-32 bg-background">
+          <SelectTrigger className="w-full sm:w-32 bg-background border-border">
             <SelectValue placeholder="وضعیت" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="border-border bg-popover">
             <SelectItem value="all-status">همه وضعیت‌ها</SelectItem>
             <SelectItem value="true">فعال</SelectItem>
             <SelectItem value="false">غیرفعال</SelectItem>
           </SelectContent>
         </Select>
 
-        {/* Clear Filters */}
         {(globalFilter || sectionFilter || activeFilter) && (
           <Button
             variant="ghost"
@@ -461,7 +621,7 @@ export function PartsTable() {
               setSectionFilter("");
               setActiveFilter("");
             }}
-            className="text-sm"
+            className="text-sm text-primary hover:text-primary/80"
           >
             پاک کردن فیلترها
           </Button>
@@ -469,13 +629,18 @@ export function PartsTable() {
       </div>
 
       {/* Table */}
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
+      <div
+        className={`rounded-md border border-border ${isMobile ? "overflow-hidden" : "overflow-x-auto"}`}
+      >
+        <Table className={isMobile ? "w-full" : "min-w-full"}>
+          <TableHeader className="bg-muted/50">
             {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
+              <TableRow key={headerGroup.id} className="border-border">
                 {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
+                  <TableHead
+                    key={header.id}
+                    className={isMobile ? "px-3 py-2" : ""}
+                  >
                     {header.isPlaceholder
                       ? null
                       : flexRender(
@@ -496,7 +661,7 @@ export function PartsTable() {
                 >
                   <div className="flex items-center justify-center gap-2">
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                    در حال بارگیری قطعات...
+                    در حال بارگیری پرزه...
                   </div>
                 </TableCell>
               </TableRow>
@@ -505,10 +670,13 @@ export function PartsTable() {
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
-                  className="group hover:bg-muted/50"
+                  className="group hover:bg-accent/30 border-border transition-colors"
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
+                    <TableCell
+                      key={cell.id}
+                      className={isMobile ? "px-3 py-3" : ""}
+                    >
                       {flexRender(
                         cell.column.columnDef.cell,
                         cell.getContext()
@@ -552,6 +720,7 @@ export function PartsTable() {
             size="sm"
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
+            className="border-border text-foreground hover:bg-accent hover:text-accent-foreground"
           >
             قبلی
           </Button>
@@ -566,11 +735,22 @@ export function PartsTable() {
             size="sm"
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
+            className="border-border text-foreground hover:bg-accent hover:text-accent-foreground"
           >
             بعدی
           </Button>
         </div>
       </div>
+
+      {/* Edit Part Dialog */}
+      <EditPartDialog
+        part={editingPart}
+        open={isEditDialogOpen}
+        onOpenChange={setIsEditDialogOpen}
+        onSuccess={() => {
+          refetch();
+        }}
+      />
     </div>
   );
 }

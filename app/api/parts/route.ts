@@ -7,8 +7,8 @@ import { listParts } from "@/lib/parts-queries";
 import { requireAuth } from "@/lib/auth-session";
 import { ok, bad, unauthorized, serverError } from "@/lib/api-response";
 import { db } from "@/db/drizzle";
-import { user, parts } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { user, parts, inventory } from "@/db/schema";
+import { eq, sql } from "drizzle-orm";
 
 export async function GET(request: NextRequest) {
   try {
@@ -30,8 +30,36 @@ export async function GET(request: NextRequest) {
       active,
     });
 
-    // Return same shape frontend expects
-    return ok(items, { pagination });
+    // Enhance items with current stock information
+    const itemsWithStock = await Promise.all(
+      items.map(async (part) => {
+        try {
+          const stockResult = await db
+            .select({
+              stock: sql<number>`COALESCE(SUM(${inventory.change}), 0)`,
+            })
+            .from(inventory)
+            .where(eq(inventory.partId, part.id));
+
+          const currentStock = Number(stockResult[0]?.stock || 0);
+
+          return {
+            ...part,
+            currentStock,
+            isLowStock: currentStock < (part.minStock || 0),
+          };
+        } catch (error) {
+          console.error(`Error fetching stock for part ${part.id}:`, error);
+          return {
+            ...part,
+            currentStock: 0,
+            isLowStock: false,
+          };
+        }
+      })
+    );
+
+    return ok(itemsWithStock, { pagination });
   } catch (err) {
     return serverError(err);
   }

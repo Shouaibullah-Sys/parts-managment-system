@@ -53,7 +53,7 @@ export default function GoogleCallback() {
   }, [router]);
 
   return (
-    <div className="flex justify-center items-center min-h-96">
+    <div className="flex justify-center items-center min-h-96 bg-mechanical">
       <Loader
         title="در حال تکمیل ورود..."
         subtitle="لطفاً منتظر بمانید"
