@@ -8,16 +8,20 @@ import {
 } from "@/types/parts";
 
 // Fetch parts with filters
-export function useParts(params?: {
-  page?: number;
-  limit?: number;
-  search?: string;
-  section?: string;
-  active?: boolean;
-}) {
+export function useParts(
+  params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    section?: string;
+    active?: boolean;
+  },
+  options?: any
+) {
   return useQuery({
     queryKey: ["parts", params],
     queryFn: async (): Promise<PartsResponse> => {
+      console.log("Fetching parts with params:", params);
       const searchParams = new URLSearchParams();
       if (params?.page) searchParams.append("page", params.page.toString());
       if (params?.limit) searchParams.append("limit", params.limit.toString());
@@ -26,11 +30,24 @@ export function useParts(params?: {
       if (params?.active !== undefined)
         searchParams.append("active", params.active.toString());
 
-      const response = await fetch(`/api/parts?${searchParams}`);
-      if (!response.ok) throw new Error("Failed to fetch parts");
-      return response.json();
+      const response = await fetch(`/api/parts?${searchParams}`, {
+        credentials: "include", // This is crucial for authentication
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("API Error:", response.status, errorText);
+        throw new Error(
+          `Failed to fetch parts: ${response.status} ${errorText}`
+        );
+      }
+      const data = await response.json();
+      console.log("Parts fetched:", data);
+      return data;
     },
     placeholderData: (previousData) => previousData, // Replaces keepPreviousData in v5
+    refetchOnWindowFocus: true, // Always refetch when window gains focus
+    refetchOnMount: true, // Always refetch when component mounts
+    ...options,
   });
 }
 
@@ -47,9 +64,9 @@ export function usePartsStats() {
       try {
         const [allResponse, activeResponse, lowStockResponse] =
           await Promise.all([
-            fetch("/api/parts?limit=1"),
-            fetch("/api/parts?active=true&limit=1"),
-            fetch("/api/parts/low-stock"),
+            fetch("/api/parts?limit=1", { credentials: "include" }),
+            fetch("/api/parts?active=true&limit=1", { credentials: "include" }),
+            fetch("/api/parts/low-stock", { credentials: "include" }),
           ]);
 
         if (!allResponse.ok || !activeResponse.ok || !lowStockResponse.ok) {
@@ -81,7 +98,9 @@ export function usePart(id: number) {
   return useQuery({
     queryKey: ["part", id],
     queryFn: async (): Promise<PartDetailsResponse> => {
-      const response = await fetch(`/api/parts/${id}`);
+      const response = await fetch(`/api/parts/${id}`, {
+        credentials: "include", // Include authentication cookies
+      });
       if (!response.ok) throw new Error("Failed to fetch part");
       return response.json();
     },
@@ -94,7 +113,9 @@ export function useLowStockParts() {
   return useQuery({
     queryKey: ["parts", "low-stock"],
     queryFn: async (): Promise<PartsResponse> => {
-      const response = await fetch("/api/parts/low-stock");
+      const response = await fetch("/api/parts/low-stock", {
+        credentials: "include", // Include authentication cookies
+      });
       if (!response.ok) throw new Error("Failed to fetch low stock parts");
       return response.json();
     },
@@ -107,22 +128,30 @@ export function useCreatePart() {
 
   return useMutation({
     mutationFn: async (partData: CreatePartInput): Promise<Part> => {
+      console.log("Creating part:", partData);
       const response = await fetch("/api/parts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include", // Include authentication cookies
         body: JSON.stringify(partData),
       });
 
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Failed to create part");
+      console.log("Part created successfully:", data.data);
       return data.data;
     },
     onSuccess: (newPart) => {
-      // Invalidate parts list
+      console.log("Invalidating parts queries after successful creation");
+      // Force complete invalidation of all parts queries
       queryClient.invalidateQueries({ queryKey: ["parts"] });
+      queryClient.removeQueries({ queryKey: ["parts"] }); // Remove cached data to force refetch
 
       // Invalidate stats
       queryClient.invalidateQueries({ queryKey: ["parts", "stats"] });
+
+      // Force refetch of parts list
+      queryClient.refetchQueries({ queryKey: ["parts"] });
     },
     onError: (error: Error) => {
       console.error("Error creating part:", error);
@@ -145,6 +174,7 @@ export function useUpdatePart() {
       const response = await fetch(`/api/parts/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
+        credentials: "include", // Include authentication cookies
         body: JSON.stringify(data),
       });
 
@@ -178,6 +208,7 @@ export function useDeletePart() {
     mutationFn: async (id: number): Promise<void> => {
       const response = await fetch(`/api/parts/${id}`, {
         method: "DELETE",
+        credentials: "include", // Include authentication cookies
       });
 
       if (!response.ok) {
@@ -214,6 +245,7 @@ export function useTogglePartActive() {
       const response = await fetch(`/api/parts/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
+        credentials: "include", // Include authentication cookies
         body: JSON.stringify({ active }),
       });
 

@@ -22,15 +22,17 @@ export type CreatePartInput = {
 
 export type UpdatePartInput = Partial<CreatePartInput>;
 
+export type PaginationInfo = {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+};
+
 export type PartsResponse = {
   success: boolean;
   data: Part[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
+  pagination: PaginationInfo;
 };
 
 export type PartDetailsResponse = {

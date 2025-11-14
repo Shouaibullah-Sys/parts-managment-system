@@ -67,8 +67,9 @@ export function CreatePartForm() {
         salePrice: data.salePrice || undefined,
       };
       await createPartMutation.mutateAsync(transformedData);
-      router.push("/parts");
-      router.refresh();
+
+      // Force a complete page reload to ensure the parts list updates
+      window.location.href = "/parts";
     } catch (error) {
       setServerError(
         error instanceof Error ? error.message : "Something went wrong"

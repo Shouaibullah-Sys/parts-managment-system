@@ -49,12 +49,10 @@ import {
   Package,
   Plus,
 } from "lucide-react";
-import { Part } from "@/types/parts";
+import { Part, PartsResponse } from "@/types/parts";
 import { useParts, useDeletePart } from "@/hooks/use-parts";
 import { authClient } from "@/lib/auth-client";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import Loader from "../loader";
 
 export function PartsTable() {
   const router = useRouter();
@@ -100,6 +98,22 @@ export function PartsTable() {
   });
 
   const deletePartMutation = useDeletePart();
+
+  // Safe data extraction
+  const partsData = (partsResponse as PartsResponse)?.data || [];
+  const paginationData = (partsResponse as PartsResponse)?.pagination || {
+    total: 0,
+    totalPages: 0,
+    page: 1,
+    limit: 10,
+  };
+
+  // Debug logging
+  useEffect(() => {
+    console.log("Parts Response:", partsResponse);
+    console.log("Parts Data:", partsData);
+    console.log("Pagination Data:", paginationData);
+  }, [partsResponse, partsData, paginationData]);
 
   // Define columns
   const columns: ColumnDef<Part>[] = [
@@ -285,7 +299,7 @@ export function PartsTable() {
   ];
 
   const table = useReactTable({
-    data: partsResponse?.data || [],
+    data: partsData,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
@@ -302,7 +316,7 @@ export function PartsTable() {
       pagination,
     },
     manualPagination: true,
-    pageCount: partsResponse?.pagination.totalPages ?? -1,
+    pageCount: paginationData.totalPages || -1,
   });
 
   if (error) {
@@ -320,6 +334,11 @@ export function PartsTable() {
 
   return (
     <div className="space-y-4">
+      {/* Debug info - remove in production */}
+      <div className="p-2 bg-yellow-100 text-yellow-800 text-sm rounded">
+        Debug: {partsData.length} parts loaded, Total: {paginationData.total}
+      </div>
+
       {/* Filters */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 bg-muted/50 rounded-lg">
         <div className="relative flex-1 max-w-sm">
@@ -409,11 +428,10 @@ export function PartsTable() {
                   colSpan={columns.length}
                   className="h-24 text-center"
                 >
-                  <Loader
-                    title="در حال بارگذاری قطعات..."
-                    subtitle="لطفاً منتظر بمانید"
-                    size="sm"
-                  />
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                    Loading parts...
+                  </div>
                 </TableCell>
               </TableRow>
             ) : table.getRowModel().rows?.length ? (
@@ -449,17 +467,6 @@ export function PartsTable() {
                           : "Get started by creating your first part"}
                       </p>
                     </div>
-                    {isAdmin &&
-                      !globalFilter &&
-                      !sectionFilter &&
-                      !activeFilter && (
-                        <Link href="/parts/new">
-                          <Button className="mt-2">
-                            <Plus className="mr-2 h-4 w-4" />
-                            Create Part
-                          </Button>
-                        </Link>
-                      )}
                   </div>
                 </TableCell>
               </TableRow>
@@ -471,8 +478,8 @@ export function PartsTable() {
       {/* Pagination */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="text-sm text-muted-foreground">
-          Showing {table.getRowModel().rows.length} of{" "}
-          {partsResponse?.pagination.total || 0} parts
+          Showing {table.getRowModel().rows.length} of {paginationData.total}{" "}
+          parts
         </div>
         <div className="flex items-center space-x-2">
           <Button

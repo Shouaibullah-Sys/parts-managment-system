@@ -1,4 +1,5 @@
 // app/parts/page.tsx
+
 "use client";
 
 import { PartsTable } from "@/components/parts/parts-table";
@@ -28,6 +29,7 @@ export default function PartsPage() {
 
   const handlePartCreated = () => {
     setIsCreateDialogOpen(false);
+    queryClient.invalidateQueries({ queryKey: ["parts"] });
   };
 
   const handleRefresh = () => {
@@ -47,13 +49,11 @@ export default function PartsPage() {
         </div>
 
         <div className="flex gap-2">
-          {/* Refresh Button */}
           <Button variant="outline" size="sm" onClick={handleRefresh}>
             <RefreshCw className="mr-2 h-4 w-4" />
             Refresh
           </Button>
 
-          {/* Import/Export Buttons - Admin Only */}
           {isAdmin && (
             <>
               <Button variant="outline" size="sm">
@@ -64,20 +64,15 @@ export default function PartsPage() {
                 <Download className="mr-2 h-4 w-4" />
                 Export
               </Button>
+              <Button onClick={() => setIsCreateDialogOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Create Part
+              </Button>
             </>
-          )}
-
-          {/* Create Part Button - Admin Only */}
-          {isAdmin && (
-            <Button onClick={() => setIsCreateDialogOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create Part
-            </Button>
           )}
         </div>
       </div>
 
-      {/* Simple Stats Placeholder - You can implement proper stats later */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-card border rounded-lg p-4">
           <div className="flex items-center justify-between">
@@ -138,7 +133,6 @@ export default function PartsPage() {
 
       <PartsTable />
 
-      {/* Create Part Dialog */}
       <CreatePartDialog
         open={isCreateDialogOpen}
         onOpenChange={setIsCreateDialogOpen}
