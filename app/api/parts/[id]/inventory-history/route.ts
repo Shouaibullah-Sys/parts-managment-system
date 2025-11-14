@@ -1,53 +1,31 @@
 // app/api/parts/[id]/inventory-history/route.ts
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-import { NextRequest, NextResponse } from "next/server";
-import { partsQueries } from "@/lib/parts-service";
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
+import type { NextRequest } from "next/server";
+import { requireAuth } from "@/lib/auth-session";
+import { getPartInventoryHistory } from "@/lib/parts-queries";
+import { ok, bad, unauthorized, serverError } from "@/lib/api-response";
 
-interface Params {
-  params: {
-    id: string;
-  };
-}
-
-export async function GET(request: NextRequest, { params }: Params) {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
   try {
-    const session = await auth.api.getSession({
-      headers: await headers(),
-    });
+    const session = await requireAuth(request);
+    if (!session?.user) return unauthorized();
 
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const id = Number(params.id);
+    if (!id) return bad("Invalid ID");
 
-    const partId = parseInt(params.id);
-    const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "20");
+    const url = new URL(request.url);
+    const page = parseInt(url.searchParams.get("page") || "1", 10);
+    const limit = parseInt(url.searchParams.get("limit") || "20", 10);
 
-    if (isNaN(partId)) {
-      return NextResponse.json(
-        { success: false, error: "Invalid part ID" },
-        { status: 400 }
-      );
-    }
+    const result = await getPartInventoryHistory(id, page, limit);
 
-    const history = await partsQueries.getPartInventoryHistory(partId, {
-      page,
-      limit,
-    });
-
-    return NextResponse.json({
-      success: true,
-      data: history.history,
-      pagination: history.pagination,
-    });
-  } catch (error) {
-    console.error("Error fetching inventory history:", error);
-    return NextResponse.json(
-      { success: false, error: "Internal server error" },
-      { status: 500 }
-    );
+    return ok(result.history, { pagination: result.pagination });
+  } catch (err) {
+    return serverError(err);
   }
 }

@@ -1,0 +1,1 @@
+ALTER TABLE "parts" ALTER COLUMN "min_stock" DROP NOT NULL;

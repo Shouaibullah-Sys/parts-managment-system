@@ -68,8 +68,9 @@ export function CreatePartForm() {
       };
       await createPartMutation.mutateAsync(transformedData);
 
-      // Force a complete page reload to ensure the parts list updates
-      window.location.href = "/parts";
+      // Navigate back to parts list with refresh
+      router.push("/parts");
+      router.refresh(); // Force refresh the route
     } catch (error) {
       setServerError(
         error instanceof Error ? error.message : "Something went wrong"

@@ -143,9 +143,9 @@ export function useCreatePart() {
     },
     onSuccess: (newPart) => {
       console.log("Invalidating parts queries after successful creation");
-      // Force complete invalidation of all parts queries
-      queryClient.invalidateQueries({ queryKey: ["parts"] });
-      queryClient.removeQueries({ queryKey: ["parts"] }); // Remove cached data to force refetch
+
+      // Remove cached data to force fresh fetch
+      queryClient.removeQueries({ queryKey: ["parts"] });
 
       // Invalidate stats
       queryClient.invalidateQueries({ queryKey: ["parts", "stats"] });

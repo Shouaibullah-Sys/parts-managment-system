@@ -83,19 +83,24 @@ export function PartsTable() {
   const [sectionFilter, setSectionFilter] = useState<string>("");
   const [activeFilter, setActiveFilter] = useState<string>("");
 
-  // Fetch parts with current filters
+  // Fetch parts with current filters - always ensure user is authenticated
   const {
     data: partsResponse,
     isLoading,
     error,
     refetch,
-  } = useParts({
-    page: pagination.pageIndex + 1,
-    limit: pagination.pageSize,
-    search: globalFilter || undefined,
-    section: sectionFilter || undefined,
-    active: activeFilter ? activeFilter === "true" : undefined,
-  });
+  } = useParts(
+    {
+      page: pagination.pageIndex + 1,
+      limit: pagination.pageSize,
+      search: globalFilter || undefined,
+      section: sectionFilter || undefined,
+      active: activeFilter ? activeFilter === "true" : undefined,
+    },
+    {
+      enabled: !!session?.user, // Only fetch when user is authenticated
+    }
+  );
 
   const deletePartMutation = useDeletePart();
 
@@ -334,11 +339,6 @@ export function PartsTable() {
 
   return (
     <div className="space-y-4">
-      {/* Debug info - remove in production */}
-      <div className="p-2 bg-yellow-100 text-yellow-800 text-sm rounded">
-        Debug: {partsData.length} parts loaded, Total: {paginationData.total}
-      </div>
-
       {/* Filters */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 bg-muted/50 rounded-lg">
         <div className="relative flex-1 max-w-sm">

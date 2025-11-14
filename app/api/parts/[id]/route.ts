@@ -1,221 +1,131 @@
 // app/api/parts/[id]/route.ts
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-import { NextRequest, NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { getPartById } from "@/lib/parts-queries";
+import { requireAuth } from "@/lib/auth-session";
+import {
+  ok,
+  bad,
+  unauthorized,
+  notFound,
+  serverError,
+} from "@/lib/api-response";
 import { db } from "@/db/drizzle";
-import { parts, inventory, user } from "@/db/schema";
+import { parts, user, inventory } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
 
-interface Params {
-  params: {
-    id: string;
-  };
-}
-
-export async function GET(request: NextRequest, { params }: Params) {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
   try {
-    const session = await auth.api.getSession({
-      headers: await headers(),
-    });
+    const session = await requireAuth(request);
+    if (!session?.user) return unauthorized();
 
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const id = Number(params.id);
+    if (!id) return bad("Invalid ID");
 
-    const partId = parseInt(params.id);
+    const part = await getPartById(id);
+    if (!part) return notFound("Part not found");
 
-    if (isNaN(partId)) {
-      return NextResponse.json(
-        { success: false, error: "Invalid part ID" },
-        { status: 400 }
-      );
-    }
-
-    const [part] = await db.select().from(parts).where(eq(parts.id, partId));
-
-    if (!part) {
-      return NextResponse.json(
-        { success: false, error: "Part not found" },
-        { status: 404 }
-      );
-    }
-
-    // Get current stock level
-    const stockResult = await db
+    const stock = await db
       .select({ stock: sql<number>`COALESCE(SUM(${inventory.change}), 0)` })
       .from(inventory)
-      .where(eq(inventory.partId, partId));
+      .where(eq(inventory.partId, id));
 
-    const currentStock = stockResult[0]?.stock || 0;
+    const currentStock = Number(stock?.[0]?.stock || 0);
 
-    // Get recent transactions
-    const recentTransactions = await db
-      .select()
-      .from(inventory)
-      .where(eq(inventory.partId, partId))
-      .orderBy(inventory.createdAt)
-      .limit(10);
-
-    const partWithDetails = {
+    return ok({
       ...part,
-      currentStock,
-      recentTransactions,
-      isLowStock: currentStock < part.minStock,
-    };
-
-    return NextResponse.json({
-      success: true,
-      data: partWithDetails,
+      currentStock: stock[0]?.stock || 0,
+      isLowStock: (stock[0]?.stock || 0) < (part.minStock || 0),
     });
-  } catch (error) {
-    console.error("Error fetching part:", error);
-    return NextResponse.json(
-      { success: false, error: "Internal server error" },
-      { status: 500 }
-    );
+  } catch (err) {
+    return serverError(err);
   }
 }
 
-export async function PUT(request: NextRequest, { params }: Params) {
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
   try {
-    const session = await auth.api.getSession({
-      headers: await headers(),
-    });
+    const session = await requireAuth(request);
+    if (!session?.user) return unauthorized();
 
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Fetch user role from database
-    const [userWithRole] = await db
+    // role check
+    const [roleRow] = await db
       .select({ role: user.role })
       .from(user)
       .where(eq(user.id, session.user.id))
       .limit(1);
 
-    if (!userWithRole || userWithRole.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    if (!roleRow || roleRow.role !== "admin") return unauthorized();
 
-    const partId = parseInt(params.id);
+    const id = Number(params.id);
+    if (!id) return bad("Invalid ID");
 
-    if (isNaN(partId)) {
-      return NextResponse.json(
-        { success: false, error: "Invalid part ID" },
-        { status: 400 }
-      );
-    }
+    const body = await request.json();
 
-    const updateData = await request.json();
-
-    // Check if part exists
-    const [existingPart] = await db
+    const [existing] = await db
       .select()
       .from(parts)
-      .where(eq(parts.id, partId));
+      .where(eq(parts.id, id))
+      .limit(1);
+    if (!existing) return notFound("Part not found");
 
-    if (!existingPart) {
-      return NextResponse.json(
-        { success: false, error: "Part not found" },
-        { status: 404 }
-      );
-    }
-
-    // Check if part number is being changed and if it already exists
-    if (
-      updateData.partNumber &&
-      updateData.partNumber !== existingPart.partNumber
-    ) {
-      const [partWithSameNumber] = await db
+    // if partNumber changed ensure uniqueness
+    if (body.partNumber && body.partNumber !== existing.partNumber) {
+      const [dup] = await db
         .select()
         .from(parts)
-        .where(eq(parts.partNumber, updateData.partNumber))
+        .where(eq(parts.partNumber, body.partNumber))
         .limit(1);
-
-      if (partWithSameNumber) {
-        return NextResponse.json(
-          { success: false, error: "Part number already exists" },
-          { status: 400 }
-        );
-      }
+      if (dup) return bad("Part number already exists");
     }
 
-    const [updatedPart] = await db
+    const [updated] = await db
       .update(parts)
-      .set(updateData)
-      .where(eq(parts.id, partId))
+      .set(body)
+      .where(eq(parts.id, id))
       .returning();
-
-    return NextResponse.json({
-      success: true,
-      data: updatedPart,
-    });
-  } catch (error: any) {
-    console.error("Error updating part:", error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message || "Internal server error",
-      },
-      { status: 400 }
-    );
+    return ok(updated);
+  } catch (err) {
+    return serverError(err);
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: Params) {
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
   try {
-    const session = await auth.api.getSession({
-      headers: await headers(),
-    });
+    const session = await requireAuth(request);
+    if (!session?.user) return unauthorized();
 
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Fetch user role from database
-    const [userWithRole] = await db
+    // role check
+    const [roleRow] = await db
       .select({ role: user.role })
       .from(user)
       .where(eq(user.id, session.user.id))
       .limit(1);
 
-    if (!userWithRole || userWithRole.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    if (!roleRow || roleRow.role !== "admin") return unauthorized();
 
-    const partId = parseInt(params.id);
+    const id = Number(params.id);
+    if (!id) return bad("Invalid ID");
 
-    if (isNaN(partId)) {
-      return NextResponse.json(
-        { success: false, error: "Invalid part ID" },
-        { status: 400 }
-      );
-    }
-
-    const [deletedPart] = await db
+    const [deleted] = await db
       .update(parts)
       .set({ active: false })
-      .where(eq(parts.id, partId))
+      .where(eq(parts.id, id))
       .returning();
+    if (!deleted) return notFound("Part not found");
 
-    if (!deletedPart) {
-      return NextResponse.json(
-        { success: false, error: "Part not found" },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: "Part deleted successfully",
-      data: deletedPart,
-    });
-  } catch (error) {
-    console.error("Error deleting part:", error);
-    return NextResponse.json(
-      { success: false, error: "Internal server error" },
-      { status: 500 }
-    );
+    return ok(deleted);
+  } catch (err) {
+    return serverError(err);
   }
 }

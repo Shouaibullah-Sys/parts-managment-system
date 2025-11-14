@@ -77,7 +77,7 @@ export const parts = pgTable("parts", {
   partNumber: varchar("part_number", { length: 100 }).unique().notNull(),
   name: varchar("name", { length: 255 }).notNull(),
   section: sectionEnum("section").default("E"),
-  minStock: integer("min_stock").default(0).notNull(), // Added .notNull()
+  minStock: integer("min_stock").default(0), // Fixed: default values don't need notNull()
   costPrice: numeric("cost_price", { precision: 12, scale: 2 }),
   salePrice: numeric("sale_price", { precision: 12, scale: 2 }),
   active: boolean("active").default(true),
