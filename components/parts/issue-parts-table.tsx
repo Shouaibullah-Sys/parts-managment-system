@@ -68,7 +68,7 @@ export function IssuePartsTable() {
       const result = await response.json();
 
       if (result.success) {
-        setParts(result.data.results);
+        setParts(result.data?.results || []);
       } else {
         setParts([]);
       }
