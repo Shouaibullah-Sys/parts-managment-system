@@ -1,3 +1,4 @@
+// components/parts/parts-table.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -120,6 +121,11 @@ export function PartsTable() {
     console.log("Pagination Data:", paginationData);
   }, [partsResponse, partsData, paginationData]);
 
+  // Calculate summary statistics
+  const totalParts = paginationData.total || 0;
+  const activeParts = partsData.filter((part) => part.active).length;
+  const inactiveParts = totalParts - activeParts;
+
   // Define columns
   const columns: ColumnDef<Part>[] = [
     {
@@ -130,7 +136,7 @@ export function PartsTable() {
             variant="ghost"
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
           >
-            Part Number
+            شماره قطعه
             <ArrowUpDown className="ml-2 h-4 w-4" />
           </Button>
         );
@@ -146,7 +152,7 @@ export function PartsTable() {
     },
     {
       accessorKey: "name",
-      header: "Name",
+      header: "نام",
       cell: ({ row }) => (
         <div className="max-w-[200px] truncate" title={row.getValue("name")}>
           {row.getValue("name")}
@@ -155,7 +161,7 @@ export function PartsTable() {
     },
     {
       accessorKey: "section",
-      header: "Section",
+      header: "بخش",
       cell: ({ row }) => (
         <Badge variant="outline" className="capitalize">
           {row.getValue("section")}
@@ -164,14 +170,14 @@ export function PartsTable() {
     },
     {
       accessorKey: "minStock",
-      header: "Min Stock",
+      header: "حداقل موجودی",
       cell: ({ row }) => (
         <div className="text-right font-mono">{row.getValue("minStock")}</div>
       ),
     },
     {
       accessorKey: "costPrice",
-      header: "Cost Price",
+      header: "قیمت خرید",
       cell: ({ row }) => {
         const costPrice = row.getValue("costPrice") as string;
         return (
@@ -183,7 +189,7 @@ export function PartsTable() {
     },
     {
       accessorKey: "salePrice",
-      header: "Sale Price",
+      header: "قیمت فروش",
       cell: ({ row }) => {
         const salePrice = row.getValue("salePrice") as string;
         return (
@@ -195,12 +201,12 @@ export function PartsTable() {
     },
     {
       accessorKey: "active",
-      header: "Status",
+      header: "وضعیت",
       cell: ({ row }) => {
         const isActive = row.getValue("active") as boolean;
         return (
           <Badge variant={isActive ? "default" : "secondary"}>
-            {isActive ? "Active" : "Inactive"}
+            {isActive ? "فعال" : "غیرفعال"}
           </Badge>
         );
       },
@@ -211,9 +217,18 @@ export function PartsTable() {
         const part = row.original;
 
         const handleDelete = async () => {
+          // Check if user is admin - this check is redundant since delete button only shows for admin
+          // but we keep it for additional security
+          if (!isAdmin) {
+            alert(
+              "شما اجازه حذف قطعات را ندارید. فقط ادمین می‌تواند قطعات را حذف کند."
+            );
+            return;
+          }
+
           if (
             confirm(
-              `Are you sure you want to delete part "${part.partNumber}"?`
+              `آیا مطمئن هستید که می‌خواهید قطعه "${part.partNumber}" را حذف کنید؟`
             )
           ) {
             try {
@@ -222,6 +237,7 @@ export function PartsTable() {
               refetch();
             } catch (error) {
               console.error("Error deleting part:", error);
+              alert("خطا در حذف قطعه. لطفاً دوباره تلاش کنید.");
             }
           }
         };
@@ -237,18 +253,18 @@ export function PartsTable() {
               variant="ghost"
               size="icon"
               onClick={() => router.push(`/parts/${part.id}`)}
-              title="View details"
+              title="مشاهده جزئیات"
             >
               <Eye className="h-4 w-4" />
             </Button>
 
-            {/* Edit Button - Always visible for quick access */}
+            {/* Edit Button - Only visible for admin */}
             {isAdmin && (
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => router.push(`/parts/${part.id}/edit`)}
-                title="Edit part"
+                title="ویرایش قطعه"
               >
                 <Edit className="h-4 w-4" />
               </Button>
@@ -258,25 +274,26 @@ export function PartsTable() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="h-8 w-8 p-0">
-                  <span className="sr-only">Open menu</span>
+                  <span className="sr-only">باز کردن منو</span>
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                <DropdownMenuLabel>عملیات</DropdownMenuLabel>
 
                 <DropdownMenuItem onClick={handleCopyPartNumber}>
                   <Copy className="mr-2 h-4 w-4" />
-                  Copy part number
+                  کپی شماره قطعه
                 </DropdownMenuItem>
 
                 <DropdownMenuItem
                   onClick={() => router.push(`/parts/${part.id}`)}
                 >
                   <Eye className="mr-2 h-4 w-4" />
-                  View details
+                  مشاهده جزئیات
                 </DropdownMenuItem>
 
+                {/* Only show admin options for admin users */}
                 {isAdmin && (
                   <>
                     <DropdownMenuSeparator />
@@ -284,14 +301,14 @@ export function PartsTable() {
                       onClick={() => router.push(`/parts/${part.id}/edit`)}
                     >
                       <Edit className="mr-2 h-4 w-4" />
-                      Edit part
+                      ویرایش قطعه
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={handleDelete}
                       className="text-red-600"
                     >
                       <Trash2 className="mr-2 h-4 w-4" />
-                      Delete part
+                      حذف قطعه
                     </DropdownMenuItem>
                   </>
                 )}
@@ -328,10 +345,10 @@ export function PartsTable() {
     return (
       <div className="flex flex-col items-center justify-center h-32 gap-2">
         <div className="text-red-600">
-          Error loading parts: {(error as Error).message}
+          خطا در بارگیری قطعات: {(error as Error).message}
         </div>
         <Button variant="outline" onClick={() => refetch()}>
-          Try Again
+          دوباره تلاش کنید
         </Button>
       </div>
     );
@@ -339,12 +356,61 @@ export function PartsTable() {
 
   return (
     <div className="space-y-4">
+      {/* Summary Statistics */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-card border rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">
+                مجموع قطعات
+              </p>
+              <p className="text-2xl font-bold">
+                {totalParts.toLocaleString()}
+              </p>
+            </div>
+            <Package className="h-8 w-8 text-muted-foreground" />
+          </div>
+        </div>
+
+        <div className="bg-card border rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">
+                قطعات فعال
+              </p>
+              <p className="text-2xl font-bold text-green-600">
+                {activeParts.toLocaleString()}
+              </p>
+            </div>
+            <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center">
+              <div className="h-3 w-3 rounded-full bg-green-600"></div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-card border rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">
+                قطعات غیرفعال
+              </p>
+              <p className="text-2xl font-bold text-gray-600">
+                {inactiveParts.toLocaleString()}
+              </p>
+            </div>
+            <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center">
+              <div className="h-3 w-3 rounded-full bg-gray-600"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Filters */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 bg-muted/50 rounded-lg">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search by part number or name..."
+            placeholder="بر اساس شماره قطعه یا نام جستجو کنید..."
             value={globalFilter ?? ""}
             onChange={(event) => setGlobalFilter(event.target.value)}
             className="pl-8 bg-background"
@@ -358,15 +424,15 @@ export function PartsTable() {
           }
         >
           <SelectTrigger className="w-32 bg-background">
-            <SelectValue placeholder="Section" />
+            <SelectValue placeholder="بخش" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all-sections">All Sections</SelectItem>
-            <SelectItem value="E">Section E</SelectItem>
-            <SelectItem value="D">Section D</SelectItem>
-            <SelectItem value="F">Section F</SelectItem>
-            <SelectItem value="G">Section G</SelectItem>
-            <SelectItem value="OLD">OLD</SelectItem>
+            <SelectItem value="all-sections">همه بخش‌ها</SelectItem>
+            <SelectItem value="E">بخش E</SelectItem>
+            <SelectItem value="D">بخش D</SelectItem>
+            <SelectItem value="F">بخش F</SelectItem>
+            <SelectItem value="G">بخش G</SelectItem>
+            <SelectItem value="OLD">قدیمی</SelectItem>
           </SelectContent>
         </Select>
 
@@ -377,12 +443,12 @@ export function PartsTable() {
           }
         >
           <SelectTrigger className="w-32 bg-background">
-            <SelectValue placeholder="Status" />
+            <SelectValue placeholder="وضعیت" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all-status">All Status</SelectItem>
-            <SelectItem value="true">Active</SelectItem>
-            <SelectItem value="false">Inactive</SelectItem>
+            <SelectItem value="all-status">همه وضعیت‌ها</SelectItem>
+            <SelectItem value="true">فعال</SelectItem>
+            <SelectItem value="false">غیرفعال</SelectItem>
           </SelectContent>
         </Select>
 
@@ -397,7 +463,7 @@ export function PartsTable() {
             }}
             className="text-sm"
           >
-            Clear Filters
+            پاک کردن فیلترها
           </Button>
         )}
       </div>
@@ -430,7 +496,7 @@ export function PartsTable() {
                 >
                   <div className="flex items-center justify-center gap-2">
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                    Loading parts...
+                    در حال بارگیری قطعات...
                   </div>
                 </TableCell>
               </TableRow>
@@ -460,11 +526,11 @@ export function PartsTable() {
                   <div className="flex flex-col items-center gap-2">
                     <Package className="h-8 w-8 text-muted-foreground" />
                     <div>
-                      <p className="font-medium">No parts found</p>
+                      <p className="font-medium">هیچ قطعه‌ای یافت نشد</p>
                       <p className="text-sm text-muted-foreground">
                         {globalFilter || sectionFilter || activeFilter
-                          ? "Try changing your filters"
-                          : "Get started by creating your first part"}
+                          ? "فیلترهای خود را تغییر دهید"
+                          : "با ایجاد اولین قطعه خود شروع کنید"}
                       </p>
                     </div>
                   </div>
@@ -478,8 +544,7 @@ export function PartsTable() {
       {/* Pagination */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="text-sm text-muted-foreground">
-          Showing {table.getRowModel().rows.length} of {paginationData.total}{" "}
-          parts
+          نمایش {table.getRowModel().rows.length} از {paginationData.total} قطعه
         </div>
         <div className="flex items-center space-x-2">
           <Button
@@ -488,12 +553,12 @@ export function PartsTable() {
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
           >
-            Previous
+            قبلی
           </Button>
           <div className="flex items-center gap-1">
-            <span className="text-sm">Page</span>
+            <span className="text-sm">صفحه</span>
             <strong className="text-sm">
-              {pagination.pageIndex + 1} of {table.getPageCount()}
+              {pagination.pageIndex + 1} از {table.getPageCount()}
             </strong>
           </div>
           <Button
@@ -502,7 +567,7 @@ export function PartsTable() {
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
           >
-            Next
+            بعدی
           </Button>
         </div>
       </div>

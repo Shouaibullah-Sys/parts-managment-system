@@ -18,22 +18,23 @@ import { eq, sql } from "drizzle-orm";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await requireAuth(request);
     if (!session?.user) return unauthorized();
 
-    const id = Number(params.id);
-    if (!id) return bad("Invalid ID");
+    const { id } = await params;
+    const numericId = Number(id);
+    if (!numericId) return bad("Invalid ID");
 
-    const part = await getPartById(id);
+    const part = await getPartById(numericId);
     if (!part) return notFound("Part not found");
 
     const stock = await db
       .select({ stock: sql<number>`COALESCE(SUM(${inventory.change}), 0)` })
       .from(inventory)
-      .where(eq(inventory.partId, id));
+      .where(eq(inventory.partId, numericId));
 
     const currentStock = Number(stock?.[0]?.stock || 0);
 
@@ -49,7 +50,7 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await requireAuth(request);
@@ -64,15 +65,16 @@ export async function PUT(
 
     if (!roleRow || roleRow.role !== "admin") return unauthorized();
 
-    const id = Number(params.id);
-    if (!id) return bad("Invalid ID");
+    const { id } = await params;
+    const numericId = Number(id);
+    if (!numericId) return bad("Invalid ID");
 
     const body = await request.json();
 
     const [existing] = await db
       .select()
       .from(parts)
-      .where(eq(parts.id, id))
+      .where(eq(parts.id, numericId))
       .limit(1);
     if (!existing) return notFound("Part not found");
 
@@ -89,7 +91,7 @@ export async function PUT(
     const [updated] = await db
       .update(parts)
       .set(body)
-      .where(eq(parts.id, id))
+      .where(eq(parts.id, numericId))
       .returning();
     return ok(updated);
   } catch (err) {
@@ -99,7 +101,7 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await requireAuth(request);
@@ -114,13 +116,14 @@ export async function DELETE(
 
     if (!roleRow || roleRow.role !== "admin") return unauthorized();
 
-    const id = Number(params.id);
-    if (!id) return bad("Invalid ID");
+    const { id } = await params;
+    const numericId = Number(id);
+    if (!numericId) return bad("Invalid ID");
 
     const [deleted] = await db
       .update(parts)
       .set({ active: false })
-      .where(eq(parts.id, id))
+      .where(eq(parts.id, numericId))
       .returning();
     if (!deleted) return notFound("Part not found");
 

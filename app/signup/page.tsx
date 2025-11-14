@@ -1,3 +1,5 @@
+// app/signup/page.tsx
+
 "use client";
 
 import Link from "next/link";
@@ -18,14 +20,12 @@ export default function SignupPage() {
         const session = await authClient.getSession();
 
         if (session?.data?.user) {
-          // User is already logged in, check their role and redirect
           const approvalResponse = await fetch("/api/user/approval-status");
 
           if (approvalResponse.ok) {
             const { role, approved } = await approvalResponse.json();
 
             if (approved) {
-              // Redirect based on role
               if (role === "admin") {
                 router.push("/dashboard/admin");
               } else if (role === "staff") {
@@ -49,10 +49,10 @@ export default function SignupPage() {
 
   if (isChecking) {
     return (
-      <div className="flex min-h-svh items-center justify-center">
+      <div className="flex min-h-svh items-center justify-center bg-mechanical">
         <Loader
-          title="Checking authentication..."
-          subtitle="Please wait"
+          title="در حال بررسی احراز هویت..."
+          subtitle="لطفاً منتظر بمانید"
           size="md"
         />
       </div>
@@ -60,22 +60,25 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="bg-muted flex min-h-svh flex-col items-center justify-center gap-6 p-6 md:p-10">
-      <div className="flex w-full max-w-sm flex-col gap-6">
+    <div className="bg-mechanical flex min-h-svh flex-col items-center justify-center gap-6 p-6 md:p-10">
+      <div className="flex w-full max-w-md flex-col gap-6">
         <Link
           href="/"
-          className="flex items-center gap-2 self-center font-medium"
+          className="flex items-center gap-3 self-center font-bold text-xl text-foreground hover:text-primary transition-colors"
         >
-          <div className="bg-primary text-primary-foreground flex size-6 items-center justify-center rounded-md">
+          <div className="bg-primary text-primary-foreground flex size-10 items-center justify-center rounded-lg shadow-lg">
             <Image
-              width={50}
-              height={50}
+              width={40}
+              height={40}
               src={"/diplomasi.jpg"}
-              alt="diplomasi ltd"
+              alt="دیپلوماسی لیمتد"
               priority
+              className="rounded-md"
             />
           </div>
-          Diplomasi LTD
+          <span className="bg-linear-to-r from-primary to-primary/80 bg-clip-text text-transparent">
+            دیپلوماسی لیمتد
+          </span>
         </Link>
         <SignupForm />
       </div>

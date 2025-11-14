@@ -1,26 +1,31 @@
-import Link from "next/link";
+// app/reset-password/page.tsx
+"use client";
 
+import Link from "next/link";
 import { ResetPasswordForm } from "@/components/forms/reset-password-form";
 import Image from "next/image";
 
-export default function LoginPage() {
+export default function ResetPasswordPage() {
   return (
-    <div className="bg-muted flex min-h-svh flex-col items-center justify-center gap-6 p-6 md:p-10">
-      <div className="flex w-full max-w-sm flex-col gap-6">
+    <div className="bg-mechanical flex min-h-svh flex-col items-center justify-center gap-6 p-6 md:p-10">
+      <div className="flex w-full max-w-md flex-col gap-6">
         <Link
           href="/"
-          className="flex items-center gap-2 self-center font-medium"
+          className="flex items-center gap-3 self-center font-bold text-xl text-foreground hover:text-primary transition-colors"
         >
-          <div className="bg-primary text-primary-foreground flex size-6 items-center justify-center rounded-md">
+          <div className="bg-primary text-primary-foreground flex size-10 items-center justify-center rounded-lg shadow-lg">
             <Image
-              width={50}
-              height={50}
-              src={"/better-auth-starter.png"}
-              alt="Better Auth Starter Logo"
+              width={40}
+              height={40}
+              src={"/diplomasi.jpg"}
+              alt="دیپلوماسی لیمتد"
               priority
+              className="rounded-md"
             />
           </div>
-          Diplomasi
+          <span className="bg-linear-to-r from-primary to-primary/80 bg-clip-text text-transparent">
+            دیپلوماسی لیمتد
+          </span>
         </Link>
         <ResetPasswordForm />
       </div>
