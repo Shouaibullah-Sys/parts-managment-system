@@ -25,6 +25,8 @@ import {
   MapPin,
   FileText as InvoiceIcon,
   MessageSquare,
+  Smartphone,
+  Monitor,
 } from "lucide-react";
 import { SmartSearchEngine } from "./smart-search-engine";
 
@@ -57,6 +59,14 @@ export function IssuePartsTable() {
   const [notes, setNotes] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   // Add part to cart from smart search
   const addToCartFromSearch = (part: Part) => {
@@ -230,198 +240,257 @@ export function IssuePartsTable() {
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <SmartSearchEngine onPartSelect={addToCartFromSearch} />
+    <div className="space-y-6">
+      {/* View Toggle */}
+      <div className="flex items-center justify-end">
+        <div className="flex items-center gap-2 bg-muted/50 rounded-lg p-1">
+          <Button
+            variant={isMobile ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setIsMobile(true)}
+            className={`${isMobile ? "bg-primary text-primary-foreground" : "text-muted-foreground"} px-3`}
+          >
+            <Smartphone className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={!isMobile ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setIsMobile(false)}
+            className={`${!isMobile ? "bg-primary text-primary-foreground" : "text-muted-foreground"} px-3`}
+          >
+            <Monitor className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
 
-      {/* Cart Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ShoppingCart className="h-5 w-5" />
-            سبد صدور
-            {cart.length > 0 && (
-              <Badge variant="secondary" className="text-xs">
-                {cart.length} قلم
-              </Badge>
+      <div
+        className={`grid gap-6 ${isMobile ? "grid-cols-1" : "grid-cols-1 lg:grid-cols-2"}`}
+      >
+        <SmartSearchEngine onPartSelect={addToCartFromSearch} />
+
+        {/* Cart Section */}
+        <Card className="border-mechanical shadow-lg">
+          <CardHeader className="bg-mechanical/50 border-b border-border">
+            <CardTitle className="flex items-center gap-2 text-foreground">
+              <ShoppingCart className="h-5 w-5 text-primary" />
+              سبد صدور
+              {cart.length > 0 && (
+                <Badge
+                  variant="secondary"
+                  className="text-xs bg-primary text-primary-foreground"
+                >
+                  {cart.length} قلم
+                </Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 p-4">
+            {/* Customer Information */}
+            <div
+              className={`gap-4 ${isMobile ? "space-y-3" : "grid grid-cols-1 md:grid-cols-2"}`}
+            >
+              <div className="flex items-center gap-2">
+                <User className="h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="نام مشتری"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  disabled={isLoading}
+                  className="border-border focus:border-primary focus:ring-primary/20"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Phone className="h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="شماره تماس"
+                  value={customerPhone}
+                  onChange={(e) => setCustomerPhone(e.target.value)}
+                  disabled={isLoading}
+                  className="border-border focus:border-primary focus:ring-primary/20"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="آدرس"
+                  value={customerAddress}
+                  onChange={(e) => setCustomerAddress(e.target.value)}
+                  disabled={isLoading}
+                  className="border-border focus:border-primary focus:ring-primary/20"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="date"
+                  placeholder="تاریخ صدور"
+                  value={invoiceDate}
+                  onChange={(e) => setInvoiceDate(e.target.value)}
+                  disabled={isLoading}
+                  className="border-border focus:border-primary focus:ring-primary/20"
+                />
+              </div>
+            </div>
+
+            {/* Invoice Information */}
+            <div
+              className={`gap-4 ${isMobile ? "space-y-3" : "grid grid-cols-1 md:grid-cols-2"}`}
+            >
+              <div className="flex items-center gap-2">
+                <InvoiceIcon className="h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="شماره فاکتور (اختیاری)"
+                  value={invoiceNumber}
+                  onChange={(e) => setInvoiceNumber(e.target.value)}
+                  disabled={isLoading}
+                  className="border-border focus:border-primary focus:ring-primary/20"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="توضیحات (اختیاری)"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  disabled={isLoading}
+                  className="border-border focus:border-primary focus:ring-primary/20"
+                />
+              </div>
+            </div>
+
+            {error && (
+              <div className="text-destructive text-sm bg-destructive/10 p-3 rounded border border-destructive/50">
+                {error}
+              </div>
             )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Customer Information */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex items-center gap-2">
-              <User className="h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="نام مشتری"
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-                disabled={isLoading}
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <Phone className="h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="شماره تماس"
-                value={customerPhone}
-                onChange={(e) => setCustomerPhone(e.target.value)}
-                disabled={isLoading}
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <MapPin className="h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="آدرس"
-                value={customerAddress}
-                onChange={(e) => setCustomerAddress(e.target.value)}
-                disabled={isLoading}
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-              <Input
-                type="date"
-                placeholder="تاریخ صدور"
-                value={invoiceDate}
-                onChange={(e) => setInvoiceDate(e.target.value)}
-                disabled={isLoading}
-              />
-            </div>
-          </div>
 
-          {/* Invoice Information */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex items-center gap-2">
-              <InvoiceIcon className="h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="شماره فاکتور (اختیاری)"
-                value={invoiceNumber}
-                onChange={(e) => setInvoiceNumber(e.target.value)}
-                disabled={isLoading}
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <MessageSquare className="h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="توضیحات (اختیاری)"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                disabled={isLoading}
-              />
-            </div>
-          </div>
-
-          {cart.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>هیچ قطعه‌ای در سبد وجود ندارد</p>
-              <p className="text-sm">قطعات را جستجو و به سبد اضافه کنید</p>
-            </div>
-          ) : (
-            <>
-              <div className="border rounded-lg max-h-96 overflow-y-auto">
-                {cart.map((item) => (
-                  <div
-                    key={item.part.id}
-                    className="flex items-center justify-between p-4 border-b"
-                  >
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-mono text-sm">
-                          {item.part.partNumber}
-                        </span>
-                        <Badge variant="outline">{item.part.section}</Badge>
+            {cart.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>هیچ قطعه‌ای در سبد وجود ندارد</p>
+                <p className="text-sm">قطعات را جستجو و به سبد اضافه کنید</p>
+              </div>
+            ) : (
+              <>
+                <div className="border border-border rounded-lg max-h-96 overflow-y-auto">
+                  {cart.map((item) => (
+                    <div
+                      key={item.part.id}
+                      className={`flex ${isMobile ? "flex-col" : "items-center justify-between"} p-4 border-b border-border hover:bg-accent/30 transition-colors`}
+                    >
+                      <div className="flex-1 mb-3 sm:mb-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-mono text-sm bg-primary/10 px-2 py-1 rounded">
+                            {item.part.partNumber}
+                          </span>
+                          <Badge
+                            variant="outline"
+                            className="border-primary/30"
+                          >
+                            {item.part.section}
+                          </Badge>
+                        </div>
+                        <p className="font-medium text-foreground">
+                          {item.part.name}
+                        </p>
+                        <div
+                          className={`flex ${isMobile ? "flex-col gap-1" : "items-center gap-4"} text-sm text-muted-foreground mt-1`}
+                        >
+                          <span>موجودی: {item.part.currentStock}</span>
+                          <span>
+                            {parseFloat(
+                              item.part.salePrice || "0"
+                            ).toLocaleString()}{" "}
+                            افغانی
+                          </span>
+                        </div>
                       </div>
-                      <p className="font-medium">{item.part.name}</p>
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
-                        <span>موجودی: {item.part.currentStock}</span>
-                        <span>
-                          {parseFloat(
-                            item.part.salePrice || "0"
-                          ).toLocaleString()}{" "}
-                          افغانی
+
+                      <div className="flex items-center gap-2 justify-end">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            updateQuantity(item.part.id, item.quantity - 1)
+                          }
+                          disabled={item.quantity <= 1 || isLoading}
+                          className="border-border text-foreground hover:bg-accent hover:text-accent-foreground"
+                        >
+                          <Minus className="h-3 w-3" />
+                        </Button>
+                        <span className="w-8 text-center font-mono font-bold">
+                          {item.quantity}
                         </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            updateQuantity(item.part.id, item.quantity + 1)
+                          }
+                          disabled={
+                            item.quantity >= item.part.currentStock || isLoading
+                          }
+                          className="border-border text-foreground hover:bg-accent hover:text-accent-foreground"
+                        >
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => removeFromCart(item.part.id)}
+                          disabled={isLoading}
+                          className="hover:bg-destructive/90"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
                       </div>
                     </div>
+                  ))}
+                </div>
 
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() =>
-                          updateQuantity(item.part.id, item.quantity - 1)
-                        }
-                        disabled={item.quantity <= 1 || isLoading}
-                      >
-                        <Minus className="h-3 w-3" />
-                      </Button>
-                      <span className="w-8 text-center font-mono">
-                        {item.quantity}
-                      </span>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() =>
-                          updateQuantity(item.part.id, item.quantity + 1)
-                        }
-                        disabled={
-                          item.quantity >= item.part.currentStock || isLoading
-                        }
-                      >
-                        <Plus className="h-3 w-3" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => removeFromCart(item.part.id)}
-                        disabled={isLoading}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
+                <div className="border-t border-border pt-4">
+                  <div className="flex justify-between items-center mb-4">
+                    <span className="font-semibold text-foreground">
+                      مبلغ کل:
+                    </span>
+                    <span className="text-xl font-bold text-primary">
+                      {getTotalAmount().toLocaleString()} افغانی
+                    </span>
                   </div>
-                ))}
-              </div>
 
-              <div className="border-t pt-4">
-                <div className="flex justify-between items-center mb-4">
-                  <span className="font-semibold">مبلغ کل:</span>
-                  <span className="text-xl font-bold">
-                    {getTotalAmount().toLocaleString()} افغانی
-                  </span>
+                  <div className={`flex gap-3 ${isMobile ? "flex-col" : ""}`}>
+                    <Button
+                      onClick={handleSave}
+                      disabled={isLoading}
+                      className="bg-green-600 hover:bg-green-700 text-white shadow-md flex-1"
+                    >
+                      {isLoading ? (
+                        <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Save className="ml-2 h-4 w-4" />
+                      )}
+                      {isLoading ? "در حال پردازش..." : "ذخیره و ایجاد بل"}
+                    </Button>
+                    <Button
+                      onClick={handleReferToAdmin}
+                      disabled={isLoading}
+                      variant="outline"
+                      className="border-blue-600 text-blue-600 hover:bg-blue-50 hover:text-blue-700 flex-1"
+                    >
+                      {isLoading ? (
+                        <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Send className="ml-2 h-4 w-4" />
+                      )}
+                      ارسال به مدیر
+                    </Button>
+                  </div>
                 </div>
-
-                <div className="flex gap-3">
-                  <Button
-                    onClick={handleSave}
-                    disabled={isLoading}
-                    className="flex-1 bg-green-600 hover:bg-green-700"
-                  >
-                    {isLoading ? (
-                      <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Save className="ml-2 h-4 w-4" />
-                    )}
-                    {isLoading ? "در حال پردازش..." : "ذخیره و ایجاد بل"}
-                  </Button>
-                  <Button
-                    onClick={handleReferToAdmin}
-                    disabled={isLoading}
-                    variant="outline"
-                    className="border-blue-600 text-blue-600 hover:bg-blue-50"
-                  >
-                    {isLoading ? (
-                      <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Send className="ml-2 h-4 w-4" />
-                    )}
-                    ارسال به مدیر
-                  </Button>
-                </div>
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
@@ -445,6 +514,14 @@ export function IssueRecordsTable() {
   const [records, setRecords] = useState<IssueRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   useEffect(() => {
     fetchRecords();
@@ -514,92 +591,135 @@ export function IssueRecordsTable() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>همه سوابق صدور</CardTitle>
-        <div className="flex gap-4">
-          <Input
-            placeholder="جستجو بر اساس نام مشتری..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="max-w-sm"
-          />
+    <div className="space-y-6">
+      {/* View Toggle */}
+      <div className="flex items-center justify-end">
+        <div className="flex items-center gap-2 bg-muted/50 rounded-lg p-1">
+          <Button
+            variant={isMobile ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setIsMobile(true)}
+            className={`${isMobile ? "bg-primary text-primary-foreground" : "text-muted-foreground"} px-3`}
+          >
+            <Smartphone className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={!isMobile ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setIsMobile(false)}
+            className={`${!isMobile ? "bg-primary text-primary-foreground" : "text-muted-foreground"} px-3`}
+          >
+            <Monitor className="h-4 w-4" />
+          </Button>
         </div>
-      </CardHeader>
-      <CardContent>
-        {error && (
-          <div className="text-red-600 text-sm bg-red-50 p-3 rounded border border-red-200 mb-4">
-            {error}
-          </div>
-        )}
+      </div>
 
-        {isLoading ? (
-          <div className="text-center py-8 flex items-center justify-center gap-2">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            در حال بارگذاری سوابق...
-          </div>
-        ) : filteredRecords.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            هیچ سابقه صدری یافت نشد
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {filteredRecords.map((record) => (
-              <div
-                key={record.id}
-                className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="p-2 rounded-lg bg-primary/10">
-                    <FileText className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <User className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-semibold">
-                        {record.customerName}
-                      </span>
-                      <Badge variant={getStatusVariant(record.status)}>
-                        {getStatusText(record.status)}
-                      </Badge>
+      <Card className="border-mechanical shadow-lg">
+        <CardHeader className="bg-mechanical/50 border-b border-border">
+          <CardTitle className="text-foreground flex flex-col sm:flex-row sm:items-center gap-4">
+            <span>همه سوابق صدور</span>
+            <Input
+              placeholder="جستجو بر اساس نام مشتری..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="max-w-sm border-border focus:border-primary focus:ring-primary/20"
+            />
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-4">
+          {error && (
+            <div className="text-destructive text-sm bg-destructive/10 p-3 rounded border border-destructive/50 mb-4">
+              {error}
+            </div>
+          )}
+
+          {isLoading ? (
+            <div className="text-center py-8 flex items-center justify-center gap-2 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              در حال بارگذاری سوابق...
+            </div>
+          ) : filteredRecords.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>هیچ سابقه صدری یافت نشد</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {filteredRecords.map((record) => (
+                <div
+                  key={record.id}
+                  className={`flex ${isMobile ? "flex-col" : "items-center justify-between"} p-4 border border-border rounded-lg hover:bg-accent/30 transition-colors`}
+                >
+                  <div className="flex items-start gap-4 mb-3 sm:mb-0">
+                    <div className="p-2 rounded-lg bg-primary/10">
+                      <FileText className="h-5 w-5 text-primary" />
                     </div>
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                      <div className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        {new Date(record.issueDate).toLocaleDateString("fa-IR")}
+                    <div>
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-1">
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-semibold text-foreground">
+                            {record.customerName}
+                          </span>
+                        </div>
+                        <Badge
+                          variant={getStatusVariant(record.status)}
+                          className={
+                            record.status === "completed" ? "bg-primary" : ""
+                          }
+                        >
+                          {getStatusText(record.status)}
+                        </Badge>
                       </div>
-                      {record.partName && <span>{record.partName}</span>}
-                      {record.quantity && <span>تعداد: {record.quantity}</span>}
-                      <span>
-                        {parseFloat(record.totalAmount).toLocaleString()} افغانی
-                      </span>
-                      <span>صادر کننده: {record.issuedBy}</span>
+                      <div
+                        className={`flex ${isMobile ? "flex-col gap-1" : "items-center gap-4"} text-sm text-muted-foreground`}
+                      >
+                        <div className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          {new Date(record.issueDate).toLocaleDateString(
+                            "fa-IR"
+                          )}
+                        </div>
+                        {record.partName && <span>{record.partName}</span>}
+                        {record.quantity && (
+                          <span>تعداد: {record.quantity}</span>
+                        )}
+                        <span className="font-medium text-foreground">
+                          {parseFloat(record.totalAmount).toLocaleString()}{" "}
+                          افغانی
+                        </span>
+                        <span>صادر کننده: {record.issuedBy}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleViewDetails(record.id)}
+                  <div
+                    className={`flex gap-2 ${isMobile ? "justify-end" : ""}`}
                   >
-                    <Eye className="ml-2 h-4 w-4" />
-                    مشاهده جزئیات
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleDownloadPDF(record.id)}
-                  >
-                    <Download className="ml-2 h-4 w-4" />
-                    دریافت PDF
-                  </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleViewDetails(record.id)}
+                      className="border-border text-foreground hover:bg-accent hover:text-accent-foreground"
+                    >
+                      <Eye className="ml-2 h-4 w-4" />
+                      مشاهده جزئیات
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDownloadPDF(record.id)}
+                      className="border-primary text-primary hover:bg-primary hover:text-primary-foreground"
+                    >
+                      <Download className="ml-2 h-4 w-4" />
+                      دریافت PDF
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
