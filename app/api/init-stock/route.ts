@@ -1,6 +1,5 @@
 // app/api/init-stock/route.ts
 export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
 
 import type { NextRequest } from "next/server";
 import { requireAuth } from "@/lib/auth-session";
@@ -14,10 +13,16 @@ export async function POST(request: NextRequest) {
     const session = await requireAuth(request);
     if (!session?.user) return unauthorized();
 
-    // Get all parts
+    // Check if already initialized
+    const existingStock = await db.select().from(inventory).limit(1);
+
+    if (existingStock.length > 0) {
+      return bad("Stock already initialized");
+    }
+
+    // Get all parts and add initial stock
     const allParts = await db.select().from(parts);
 
-    // Add initial stock for each part (100 units)
     for (const part of allParts) {
       await db.insert(inventory).values({
         partId: part.id,
@@ -29,8 +34,8 @@ export async function POST(request: NextRequest) {
     }
 
     return ok({
-      message: `Initial stock added for ${allParts.length} parts`,
-      partsCount: allParts.length,
+      message: `Initialized stock for ${allParts.length} parts`,
+      count: allParts.length,
     });
   } catch (err) {
     return serverError(err);

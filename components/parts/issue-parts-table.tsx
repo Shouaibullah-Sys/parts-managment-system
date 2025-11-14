@@ -1,7 +1,7 @@
 // components/parts/issue-parts-table.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import {
   Calendar,
   Eye,
   Download,
+  Zap,
 } from "lucide-react";
 
 interface Part {
@@ -48,49 +49,49 @@ export function IssuePartsTable() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [searchTime, setSearchTime] = useState(0);
 
-  // Search parts
-  useEffect(() => {
-    const searchParts = async () => {
-      if (searchTerm.length < 2) {
+  // Fast search with debouncing
+  const performSearch = useCallback(async (query: string) => {
+    if (!query.trim() || query.length < 2) {
+      setParts([]);
+      return;
+    }
+
+    setIsSearching(true);
+    const startTime = performance.now();
+
+    try {
+      const response = await fetch(
+        `/api/parts/search?q=${encodeURIComponent(query)}&limit=20`
+      );
+      const result = await response.json();
+
+      if (result.success) {
+        setParts(result.data.results);
+      } else {
         setParts([]);
-        setIsSearching(false);
-        return;
       }
+    } catch (error) {
+      console.error("Search error:", error);
+      setParts([]);
+    } finally {
+      setIsSearching(false);
+      setSearchTime(performance.now() - startTime);
+    }
+  }, []);
 
-      setIsSearching(true);
-      setError(null);
-      try {
-        const response = await fetch(
-          `/api/parts?search=${encodeURIComponent(searchTerm)}&limit=20`
-        );
-        const result = await response.json();
+  // Debounced search
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      performSearch(searchTerm);
+    }, 150); // Reduced debounce time
 
-        if (result.success) {
-          // For testing, assume all parts have stock if currentStock is 0
-          const partsWithStock = result.data.map((part: any) => ({
-            ...part,
-            currentStock: part.currentStock > 0 ? part.currentStock : 100, // Default to 100 if 0
-          }));
-          setParts(partsWithStock);
-        } else {
-          setError("خطا در جستجوی قطعات");
-        }
-      } catch (error) {
-        console.error("Error searching parts:", error);
-        setError("خطا در اتصال به سرور");
-      } finally {
-        setIsSearching(false);
-      }
-    };
-
-    const timeoutId = setTimeout(searchParts, 300);
     return () => clearTimeout(timeoutId);
-  }, [searchTerm]);
+  }, [searchTerm, performSearch]);
 
-  // Add this missing function
   const addToCart = (part: Part) => {
-    // For testing, allow adding even if stock shows 0
+    // Allow adding even with 0 stock for testing
     if (part.currentStock <= 0) {
       if (!confirm("این قطعه موجودی صفر دارد. آیا می‌خواهید ادامه دهید؟")) {
         return;
@@ -100,7 +101,6 @@ export function IssuePartsTable() {
     setCart((prev) => {
       const existing = prev.find((item) => item.part.id === part.id);
       if (existing) {
-        // Allow exceeding stock for testing
         return prev.map((item) =>
           item.part.id === part.id
             ? { ...item, quantity: item.quantity + 1 }
@@ -177,13 +177,9 @@ export function IssuePartsTable() {
       const result = await response.json();
 
       if (result.success) {
-        // Generate PDF
-        await generatePDF(result.data.issueId);
-
         // Reset form
         setCart([]);
         setCustomerName("");
-
         // Redirect to records page
         router.push("/issue-records");
       } else {
@@ -245,25 +241,6 @@ export function IssuePartsTable() {
     }
   };
 
-  const generatePDF = async (issueId: number) => {
-    try {
-      const response = await fetch(`/api/generate-pdf?issueId=${issueId}`);
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `issue-${issueId}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-      }
-    } catch (error) {
-      console.error("Error generating PDF:", error);
-    }
-  };
-
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {/* Search and Parts Section */}
@@ -271,12 +248,18 @@ export function IssuePartsTable() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Search className="h-5 w-5" />
-            جستجوی قطعات
+            جستجوی سریع قطعات
+            {searchTime > 0 && (
+              <Badge variant="outline" className="text-xs">
+                <Zap className="h-3 w-3 ml-1" />
+                {searchTime.toFixed(0)}ms
+              </Badge>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <Input
-            placeholder="جستجو بر اساس شماره قطعه یا نام..."
+            placeholder="شماره قطعه یا نام را وارد کنید..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -346,6 +329,11 @@ export function IssuePartsTable() {
           <CardTitle className="flex items-center gap-2">
             <ShoppingCart className="h-5 w-5" />
             سبد صدور
+            {cart.length > 0 && (
+              <Badge variant="secondary" className="text-xs">
+                {cart.length} قلم
+              </Badge>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -474,7 +462,6 @@ export function IssuePartsTable() {
     </div>
   );
 }
-
 // Issue Records Table Component
 interface IssueRecord {
   id: number;
