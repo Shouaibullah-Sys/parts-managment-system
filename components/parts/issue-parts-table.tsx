@@ -1,14 +1,13 @@
 // components/parts/issue-parts-table.tsx
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
-  Search,
   Package,
   ShoppingCart,
   Trash2,
@@ -22,9 +21,10 @@ import {
   Calendar,
   Eye,
   Download,
-  Zap,
 } from "lucide-react";
+import { SmartSearchEngine } from "./smart-search-engine";
 
+// Define interfaces
 interface Part {
   id: number;
   partNumber: string;
@@ -42,55 +42,13 @@ interface CartItem {
 
 export function IssuePartsTable() {
   const router = useRouter();
-  const [searchTerm, setSearchTerm] = useState("");
-  const [parts, setParts] = useState<Part[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [customerName, setCustomerName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [searchTime, setSearchTime] = useState(0);
 
-  // Fast search with debouncing
-  const performSearch = useCallback(async (query: string) => {
-    if (!query.trim() || query.length < 2) {
-      setParts([]);
-      return;
-    }
-
-    setIsSearching(true);
-    const startTime = performance.now();
-
-    try {
-      const response = await fetch(
-        `/api/parts/search?q=${encodeURIComponent(query)}&limit=20`
-      );
-      const result = await response.json();
-
-      if (result.success) {
-        setParts(result.data?.results || []);
-      } else {
-        setParts([]);
-      }
-    } catch (error) {
-      console.error("Search error:", error);
-      setParts([]);
-    } finally {
-      setIsSearching(false);
-      setSearchTime(performance.now() - startTime);
-    }
-  }, []);
-
-  // Debounced search
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      performSearch(searchTerm);
-    }, 150); // Reduced debounce time
-
-    return () => clearTimeout(timeoutId);
-  }, [searchTerm, performSearch]);
-
-  const addToCart = (part: Part) => {
+  // Add part to cart from smart search
+  const addToCartFromSearch = (part: Part) => {
     // Allow adding even with 0 stock for testing
     if (part.currentStock <= 0) {
       if (!confirm("این قطعه موجودی صفر دارد. آیا می‌خواهید ادامه دهید؟")) {
@@ -109,10 +67,9 @@ export function IssuePartsTable() {
       }
       return [...prev, { part, quantity: 1 }];
     });
-    setSearchTerm("");
-    setParts([]);
   };
 
+  // Cart management functions
   const updateQuantity = (partId: number, newQuantity: number) => {
     if (newQuantity < 1) {
       removeFromCart(partId);
@@ -243,85 +200,7 @@ export function IssuePartsTable() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {/* Search and Parts Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Search className="h-5 w-5" />
-            جستجوی سریع قطعات
-            {searchTime > 0 && (
-              <Badge variant="outline" className="text-xs">
-                <Zap className="h-3 w-3 ml-1" />
-                {searchTime.toFixed(0)}ms
-              </Badge>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Input
-            placeholder="شماره قطعه یا نام را وارد کنید..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-
-          {error && (
-            <div className="text-red-600 text-sm bg-red-50 p-3 rounded border border-red-200">
-              {error}
-            </div>
-          )}
-
-          {isSearching && (
-            <div className="text-center py-4 text-muted-foreground flex items-center justify-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              در حال جستجو...
-            </div>
-          )}
-
-          {parts.length > 0 && (
-            <div className="border rounded-lg max-h-96 overflow-y-auto">
-              {parts.map((part) => (
-                <div
-                  key={part.id}
-                  className="flex items-center justify-between p-4 border-b hover:bg-muted/50 cursor-pointer"
-                  onClick={() => addToCart(part)}
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-mono text-sm">
-                        {part.partNumber}
-                      </span>
-                      <Badge variant="outline">{part.section}</Badge>
-                      {part.currentStock <= part.minStock && (
-                        <Badge variant="destructive" className="text-xs">
-                          کمبود موجودی
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="font-medium">{part.name}</p>
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
-                      <span>موجودی: {part.currentStock}</span>
-                      <span>
-                        قیمت:{" "}
-                        {parseFloat(part.salePrice || "0").toLocaleString()}{" "}
-                        تومان
-                      </span>
-                    </div>
-                  </div>
-                  <Button size="sm" variant="outline">
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {searchTerm.length >= 2 && !isSearching && parts.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              قطعه‌ای یافت نشد
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <SmartSearchEngine onPartSelect={addToCartFromSearch} />
 
       {/* Cart Section */}
       <Card>
@@ -375,7 +254,7 @@ export function IssuePartsTable() {
                           {parseFloat(
                             item.part.salePrice || "0"
                           ).toLocaleString()}{" "}
-                          تومان
+                          افغانی
                         </span>
                       </div>
                     </div>
@@ -423,7 +302,7 @@ export function IssuePartsTable() {
                 <div className="flex justify-between items-center mb-4">
                   <span className="font-semibold">مبلغ کل:</span>
                   <span className="text-xl font-bold">
-                    {getTotalAmount().toLocaleString()} تومان
+                    {getTotalAmount().toLocaleString()} افغانی
                   </span>
                 </div>
 
@@ -438,7 +317,7 @@ export function IssuePartsTable() {
                     ) : (
                       <Save className="ml-2 h-4 w-4" />
                     )}
-                    {isLoading ? "در حال پردازش..." : "ذخیره و ایجاد فاکتور"}
+                    {isLoading ? "در حال پردازش..." : "ذخیره و ایجاد بل"}
                   </Button>
                   <Button
                     onClick={handleReferToAdmin}
@@ -462,7 +341,8 @@ export function IssuePartsTable() {
     </div>
   );
 }
-// Issue Records Table Component
+
+// Issue Records Table Component (keep existing)
 interface IssueRecord {
   id: number;
   customerName: string;
@@ -607,7 +487,7 @@ export function IssueRecordsTable() {
                       {record.partName && <span>{record.partName}</span>}
                       {record.quantity && <span>تعداد: {record.quantity}</span>}
                       <span>
-                        {parseFloat(record.totalAmount).toLocaleString()} تومان
+                        {parseFloat(record.totalAmount).toLocaleString()} افغانی
                       </span>
                       <span>صادر کننده: {record.issuedBy}</span>
                     </div>

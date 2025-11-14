@@ -156,6 +156,22 @@ export const inventory = pgTable("inventory_transactions", {
   createdBy: text("created_by").references(() => user.id),
 });
 
+// --- جدول شاخص جستجو برای عملکرد بهتر ---
+export const searchIndex = pgTable("search_index", {
+  id: serial("id").primaryKey(),
+  partId: integer("part_id")
+    .references(() => parts.id, { onDelete: "cascade" })
+    .notNull(),
+  searchText: text("search_text").notNull(), // متن جستجو با تمام زبان‌ها
+  englishText: text("english_text"), // متن انگلیسی
+  dariText: text("dari_text"), // متن دری
+  partNumber: varchar("part_number", { length: 100 }).notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  section: sectionEnum("section").default("E"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const verification = pgTable("verification", {
   id: text("id").primaryKey(),
   identifier: text("identifier").notNull(),
@@ -177,4 +193,5 @@ export const schema = {
   imports,
   importItems,
   inventory,
+  searchIndex,
 };

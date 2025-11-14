@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Search, Zap, Clock, Filter, Sparkles } from "lucide-react";
+import { Search, Zap, Clock, Sparkles } from "lucide-react";
 
 interface Part {
   id: number;
@@ -27,7 +27,7 @@ interface SearchResult {
 }
 
 interface SmartSearchEngineProps {
-  onPartSelect: (part: Part) => void;
+  onPartSelect?: (part: Part) => void;
 }
 
 export function SmartSearchEngine({ onPartSelect }: SmartSearchEngineProps) {
@@ -309,7 +309,13 @@ export function SmartSearchEngine({ onPartSelect }: SmartSearchEngineProps) {
               <div
                 key={result.part.id}
                 className="flex items-center justify-between p-4 border-b hover:bg-muted/50 cursor-pointer"
-                onClick={() => onPartSelect(result.part)}
+                onClick={() => {
+                  if (onPartSelect) {
+                    onPartSelect(result.part);
+                  } else {
+                    console.log("Selected part:", result.part);
+                  }
+                }}
               >
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
@@ -330,11 +336,20 @@ export function SmartSearchEngine({ onPartSelect }: SmartSearchEngineProps) {
                       {parseFloat(
                         result.part.salePrice || "0"
                       ).toLocaleString()}{" "}
-                      تومان
+                      افغانی
                     </span>
                   </div>
                 </div>
-                <Button size="sm" variant="outline">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={(e) => {
+                    e.stopPropagation(); // Prevent div onClick
+                    if (onPartSelect) {
+                      onPartSelect(result.part);
+                    }
+                  }}
+                >
                   انتخاب
                 </Button>
               </div>
