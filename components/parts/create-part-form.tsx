@@ -49,6 +49,7 @@ export function CreatePartForm() {
       name: "",
       section: "E",
       minStock: 0,
+      currentStock: 0,
       active: true,
     },
   });
@@ -63,6 +64,7 @@ export function CreatePartForm() {
       const transformedData = {
         ...data,
         minStock: data.minStock as number,
+        currentStock: data.currentStock as number,
         costPrice: data.costPrice || undefined,
         salePrice: data.salePrice || undefined,
       };
@@ -200,6 +202,30 @@ export function CreatePartForm() {
                       </FormControl>
                       <FormDescription>
                         Alert when stock falls below this level
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Current Stock */}
+                <FormField
+                  control={form.control}
+                  name="currentStock"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Current Stock</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min="0"
+                          placeholder="0"
+                          {...field}
+                          value={field.value as number}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Initial stock quantity for this part
                       </FormDescription>
                       <FormMessage />
                     </FormItem>

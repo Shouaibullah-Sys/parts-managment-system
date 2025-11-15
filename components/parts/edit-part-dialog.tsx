@@ -59,6 +59,7 @@ export function EditPartDialog({
       name: "",
       section: "E",
       minStock: 0,
+      currentStock: 0,
       costPrice: "",
       salePrice: "",
       active: true,
@@ -73,6 +74,7 @@ export function EditPartDialog({
         name: part.name,
         section: part.section,
         minStock: part.minStock,
+        currentStock: part.currentStock || 0,
         costPrice: part.costPrice || "",
         salePrice: part.salePrice || "",
         active: part.active,
@@ -93,6 +95,7 @@ export function EditPartDialog({
       const transformedData = {
         ...data,
         minStock: data.minStock as number,
+        currentStock: data.currentStock as number,
         active: data.active as boolean,
         costPrice: data.costPrice || undefined,
         salePrice: data.salePrice || undefined,
@@ -220,6 +223,27 @@ export function EditPartDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>حداقل موجودی</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min="0"
+                        placeholder="0"
+                        {...field}
+                        value={field.value as number}
+                        className="border-border focus:border-primary focus:ring-primary/20"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="currentStock"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>موجودی فعلی</FormLabel>
                     <FormControl>
                       <Input
                         type="number"

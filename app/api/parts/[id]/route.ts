@@ -13,8 +13,8 @@ import {
   serverError,
 } from "@/lib/api-response";
 import { db } from "@/db/drizzle";
-import { parts, user, inventory } from "@/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { parts, user } from "@/db/schema";
+import { eq } from "drizzle-orm";
 
 export async function GET(
   request: NextRequest,
@@ -31,17 +31,13 @@ export async function GET(
     const part = await getPartById(numericId);
     if (!part) return notFound("Part not found");
 
-    const stock = await db
-      .select({ stock: sql<number>`COALESCE(SUM(${inventory.change}), 0)` })
-      .from(inventory)
-      .where(eq(inventory.partId, numericId));
-
-    const currentStock = Number(stock?.[0]?.stock || 0);
+    // Use the currentStock from parts table instead of calculating from inventory
+    const currentStock = Number(part.currentStock || 0);
 
     return ok({
       ...part,
-      currentStock: stock[0]?.stock || 0,
-      isLowStock: (stock[0]?.stock || 0) < (part.minStock || 0),
+      currentStock: currentStock,
+      isLowStock: currentStock < (part.minStock || 0),
     });
   } catch (err) {
     return serverError(err);

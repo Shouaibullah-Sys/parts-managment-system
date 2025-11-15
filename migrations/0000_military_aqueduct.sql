@@ -1,4 +1,9 @@
-CREATE TYPE "public"."role" AS ENUM('staff', 'admin');--> statement-breakpoint
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'role') THEN
+        CREATE TYPE "public"."role" AS ENUM('staff', 'admin');
+    END IF;
+END$$;--> statement-breakpoint
 CREATE TABLE "account" (
 	"id" text PRIMARY KEY NOT NULL,
 	"account_id" text NOT NULL,

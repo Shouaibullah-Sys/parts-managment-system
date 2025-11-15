@@ -22,6 +22,11 @@ export const partFormSchema = z
       .int("Must be a whole number")
       .min(0, "Minimum stock cannot be negative")
       .default(0),
+    currentStock: z.coerce
+      .number()
+      .int("Must be a whole number")
+      .min(0, "Current stock cannot be negative")
+      .default(0),
     costPrice: z
       .string()
       .optional()
@@ -48,6 +53,15 @@ export const partFormSchema = z
     {
       message: "Sale price must be greater than or equal to cost price",
       path: ["salePrice"],
+    }
+  )
+  .refine(
+    (data) => {
+      return data.currentStock >= 0;
+    },
+    {
+      message: "Current stock cannot be negative",
+      path: ["currentStock"],
     }
   );
 

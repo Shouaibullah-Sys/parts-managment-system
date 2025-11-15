@@ -39,6 +39,8 @@ interface Part {
   currentStock: number;
   salePrice: string | null;
   minStock: number;
+  costPrice?: string | null;
+  active?: boolean;
 }
 
 interface CartItem {
@@ -68,8 +70,107 @@ export function IssuePartsTable() {
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
+  const handleSaveAndGeneratePDF = async () => {
+    if (!customerName.trim()) {
+      alert("لطفاً نام مشتری را وارد کنید");
+      return;
+    }
+
+    if (cart.length === 0) {
+      alert("لطفاً قطعات را به سبد اضافه کنید");
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/issue-parts", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          customerName: customerName.trim(),
+          customerPhone: customerPhone.trim(),
+          customerAddress: customerAddress.trim(),
+          invoiceDate: invoiceDate,
+          invoiceNumber: invoiceNumber.trim(),
+          notes: notes.trim(),
+          items: cart.map((item) => ({
+            partId: item.part.id,
+            quantity: item.quantity,
+            unitPrice: parseFloat(item.part.salePrice || "0"),
+          })),
+          action: "save",
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Generate PDF after successful save
+        await generateAndDownloadPDF(result.data.customerId);
+
+        // Reset form
+        setCart([]);
+        setCustomerName("");
+        setCustomerPhone("");
+        setCustomerAddress("");
+        setInvoiceDate(new Date().toISOString().split("T")[0]);
+        setInvoiceNumber("");
+        setNotes("");
+
+        // Redirect to records page
+        router.push("/parts/records");
+      } else {
+        setError(result.message || "خطا در ایجاد سند");
+      }
+    } catch (error) {
+      console.error("Error saving issue:", error);
+      setError("خطا در اتصال به سرور");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const generateAndDownloadPDF = async (customerId: number) => {
+    try {
+      const response = await fetch(`/api/issue-parts/${customerId}/pdf`);
+      if (!response.ok) {
+        throw new Error("Failed to generate PDF");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.style.display = "none";
+      a.href = url;
+      a.download = `invoice-${customerId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error("Error downloading PDF:", error);
+      // Don't show error to user, just log it
+    }
+  };
+
   // Add part to cart from smart search
   const addToCartFromSearch = (part: Part) => {
+    // 🚨 CRITICAL DEBUG: Log real data when adding to cart
+    console.log("🛒 ADDING TO CART - Real Part Data:", {
+      id: part.id,
+      partNumber: part.partNumber,
+      name: part.name,
+      currentStock: part.currentStock,
+      minStock: part.minStock,
+      salePrice: part.salePrice,
+      costPrice: part.costPrice,
+      active: part.active,
+    });
+
     // Allow adding even with 0 stock for testing
     if (part.currentStock <= 0) {
       if (!confirm("این قطعه موجودی صفر دارد. آیا می‌خواهید ادامه دهید؟")) {
@@ -80,13 +181,20 @@ export function IssuePartsTable() {
     setCart((prev) => {
       const existing = prev.find((item) => item.part.id === part.id);
       if (existing) {
-        return prev.map((item) =>
+        const updated = prev.map((item) =>
           item.part.id === part.id
             ? { ...item, quantity: item.quantity + 1 }
             : item
         );
+        console.log(
+          "🛒 UPDATED EXISTING CART ITEM:",
+          updated.find((item) => item.part.id === part.id)
+        );
+        return updated;
       }
-      return [...prev, { part, quantity: 1 }];
+      const newCart = [...prev, { part, quantity: 1 }];
+      console.log("🛒 ADDED NEW CART ITEM:", newCart[newCart.length - 1]);
+      return newCart;
     });
   };
 
@@ -136,6 +244,7 @@ export function IssuePartsTable() {
     setError(null);
 
     try {
+      console.log("Sending request to API...");
       const response = await fetch("/api/issue-parts", {
         method: "POST",
         headers: {
@@ -157,9 +266,23 @@ export function IssuePartsTable() {
         }),
       });
 
-      const result = await response.json();
+      console.log("Response status:", response.status);
+
+      let result;
+      try {
+        result = await response.json();
+        console.log("Response data:", result);
+      } catch (parseError) {
+        console.error("Error parsing response:", parseError);
+        throw new Error("پاسخ سرور نامعتبر است");
+      }
 
       if (result.success) {
+        console.log("Success, generating PDF...");
+
+        // Generate PDF after successful save
+        await generateAndDownloadPDF(result.data.customerId);
+
         // Reset form
         setCart([]);
         setCustomerName("");
@@ -168,14 +291,21 @@ export function IssuePartsTable() {
         setInvoiceDate(new Date().toISOString().split("T")[0]);
         setInvoiceNumber("");
         setNotes("");
+
         // Redirect to records page
-        router.push("/issue-records");
+        router.push("/parts/records");
       } else {
-        setError(result.message || "خطا در ایجاد سند");
+        const errorMessage =
+          result.error || result.message || "خطا در ایجاد سند";
+        console.error("API error:", errorMessage);
+        setError(errorMessage);
       }
     } catch (error) {
-      console.error("Error saving issue:", error);
-      setError("خطا در اتصال به سرور");
+      console.error("Network error:", error);
+      setError(
+        "خطا در اتصال به سرور: " +
+          (error instanceof Error ? error.message : "نامعلوم")
+      );
     } finally {
       setIsLoading(false);
     }
@@ -396,13 +526,30 @@ export function IssuePartsTable() {
                         <div
                           className={`flex ${isMobile ? "flex-col gap-1" : "items-center gap-4"} text-sm text-muted-foreground mt-1`}
                         >
-                          <span>موجودی: {item.part.currentStock}</span>
+                          {/* 🚨 CRITICAL DEBUG: Show real stock data in cart */}
+                          <span className="flex items-center gap-1">
+                            <span>موجودی:</span>
+                            <span
+                              className={`font-mono font-bold ${item.part.currentStock <= item.part.minStock ? "text-red-600" : "text-green-600"}`}
+                              title="Real stock from Neon DB"
+                            >
+                              {item.part.currentStock}
+                            </span>
+                            <span className="text-xs">
+                              (حداقل: {item.part.minStock})
+                            </span>
+                          </span>
                           <span>
                             {parseFloat(
                               item.part.salePrice || "0"
                             ).toLocaleString()}{" "}
                             افغانی
                           </span>
+                        </div>
+                        {/* Debug info */}
+                        <div className="text-xs text-muted-foreground mt-1">
+                          Debug: ID={item.part.id} | Real Stock=
+                          {item.part.currentStock}
                         </div>
                       </div>
 
@@ -460,14 +607,14 @@ export function IssuePartsTable() {
 
                   <div className={`flex gap-3 ${isMobile ? "flex-col" : ""}`}>
                     <Button
-                      onClick={handleSave}
+                      onClick={handleSaveAndGeneratePDF}
                       disabled={isLoading}
                       className="bg-green-600 hover:bg-green-700 text-white shadow-md flex-1"
                     >
                       {isLoading ? (
                         <Loader2 className="ml-2 h-4 w-4 animate-spin" />
                       ) : (
-                        <Save className="ml-2 h-4 w-4" />
+                        <FileText className="ml-2 h-4 w-4" />
                       )}
                       {isLoading ? "در حال پردازش..." : "ذخیره و ایجاد بل"}
                     </Button>
@@ -531,7 +678,7 @@ export function IssueRecordsTable() {
     try {
       setIsLoading(true);
       setError(null);
-      const response = await fetch("/api/issue-records");
+      const response = await fetch("/api/parts/records");
       const result = await response.json();
 
       if (result.success) {

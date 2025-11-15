@@ -35,6 +35,7 @@ import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2 } from "lucide-react";
 import { partFormSchema, PartFormData } from "@/lib/validations/part";
+import { z } from "zod";
 import { useCreatePart } from "@/hooks/use-parts";
 
 interface CreatePartDialogProps {
@@ -51,13 +52,14 @@ export function CreatePartDialog({
   const createPartMutation = useCreatePart();
   const [serverError, setServerError] = useState<string | null>(null);
 
-  const form = useForm<PartFormData>({
+  const form = useForm<z.input<typeof partFormSchema>>({
     resolver: zodResolver(partFormSchema),
     defaultValues: {
       partNumber: "",
       name: "",
       section: "E",
       minStock: 0,
+      currentStock: 0,
       costPrice: "",
       salePrice: "",
       active: true,
@@ -67,11 +69,18 @@ export function CreatePartDialog({
   const costPrice = form.watch("costPrice");
   const salePrice = form.watch("salePrice");
 
-  const onSubmit = async (data: PartFormData) => {
+  const onSubmit = async (data: z.input<typeof partFormSchema>) => {
     setServerError(null);
 
     try {
-      await createPartMutation.mutateAsync(data);
+      const transformedData = {
+        ...data,
+        minStock: data.minStock as number,
+        currentStock: data.currentStock as number,
+        costPrice: data.costPrice || undefined,
+        salePrice: data.salePrice || undefined,
+      };
+      await createPartMutation.mutateAsync(transformedData);
       form.reset();
       onPartCreated();
       onOpenChange(false);
@@ -179,8 +188,38 @@ export function CreatePartDialog({
                   <FormItem>
                     <FormLabel>Minimum Stock</FormLabel>
                     <FormControl>
-                      <Input type="number" min="0" placeholder="0" {...field} />
+                      <Input
+                        type="number"
+                        min="0"
+                        placeholder="0"
+                        {...field}
+                        value={field.value as number}
+                      />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Current Stock */}
+              <FormField
+                control={form.control}
+                name="currentStock"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Current Stock</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min="0"
+                        placeholder="0"
+                        {...field}
+                        value={field.value as number}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Initial stock quantity for this part
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

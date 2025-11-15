@@ -78,13 +78,16 @@ export async function lowStockParts() {
   return db
     .select({
       part: parts,
-      currentStock: sql<number>`COALESCE(SUM(${inventory.change}), 0)`,
+      currentStock: parts.currentStock,
     })
     .from(parts)
-    .leftJoin(inventory, eq(parts.id, inventory.partId))
-    .where(eq(parts.active, true))
-    .groupBy(parts.id)
-    .having(sql`COALESCE(SUM(${inventory.change}), 0) < ${parts.minStock}`);
+    .where(
+      and(
+        eq(parts.active, true),
+        sql`${parts.currentStock} < ${parts.minStock}`
+      )
+    )
+    .orderBy(parts.partNumber);
 }
 
 export async function getPartInventoryHistory(

@@ -187,6 +187,14 @@ export function PartsTable() {
               <span className="text-muted-foreground">حداقل:</span>
               <span className="font-mono">{part.minStock}</span>
             </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">فعلی:</span>
+              <span
+                className={`font-mono ${(part.currentStock || 0) <= part.minStock ? "text-red-600 font-bold" : ""}`}
+              >
+                {part.currentStock || 0}
+              </span>
+            </div>
           </div>
         );
       },
@@ -259,6 +267,25 @@ export function PartsTable() {
       cell: ({ row }) => (
         <div className="font-mono text-center">{row.getValue("minStock")}</div>
       ),
+    },
+    {
+      accessorKey: "currentStock",
+      header: "موجودی فعلی",
+      cell: ({ row }) => {
+        const currentStock = row.getValue("currentStock") as number;
+        const minStock = row.getValue("minStock") as number;
+        return (
+          <div className="font-mono text-center">
+            <span
+              className={
+                currentStock <= minStock ? "text-red-600 font-bold" : ""
+              }
+            >
+              {currentStock}
+            </span>
+          </div>
+        );
+      },
     },
     {
       accessorKey: "costPrice",

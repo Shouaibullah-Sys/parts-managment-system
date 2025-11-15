@@ -29,6 +29,13 @@
       "when": 1763110333997,
       "tag": "0003_milky_santa_claus",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1763206947157,
+      "tag": "0004_skinny_may_parker",
+      "breakpoints": true
     }
   ]
 }

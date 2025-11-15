@@ -8,6 +8,7 @@ export type Part = {
   salePrice: string | null;
   active: boolean;
   createdAt: string;
+  currentStock?: number; // Added to match API response with real stock data
 };
 
 export type CreatePartInput = {
@@ -15,6 +16,7 @@ export type CreatePartInput = {
   name: string;
   section?: "E" | "D" | "F" | "G" | "OLD";
   minStock?: number;
+  currentStock?: number;
   costPrice?: string;
   salePrice?: string;
   active?: boolean;

@@ -1,113 +1,102 @@
 // app/api/parts/search/route.ts
 export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
 
-import type { NextRequest } from "next/server";
-import { requireAuth } from "@/lib/auth-session";
-import { ok, bad, unauthorized, serverError } from "@/lib/api-response";
+import { NextRequest } from "next/server";
 import { db } from "@/db/drizzle";
 import { parts, inventory } from "@/db/schema";
-import { sql, eq, or, like } from "drizzle-orm";
-
-// Simple in-memory cache (consider Redis for production)
-const searchCache = new Map();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+import { eq, sql } from "drizzle-orm";
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await requireAuth(request);
-    if (!session?.user) return unauthorized();
+    const { searchParams } = new URL(request.url);
+    const limit = parseInt(searchParams.get("limit") || "1000");
 
-    const url = new URL(request.url);
-    const query = url.searchParams.get("q");
-    const limit = parseInt(url.searchParams.get("limit") || "20", 10);
-    const useCache = url.searchParams.get("cache") !== "false";
+    console.log("🔍 Fetching parts for search with limit:", limit);
 
-    if (!query || query.length < 2) {
-      return bad("Query must be at least 2 characters long");
-    }
+    // Try to get parts with direct currentStock first (post-migration)
+    // Fallback to inventory calculation if column doesn't exist
+    let partsWithStock;
 
-    // Check cache first
-    const cacheKey = `${query}:${limit}`;
-    if (useCache) {
-      const cached = searchCache.get(cacheKey);
-      if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-        return ok(cached.data);
-      }
-    }
+    try {
+      // Attempt to use current_stock column (new structure)
+      partsWithStock = await db
+        .select({
+          id: parts.id,
+          partNumber: parts.partNumber,
+          name: parts.name,
+          section: parts.section,
+          minStock: parts.minStock,
+          costPrice: parts.costPrice,
+          salePrice: parts.salePrice,
+          active: parts.active,
+          createdAt: parts.createdAt,
+          currentStock: parts.currentStock, // Use direct column
+        })
+        .from(parts)
+        .where(eq(parts.active, true))
+        .orderBy(parts.partNumber)
+        .limit(limit);
 
-    const startTime = Date.now();
-
-    // Build optimized search query
-    const searchQuery = db
-      .select({
-        id: parts.id,
-        partNumber: parts.partNumber,
-        name: parts.name,
-        section: parts.section,
-        currentStock: sql<number>`COALESCE(SUM(${inventory.change}), 0)`,
-        salePrice: parts.salePrice,
-        minStock: parts.minStock,
-      })
-      .from(parts)
-      .leftJoin(inventory, eq(parts.id, inventory.partId))
-      .where(
-        or(
-          like(sql`LOWER(${parts.partNumber})`, `%${query.toLowerCase()}%`),
-          like(sql`LOWER(${parts.name})`, `%${query.toLowerCase()}%`),
-          like(
-            sql`REPLACE(LOWER(${parts.partNumber}), ' ', '')`,
-            `%${query.toLowerCase().replace(/\s/g, "")}%`
-          )
+      console.log("✅ Using current_stock column from parts table");
+    } catch (error) {
+      console.log(
+        "current_stock column not found, using inventory calculation..."
+      );
+      // Fallback to inventory transaction calculation (old structure)
+      partsWithStock = await db
+        .select({
+          id: parts.id,
+          partNumber: parts.partNumber,
+          name: parts.name,
+          section: parts.section,
+          minStock: parts.minStock,
+          costPrice: parts.costPrice,
+          salePrice: parts.salePrice,
+          active: parts.active,
+          createdAt: parts.createdAt,
+          currentStock: sql<number>`COALESCE(SUM(${inventory.change}), 0)`,
+        })
+        .from(parts)
+        .leftJoin(inventory, eq(parts.id, inventory.partId))
+        .where(eq(parts.active, true))
+        .groupBy(
+          parts.id,
+          parts.partNumber,
+          parts.name,
+          parts.section,
+          parts.minStock,
+          parts.costPrice,
+          parts.salePrice,
+          parts.active,
+          parts.createdAt
         )
-      )
-      .groupBy(parts.id)
-      .orderBy(
-        sql`
-          CASE 
-            WHEN LOWER(${parts.partNumber}) = LOWER(${query}) THEN 1
-            WHEN LOWER(${parts.name}) = LOWER(${query}) THEN 2
-            WHEN LOWER(${parts.partNumber}) LIKE LOWER(${`${query}%`}) THEN 3
-            WHEN LOWER(${parts.name}) LIKE LOWER(${`${query}%`}) THEN 4
-            ELSE 5
-          END
-        `
-      )
-      .limit(limit);
-
-    const results = await searchQuery;
-    const searchTime = Date.now() - startTime;
-
-    // Cache the results
-    if (useCache && results.length > 0) {
-      searchCache.set(cacheKey, {
-        data: results,
-        timestamp: Date.now(),
-      });
+        .orderBy(parts.partNumber)
+        .limit(limit);
     }
 
-    // Clean old cache entries
-    cleanupCache();
+    console.log(`✅ Loaded ${partsWithStock.length} parts for search`);
 
-    return ok({
-      results,
-      metadata: {
-        query,
-        count: results.length,
-        searchTime,
-        cached: false,
-      },
+    // Log stock information for debugging
+    partsWithStock.slice(0, 5).forEach((part) => {
+      console.log(
+        `📦 ${part.partNumber}: ${part.name} - Stock: ${part.currentStock}, Min: ${part.minStock}`
+      );
     });
-  } catch (err) {
-    return serverError(err);
-  }
-}
 
-function cleanupCache() {
-  const now = Date.now();
-  for (const [key, value] of searchCache.entries()) {
-    if (now - value.timestamp > CACHE_TTL) {
-      searchCache.delete(key);
-    }
+    return Response.json({
+      success: true,
+      data: partsWithStock,
+      count: partsWithStock.length,
+    });
+  } catch (error) {
+    console.error("❌ Error in parts search API:", error);
+    return Response.json(
+      {
+        success: false,
+        error: "Failed to fetch parts for search",
+        message: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 }
+    );
   }
 }

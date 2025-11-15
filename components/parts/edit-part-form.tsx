@@ -57,6 +57,7 @@ export function EditPartForm({ partId }: EditPartFormProps) {
       name: "",
       section: "E",
       minStock: 0,
+      currentStock: 0,
       costPrice: "",
       salePrice: "",
       active: true,
@@ -71,6 +72,7 @@ export function EditPartForm({ partId }: EditPartFormProps) {
         name: part.name,
         section: part.section,
         minStock: part.minStock,
+        currentStock: part.currentStock || 0,
         costPrice: part.costPrice || "",
         salePrice: part.salePrice || "",
         active: part.active,
@@ -88,6 +90,7 @@ export function EditPartForm({ partId }: EditPartFormProps) {
       const transformedData = {
         ...data,
         minStock: data.minStock as number,
+        currentStock: data.currentStock as number,
         active: data.active as boolean,
         costPrice: data.costPrice || undefined,
         salePrice: data.salePrice || undefined,
@@ -229,6 +232,30 @@ export function EditPartForm({ partId }: EditPartFormProps) {
                           value={field.value as number}
                         />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Current Stock */}
+                <FormField
+                  control={form.control}
+                  name="currentStock"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Current Stock</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min="0"
+                          placeholder="0"
+                          {...field}
+                          value={field.value as number}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Current available quantity
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

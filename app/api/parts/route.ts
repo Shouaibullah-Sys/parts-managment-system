@@ -1,124 +1,138 @@
 // app/api/parts/route.ts
 export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
 
-import type { NextRequest } from "next/server";
-import { listParts } from "@/lib/parts-queries";
-import { requireAuth } from "@/lib/auth-session";
-import { ok, bad, unauthorized, serverError } from "@/lib/api-response";
+import { NextRequest } from "next/server";
 import { db } from "@/db/drizzle";
-import { user, parts, inventory } from "@/db/schema";
-import { eq, sql } from "drizzle-orm";
-
-// Cache for parts data (simple in-memory cache)
-let partsCache: { data: any[]; timestamp: number } | null = null;
-const CACHE_TTL = 60 * 1000; // 1 minute
+import { parts, inventory } from "@/db/schema";
+import { eq, sql, and, or, like } from "drizzle-orm";
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await requireAuth(request);
-    if (!session?.user) return unauthorized();
+    const { searchParams } = new URL(request.url);
+    const search = searchParams.get("search");
+    const limit = parseInt(searchParams.get("limit") || "100");
+    const page = parseInt(searchParams.get("page") || "1");
 
-    const url = new URL(request.url);
-    const page = parseInt(url.searchParams.get("page") || "1", 10);
-    const limit = parseInt(url.searchParams.get("limit") || "10", 10);
-    const search = url.searchParams.get("search");
-    const section = url.searchParams.get("section");
-    const active = url.searchParams.get("active");
+    const offset = (page - 1) * limit;
 
-    // Use cache for non-search requests
-    const cacheKey = `${page}-${limit}-${search}-${section}-${active}`;
-    if (
-      !search &&
-      partsCache &&
-      Date.now() - partsCache.timestamp < CACHE_TTL
-    ) {
-      return ok(partsCache.data, {
-        pagination: {
-          page,
-          limit,
-          total: partsCache.data.length,
-          totalPages: 1,
-        },
-      });
+    // Build where conditions
+    const whereConditions = [];
+    if (search) {
+      whereConditions.push(
+        or(
+          like(parts.partNumber, `%${search}%`),
+          like(parts.name, `%${search}%`)
+        )
+      );
     }
+    whereConditions.push(eq(parts.active, true));
 
-    const { items, pagination } = await listParts({
-      page,
-      limit,
-      search,
-      section,
-      active,
+    // Simple parts query first
+    const partsData = await db
+      .select({
+        id: parts.id,
+        partNumber: parts.partNumber,
+        name: parts.name,
+        section: parts.section,
+        minStock: parts.minStock,
+        currentStock: parts.currentStock,
+        costPrice: parts.costPrice,
+        salePrice: parts.salePrice,
+        active: parts.active,
+        createdAt: parts.createdAt,
+      })
+      .from(parts)
+      .where(and(...whereConditions))
+      .orderBy(parts.partNumber)
+      .limit(limit)
+      .offset(offset);
+
+    // Get total count
+    const countResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(parts)
+      .where(and(...whereConditions));
+
+    const total = Number(countResult[0]?.count || 0);
+
+    return Response.json({
+      success: true,
+      data: partsData,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
     });
-
-    // For now, return parts without stock to avoid database connection issues
-    // Stock will be calculated on-demand when needed
-    const itemsWithDefaultStock = items.map((item) => ({
-      ...item,
-      currentStock: 100, // Default value for testing
-      isLowStock: false,
-    }));
-
-    // Cache the results
-    if (!search) {
-      partsCache = {
-        data: itemsWithDefaultStock,
-        timestamp: Date.now(),
-      };
-    }
-
-    return ok(itemsWithDefaultStock, { pagination });
-  } catch (err) {
-    console.error("Parts API error:", err);
-    return serverError(err);
+  } catch (error) {
+    console.error("Error in parts API:", error);
+    return Response.json(
+      { success: false, error: "Failed to fetch parts" },
+      { status: 500 }
+    );
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await requireAuth(request);
-    if (!session?.user) return unauthorized();
-
-    // check role
-    const [roleRow] = await db
-      .select({ role: user.role })
-      .from(user)
-      .where(eq(user.id, session.user.id))
-      .limit(1);
-
-    if (!roleRow || roleRow.role !== "admin") return unauthorized();
-
     const body = await request.json();
 
-    if (!body?.partNumber || !body?.name) {
-      return bad("Part number and name are required");
+    // Validate required fields
+    const {
+      partNumber,
+      name,
+      section,
+      minStock,
+      currentStock,
+      costPrice,
+      salePrice,
+    } = body;
+
+    if (!partNumber || !name) {
+      return Response.json(
+        { success: false, error: "Part number and name are required" },
+        { status: 400 }
+      );
     }
 
-    // avoid exact duplicates
-    const existing = await db
-      .select()
-      .from(parts)
-      .where(eq(parts.partNumber, body.partNumber))
-      .limit(1);
+    // Insert the new part
+    const newPart = await db
+      .insert(parts)
+      .values({
+        partNumber,
+        name,
+        section: section || "E",
+        minStock: minStock || 0,
+        currentStock: currentStock || 0,
+        costPrice: costPrice || null,
+        salePrice: salePrice || null,
+        active: true,
+      })
+      .returning();
 
-    if (existing.length > 0) {
-      return bad("Part number already exists");
-    }
-
-    // Validate numeric fields (optional)
-    if (body.costPrice) body.costPrice = parseFloat(String(body.costPrice));
-    if (body.salePrice) body.salePrice = parseFloat(String(body.salePrice));
-    if (body.minStock) body.minStock = parseInt(String(body.minStock), 10);
-
-    const [inserted] = await db.insert(parts).values(body).returning();
-
-    // Invalidate cache
-    partsCache = null;
-
-    return ok(inserted, {
-      pagination: { page: 1, limit: 10, total: 1, totalPages: 1 },
+    return Response.json({
+      success: true,
+      data: newPart[0],
+      message: "Part created successfully",
     });
-  } catch (err) {
-    return serverError(err);
+  } catch (error) {
+    console.error("Error creating part:", error);
+
+    // Check for duplicate part number
+    if (
+      error instanceof Error &&
+      error.message.includes("duplicate key value")
+    ) {
+      return Response.json(
+        { success: false, error: "Part number already exists" },
+        { status: 409 }
+      );
+    }
+
+    return Response.json(
+      { success: false, error: "Failed to create part" },
+      { status: 500 }
+    );
   }
 }

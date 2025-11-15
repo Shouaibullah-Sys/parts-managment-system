@@ -1,4 +1,4 @@
-// app/issue-records/page.tsx
+// app/parts/records/page.tsx
 "use client";
 
 import { Button } from "@/components/ui/button";
@@ -6,9 +6,9 @@ import { RefreshCw } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { IssueRecordsTable } from "@/components/parts/issue-parts-table";
+import { PartsRecordsTable } from "@/components/parts/parts-records-table";
 
-export default function IssueRecordsPage() {
+export default function PartsRecordsPage() {
   const { data: session } = authClient.useSession();
   const [userRole, setUserRole] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -23,7 +23,7 @@ export default function IssueRecordsPage() {
   }, [session?.user]);
 
   const handleRefresh = () => {
-    queryClient.invalidateQueries({ queryKey: ["issue-records"] });
+    queryClient.invalidateQueries({ queryKey: ["parts-records"] });
   };
 
   return (
@@ -31,10 +31,10 @@ export default function IssueRecordsPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div className="text-center sm:text-left">
           <h1 className="text-3xl font-bold tracking-tight bg-linear-to-r from-primary to-primary/80 bg-clip-text text-transparent">
-            سوابق صدور
+            سوابق صدور قطعات
           </h1>
           <p className="text-muted-foreground mt-2">
-            مشاهده تمام سوابق صدور قطعات
+            مشاهده تمام سوابق صدور و فروش قطعات
           </p>
         </div>
 
@@ -51,7 +51,7 @@ export default function IssueRecordsPage() {
         </div>
       </div>
 
-      <IssueRecordsTable />
+      <PartsRecordsTable />
     </div>
   );
 }

@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Search, Zap, Clock, Sparkles } from "lucide-react";
+import { Search, Zap, Clock, Sparkles, AlertTriangle } from "lucide-react";
 
 interface Part {
   id: number;
@@ -17,6 +17,8 @@ interface Part {
   currentStock: number;
   salePrice: string | null;
   minStock: number;
+  costPrice: string | null;
+  active: boolean;
 }
 
 interface SearchResult {
@@ -64,14 +66,85 @@ export function SmartSearchEngine({ onPartSelect }: SmartSearchEngineProps) {
 
   const loadPartsData = async () => {
     try {
-      const response = await fetch("/api/parts?limit=1000");
+      console.log(
+        "🔄 Loading REAL parts data from Neon DB (same endpoint as /parts/manage)..."
+      );
+
+      // Use the dedicated search endpoint with smart fallback for currentStock
+      const response = await fetch("/api/parts/search?limit=1000");
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
       const result = await response.json();
-      if (result.success) {
-        allParts.current = result.data;
-        await buildSearchIndex(result.data);
+      console.log("📊 Parts API Response (same as /parts/manage):", result);
+
+      if (result.success && result.data) {
+        console.log(
+          `✅ Loaded ${result.data.length} parts with REAL stock values from Neon DB`
+        );
+
+        // 🚨 CRITICAL DEBUG: Log raw API response for first part to verify real data
+        console.log("🔍 RAW API DATA for first part:", {
+          id: result.data[0]?.id,
+          partNumber: result.data[0]?.partNumber,
+          name: result.data[0]?.name,
+          currentStock: result.data[0]?.currentStock,
+          minStock: result.data[0]?.minStock,
+          salePrice: result.data[0]?.salePrice,
+          allKeys: Object.keys(result.data[0] || {}),
+        });
+
+        // Process and verify stock data - ensure we preserve real API values
+        const processedData = result.data.map((part: any) => {
+          const processed = {
+            ...part,
+            currentStock: Number(part.currentStock) || 0,
+            minStock: Number(part.minStock) || 0,
+            salePrice: part.salePrice || "0",
+            costPrice: part.costPrice || "0",
+            active: part.active !== false,
+          };
+
+          // Debug each part during processing
+          console.log(`🔧 Processing part ${part.partNumber}:`, {
+            originalCurrentStock: part.currentStock,
+            processedCurrentStock: processed.currentStock,
+            originalMinStock: part.minStock,
+            processedMinStock: processed.minStock,
+          });
+
+          return processed;
+        });
+
+        // Debug: Log first few parts with their stock info
+        console.log("🔍 FINAL PROCESSED DATA for first 3 parts:");
+        processedData.slice(0, 3).forEach((part: Part, index: number) => {
+          console.log(
+            `   📦 [${index}] ${part.partNumber}: ${part.name} | Current: ${part.currentStock} | Min: ${part.minStock} | Status: ${part.currentStock <= part.minStock ? "LOW STOCK" : "OK"}`
+          );
+        });
+
+        console.log("📋 Sample final processed data structure:", {
+          partNumber: processedData[0]?.partNumber,
+          currentStock: processedData[0]?.currentStock,
+          minStock: processedData[0]?.minStock,
+          salePrice: processedData[0]?.salePrice,
+          active: processedData[0]?.active,
+        });
+
+        allParts.current = processedData;
+        await buildSearchIndex(processedData);
+
+        console.log("✅ SmartSearchEngine data loading completed successfully");
+      } else {
+        console.error("❌ Search API returned error:", result.error);
+        allParts.current = [];
       }
     } catch (error) {
-      console.error("Error loading parts data:", error);
+      console.error("❌ Error loading search parts data:", error);
+      allParts.current = [];
     }
   };
 
@@ -328,15 +401,73 @@ export function SmartSearchEngine({ onPartSelect }: SmartSearchEngineProps) {
                     </span>
                   </div>
                   <p className="font-medium">{result.part.name}</p>
-                  <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
-                    <span>موجودی: {result.part.currentStock}</span>
-                    <span>
-                      قیمت:{" "}
-                      {parseFloat(
-                        result.part.salePrice || "0"
-                      ).toLocaleString()}{" "}
-                      افغانی
-                    </span>
+
+                  {/* Stock Status Section - Enhanced Display */}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-4 text-sm">
+                      <span className="flex items-center gap-1">
+                        موجودی:
+                        <span
+                          className={`font-mono font-bold ${
+                            result.part.currentStock <= result.part.minStock
+                              ? "text-red-600"
+                              : "text-green-600"
+                          }`}
+                          title={`Actual stock: ${result.part.currentStock}`}
+                        >
+                          {result.part.currentStock}
+                        </span>
+                        {result.part.currentStock <= result.part.minStock && (
+                          <AlertTriangle className="h-3 w-3 text-red-500" />
+                        )}
+                      </span>
+                      <span>
+                        قیمت:{" "}
+                        {parseFloat(
+                          result.part.salePrice || "0"
+                        ).toLocaleString()}{" "}
+                        افغانی
+                      </span>
+                    </div>
+
+                    {/* Enhanced Stock Warning Display */}
+                    {result.part.currentStock <= result.part.minStock ? (
+                      <div className="flex items-center gap-2 p-2 bg-red-50 border border-red-200 rounded">
+                        <AlertTriangle className="h-4 w-4 text-red-500 shrink-0" />
+                        <div className="text-sm">
+                          <span className="text-red-700 font-medium">
+                            ⚠️ موجودی ناکافی
+                          </span>
+                          <div className="text-xs text-red-600 mt-1">
+                            <span>
+                              حداقل مورد نیاز: {result.part.minStock} عدد
+                            </span>
+                            {result.part.currentStock <
+                              result.part.minStock && (
+                              <span className="block">
+                                (کمبود:{" "}
+                                {result.part.minStock -
+                                  result.part.currentStock}{" "}
+                                عدد)
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded">
+                        <div className="text-sm text-green-700">
+                          <span className="text-green-700 font-medium">
+                            ✅ موجودی کافی
+                          </span>
+                          <span className="block text-xs text-green-600 mt-1">
+                            حداقل: {result.part.minStock} عدد | مازاد:{" "}
+                            {result.part.currentStock - result.part.minStock}{" "}
+                            عدد
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
                 <Button
