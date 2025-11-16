@@ -21,13 +21,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -113,7 +106,7 @@ export function EditPartDialog({
         const error = await response.json();
         throw new Error(
           error.message ||
-            "شما نمیتوانید در پزره تغییر بیاورین. لطفا با مدیر بتماس شوین!"
+            "شما نمیتوانید در پرزه تغییر بیاورین. لطفا با مدیر بتماس شوین!"
         );
       }
 
@@ -198,20 +191,16 @@ export function EditPartDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>بخش *</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger className="border-border focus:border-primary focus:ring-primary/20">
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent className="border-border bg-popover">
-                        <SelectItem value="E">بخش E</SelectItem>
-                        <SelectItem value="D">بخش D</SelectItem>
-                        <SelectItem value="F">بخش F</SelectItem>
-                        <SelectItem value="G">بخش G</SelectItem>
-                        <SelectItem value="OLD">قدیمی</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <Input
+                        placeholder="E, D, F, G, OLD, یا سفارشی"
+                        {...field}
+                        className="border-border focus:border-primary focus:ring-primary/20"
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      دسته‌بندی بخش برای قطعه (هر مقدار متنی مجاز است)
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

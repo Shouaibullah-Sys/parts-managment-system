@@ -15,9 +15,6 @@ export const role = pgEnum("role", ["staff", "admin"]);
 
 export type Role = (typeof role.enumValues)[number];
 
-// --- بخش ENUM برای دسته‌بندی پرزه‌ها ---
-export const sectionEnum = pgEnum("section", ["E", "D", "F", "G", "OLD"]);
-
 // Extended user table with role
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -76,7 +73,7 @@ export const parts = pgTable("parts", {
   id: serial("id").primaryKey(),
   partNumber: varchar("part_number", { length: 100 }).unique().notNull(),
   name: varchar("name", { length: 255 }).notNull(),
-  section: sectionEnum("section").default("E"),
+  section: varchar("section", { length: 50 }).default("E"), // Changed from enum to varchar for flexibility
   minStock: integer("min_stock").default(0), // Minimum stock threshold
   currentStock: integer("current_stock").default(0), // Current available quantity
   costPrice: numeric("cost_price", { precision: 12, scale: 2 }),
@@ -89,6 +86,7 @@ export const parts = pgTable("parts", {
 export const customers = pgTable("customers", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
+  normalizedName: varchar("normalized_name", { length: 255 }).notNull(),
   phone: varchar("phone", { length: 50 }),
   address: text("address"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -168,7 +166,7 @@ export const searchIndex = pgTable("search_index", {
   dariText: text("dari_text"), // متن دری
   partNumber: varchar("part_number", { length: 100 }).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
-  section: sectionEnum("section").default("E"),
+  section: varchar("section", { length: 50 }).default("E"), // Changed from enum to varchar for flexibility
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

@@ -33,13 +33,19 @@ import {
   Smartphone,
   Monitor,
   Printer,
+  CheckCircle,
+  AlertCircle,
 } from "lucide-react";
 
 // Define interfaces
 interface PartsRecord {
   id: number;
   customerName: string;
+  normalizedName: string;
   totalAmount: string;
+  paidAmount: string;
+  outstanding: string;
+  isFullyPaid: boolean;
   issueDate: string;
   quantity: number;
   issuedBy: string;
@@ -49,11 +55,24 @@ interface PartsRecord {
   status: "completed" | "pending" | "approved";
 }
 
+interface PaginationInfo {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
 export function PartsRecordsTable() {
   const [records, setRecords] = useState<PartsRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [pagination, setPagination] = useState<PaginationInfo>({
+    page: 1,
+    limit: 100,
+    total: 0,
+    totalPages: 1,
+  });
   const [isMobile, setIsMobile] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<PartsRecord | null>(
     null
@@ -67,18 +86,33 @@ export function PartsRecordsTable() {
   }, []);
 
   useEffect(() => {
-    fetchRecords();
+    fetchRecords(1, 100); // Fetch first page on mount
   }, []);
 
-  const fetchRecords = async () => {
+  // Refetch records when search term changes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchRecords(1, 100);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  const fetchRecords = async (page = 1, limit = 100) => {
     try {
       setIsLoading(true);
       setError(null);
-      const response = await fetch("/api/parts/records");
+      const response = await fetch(
+        `/api/parts/records?page=${page}&limit=${limit}${
+          searchTerm ? `&search=${encodeURIComponent(searchTerm)}` : ""
+        }`
+      );
       const result = await response.json();
 
       if (result.success) {
         setRecords(result.data || []);
+        if (result.pagination) {
+          setPagination(result.pagination);
+        }
       } else {
         setError("خطا در بارگذاری سوابق");
       }
@@ -91,9 +125,34 @@ export function PartsRecordsTable() {
     }
   };
 
+  const handleLoadAll = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const response = await fetch(`/api/parts/records?limit=10000`);
+      const result = await response.json();
+
+      if (result.success) {
+        setRecords(result.data || []);
+        if (result.pagination) {
+          setPagination(result.pagination);
+        }
+      } else {
+        setError("خطا در بارگذاری همه سوابق");
+      }
+    } catch (error) {
+      console.error("Error fetching all records:", error);
+      setError("خطا در اتصال به سرور");
+      setRecords([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const filteredRecords = records.filter(
     (record) =>
       record.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      record.normalizedName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       record.partName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       record.partNumber?.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -154,8 +213,17 @@ export function PartsRecordsTable() {
 
   return (
     <div className="space-y-6">
-      {/* View Toggle */}
-      <div className="flex items-center justify-end">
+      <div className="flex items-center justify-end gap-3">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleLoadAll}
+          disabled={isLoading}
+          className="border-primary text-primary hover:bg-primary hover:text-primary-foreground"
+        >
+          <Package className="mr-2 h-4 w-4" />
+          بارگذاری همه سوابق
+        </Button>
         <div className="flex items-center gap-2 bg-muted/50 rounded-lg p-1">
           <Button
             variant={isMobile ? "default" : "ghost"}
@@ -248,6 +316,22 @@ export function PartsRecordsTable() {
                       <User className="h-3 w-3" />
                       {record.issuedBy}
                     </div>
+                    <div className="text-sm text-muted-foreground">
+                      <div className="flex justify-between">
+                        <span>پرداخت شده:</span>
+                        <span className="text-green-600 font-medium">
+                          {parseFloat(record.paidAmount).toLocaleString()}{" "}
+                          افغانی
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>باقیمانده:</span>
+                        <span className="text-orange-600 font-medium">
+                          {parseFloat(record.outstanding).toLocaleString()}{" "}
+                          افغانی
+                        </span>
+                      </div>
+                    </div>
                     <div className="font-medium text-foreground">
                       {parseFloat(record.totalAmount).toLocaleString()} افغانی
                     </div>
@@ -294,7 +378,10 @@ export function PartsRecordsTable() {
                     <TableHead>قطعه</TableHead>
                     <TableHead>تعداد</TableHead>
                     <TableHead>تاریخ</TableHead>
-                    <TableHead>مبلغ</TableHead>
+                    <TableHead>مبلغ کل</TableHead>
+                    <TableHead>پرداخت شده</TableHead>
+                    <TableHead>باقیمانده</TableHead>
+                    <TableHead>وضعیت</TableHead>
                     <TableHead>صادر کننده</TableHead>
                     <TableHead>عملیات</TableHead>
                   </TableRow>
@@ -334,6 +421,28 @@ export function PartsRecordsTable() {
                       </TableCell>
                       <TableCell className="font-medium">
                         {parseFloat(record.totalAmount).toLocaleString()} افغانی
+                      </TableCell>
+                      <TableCell className="text-green-600 font-medium">
+                        {parseFloat(record.paidAmount).toLocaleString()} افغانی
+                      </TableCell>
+                      <TableCell className="text-orange-600 font-medium">
+                        {parseFloat(record.outstanding).toLocaleString()} افغانی
+                      </TableCell>
+                      <TableCell>
+                        {record.isFullyPaid ? (
+                          <Badge className="bg-green-600">
+                            <CheckCircle className="h-3 w-3 ml-1" />
+                            پرداخت کامل
+                          </Badge>
+                        ) : (
+                          <Badge
+                            variant="outline"
+                            className="border-orange-600 text-orange-600"
+                          >
+                            <AlertCircle className="h-3 w-3 ml-1" />
+                            بدهکار
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">

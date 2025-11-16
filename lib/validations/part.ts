@@ -14,9 +14,10 @@ export const partFormSchema = z
       .string()
       .min(1, "Name is required")
       .max(255, "Name must be less than 255 characters"),
-    section: z.enum(["E", "D", "F", "G", "OLD"], {
-      message: "Please select a section",
-    }),
+    section: z
+      .string()
+      .min(1, "Section is required")
+      .max(50, "Section must be less than 50 characters"),
     minStock: z.coerce
       .number()
       .int("Must be a whole number")

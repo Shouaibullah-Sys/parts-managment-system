@@ -58,15 +58,15 @@ const loadFontBase64 = async (): Promise<string> => {
 };
 
 // ----------------------
-// Load logo (PNG)
+// Load logo and watermark
 // ----------------------
-const loadLogoBase64 = async (): Promise<string> => {
+const loadImageBase64 = async (filename: string): Promise<string> => {
   try {
-    const logoPath = path.join(process.cwd(), "public", "logo.png");
-    const buffer = await fs.readFile(logoPath);
+    const filePath = path.join(process.cwd(), "public", filename);
+    const buffer = await fs.readFile(filePath);
     return `data:image/png;base64,${buffer.toString("base64")}`;
   } catch {
-    console.warn("⚠️ logo.png missing");
+    console.warn(`⚠️ ${filename} missing`);
     return "";
   }
 };
@@ -96,17 +96,20 @@ export async function generateInvoicePDF(
     }
   }
 
-  // Load logo
-  const logoBase64 = await loadLogoBase64();
+  // Load images
+  const logoBase64 = await loadImageBase64("logo.png");
+  const watermarkBase64 = await loadImageBase64("watermark.png");
 
   // ----------------------
   // WATERMARK background
   // ----------------------
-  if (logoBase64) {
+  if (watermarkBase64) {
     const wmSize = 300;
-    doc.setGState(new (doc as any).GState({ opacity: 0.1 }));
+    const gs = doc.GState({ opacity: 0.1 });
+    doc.setGState(gs);
+
     doc.addImage(
-      logoBase64,
+      watermarkBase64,
       "PNG",
       (pageWidth - wmSize) / 2,
       (pageHeight - wmSize) / 2,
@@ -115,7 +118,9 @@ export async function generateInvoicePDF(
       "",
       "FAST"
     );
-    doc.setGState(new (doc as any).GState({ opacity: 1 }));
+
+    const gsReset = doc.GState({ opacity: 1 });
+    doc.setGState(gsReset);
   }
 
   // ----------------------
@@ -133,7 +138,6 @@ export async function generateInvoicePDF(
   doc.setTextColor(...LIGHT_GRAY);
   doc.text("Diplomasi Ltd", pageWidth / 2, 40, { align: "center" });
 
-  // --- NEW: Company Address (English) ---
   doc.setFont("helvetica", "normal");
   doc.setFontSize(11);
   doc.text("Kabul - Afghanistan | Main Road | Shop #12", pageWidth / 2, 60, {
@@ -145,7 +149,6 @@ export async function generateInvoicePDF(
     doc.setFontSize(14);
     doc.text("بل پرزه جات وسایط", pageWidth / 2, 80, { align: "center" });
 
-    // --- NEW: Company Address (Dari) ---
     doc.setFontSize(12);
     doc.text(
       "کابل - افغانستان | سرک عمومی | دکان شماره ۱۲",
@@ -168,14 +171,12 @@ export async function generateInvoicePDF(
   // TABLE HEADER
   // ----------------------
   const colWidth = (pageWidth - 80) / 6;
-
   doc.setFillColor(...DARK_RED);
   doc.rect(40, y, pageWidth - 80, 25, "F");
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
   doc.setTextColor(255, 255, 255);
-
   doc.text("#", 45, y + 17);
   doc.text("Part No.", 45 + colWidth, y + 17);
   doc.text("Name", 45 + colWidth * 2, y + 17);
@@ -198,12 +199,14 @@ export async function generateInvoicePDF(
     if (y > pageHeight - 140) {
       doc.addPage();
       y = 80;
-      // add watermark again if needed
-      if (logoBase64) {
+
+      if (watermarkBase64) {
         const wmSize2 = 300;
-        doc.setGState(new (doc as any).GState({ opacity: 0.1 }));
+        const gs = doc.GState({ opacity: 0.1 });
+        doc.setGState(gs);
+
         doc.addImage(
-          logoBase64,
+          watermarkBase64,
           "PNG",
           (pageWidth - wmSize2) / 2,
           (pageHeight - wmSize2) / 2,
@@ -212,7 +215,9 @@ export async function generateInvoicePDF(
           "",
           "FAST"
         );
-        doc.setGState(new (doc as any).GState({ opacity: 1 }));
+
+        const gsReset = doc.GState({ opacity: 1 });
+        doc.setGState(gsReset);
       }
     }
 
@@ -220,13 +225,10 @@ export async function generateInvoicePDF(
       typeof s.sale.totalAmount === "string"
         ? parseFloat(s.sale.totalAmount)
         : s.sale.totalAmount;
-
     const qty = s.sale.quantity;
     const unitPrice = qty ? totalValue / qty : 0;
-
     totalAmount += totalValue;
 
-    // alternating row background
     if (idx % 2 === 0) {
       doc.setFillColor(...LIGHT_GRAY);
     } else {
@@ -248,7 +250,6 @@ export async function generateInvoicePDF(
   // TOTAL BOX
   // ----------------------
   y += 30;
-
   doc.setFillColor(...LIGHT_GRAY);
   doc.rect(pageWidth - 200, y, 160, 40, "F");
   doc.setFont("helvetica", "bold");
@@ -260,14 +261,12 @@ export async function generateInvoicePDF(
   doc.text(`${totalAmount.toFixed(2)} AFN`, pageWidth - 180, y + 35);
 
   // ----------------------
-  // SIGNATURE & STAMP AREA (No borders)
+  // SIGNATURE AREA
   // ----------------------
   y += 100;
-
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
   doc.setTextColor(...TEXT_COLOR);
-
   doc.text("Authorized Signature", 40, y);
   doc.text("Company Stamp", pageWidth - 200, y);
 
@@ -312,8 +311,6 @@ export async function generateInvoicePDF(
 // ----------------------
 export async function generateInvoiceBlob(data: InvoiceData): Promise<Blob> {
   const uint8 = await generateInvoicePDF(data);
-  // create a proper ArrayBuffer copy to ensure we pass a plain ArrayBuffer
-  // (this avoids type errors when Uint8Array.buffer may be a SharedArrayBuffer)
   const arrayBuffer = uint8.slice().buffer;
   return new Blob([arrayBuffer], { type: "application/pdf" });
 }

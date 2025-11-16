@@ -8,6 +8,7 @@ import { ok, bad, unauthorized, serverError } from "@/lib/api-response";
 import { db } from "@/db/drizzle";
 import { parts, inventory, customers, sales, user } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
+import { normalizeName } from "@/lib/utils/normalize";
 
 export async function POST(request: NextRequest) {
   try {
@@ -121,10 +122,12 @@ export async function POST(request: NextRequest) {
 
     // Create customer record
     console.log("Creating customer record...");
+    const normalizedCustomerName = normalizeName(customerName);
     const [customer] = await db
       .insert(customers)
       .values({
         name: customerName,
+        normalizedName: normalizedCustomerName,
         phone: customerPhone || null,
         address: customerAddress || null,
       })

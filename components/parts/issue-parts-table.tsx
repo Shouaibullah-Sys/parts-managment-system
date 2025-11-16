@@ -21,16 +21,25 @@ import {
   Calendar,
   Eye,
   Download,
-  Phone,
   MapPin,
+  Phone,
   FileText as InvoiceIcon,
   MessageSquare,
   Smartphone,
   Monitor,
 } from "lucide-react";
 import { SmartSearchEngine } from "./smart-search-engine";
+import { CustomerSelector } from "./customer-selector";
 
 // Define interfaces
+interface Customer {
+  id: number;
+  name: string;
+  normalizedName: string;
+  phone: string | null;
+  address: string | null;
+}
+
 interface Part {
   id: number;
   partNumber: string;
@@ -46,11 +55,15 @@ interface Part {
 interface CartItem {
   part: Part;
   quantity: number;
+  customPrice?: number;
 }
 
 export function IssuePartsTable() {
   const router = useRouter();
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
+    null
+  );
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
@@ -62,6 +75,7 @@ export function IssuePartsTable() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [isNewCustomer, setIsNewCustomer] = useState(false);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -100,7 +114,8 @@ export function IssuePartsTable() {
           items: cart.map((item) => ({
             partId: item.part.id,
             quantity: item.quantity,
-            unitPrice: parseFloat(item.part.salePrice || "0"),
+            unitPrice:
+              item.customPrice || parseFloat(item.part.salePrice || "0"),
           })),
           action: "save",
         }),
@@ -114,6 +129,8 @@ export function IssuePartsTable() {
 
         // Reset form
         setCart([]);
+        setSelectedCustomer(null);
+        setIsNewCustomer(false);
         setCustomerName("");
         setCustomerPhone("");
         setCustomerAddress("");
@@ -159,18 +176,6 @@ export function IssuePartsTable() {
 
   // Add part to cart from smart search
   const addToCartFromSearch = (part: Part) => {
-    // 🚨 CRITICAL DEBUG: Log real data when adding to cart
-    console.log("🛒 ADDING TO CART - Real Part Data:", {
-      id: part.id,
-      partNumber: part.partNumber,
-      name: part.name,
-      currentStock: part.currentStock,
-      minStock: part.minStock,
-      salePrice: part.salePrice,
-      costPrice: part.costPrice,
-      active: part.active,
-    });
-
     // Allow adding even with 0 stock for testing
     if (part.currentStock <= 0) {
       if (!confirm("این قطعه موجودی صفر دارد. آیا می‌خواهید ادامه دهید؟")) {
@@ -181,21 +186,31 @@ export function IssuePartsTable() {
     setCart((prev) => {
       const existing = prev.find((item) => item.part.id === part.id);
       if (existing) {
-        const updated = prev.map((item) =>
+        return prev.map((item) =>
           item.part.id === part.id
             ? { ...item, quantity: item.quantity + 1 }
             : item
         );
-        console.log(
-          "🛒 UPDATED EXISTING CART ITEM:",
-          updated.find((item) => item.part.id === part.id)
-        );
-        return updated;
       }
-      const newCart = [...prev, { part, quantity: 1 }];
-      console.log("🛒 ADDED NEW CART ITEM:", newCart[newCart.length - 1]);
+      const newCart = [
+        ...prev,
+        {
+          part,
+          quantity: 1,
+          customPrice: parseFloat(part.salePrice || "0"),
+        },
+      ];
       return newCart;
     });
+  };
+
+  // Update custom price for cart item
+  const updateCustomPrice = (partId: number, newPrice: number) => {
+    setCart((prev) =>
+      prev.map((item) =>
+        item.part.id === partId ? { ...item, customPrice: newPrice } : item
+      )
+    );
   };
 
   // Cart management functions
@@ -224,7 +239,7 @@ export function IssuePartsTable() {
 
   const getTotalAmount = () => {
     return cart.reduce((total, item) => {
-      const price = parseFloat(item.part.salePrice || "0");
+      const price = item.customPrice || parseFloat(item.part.salePrice || "0");
       return total + price * item.quantity;
     }, 0);
   };
@@ -244,7 +259,6 @@ export function IssuePartsTable() {
     setError(null);
 
     try {
-      console.log("Sending request to API...");
       const response = await fetch("/api/issue-parts", {
         method: "POST",
         headers: {
@@ -260,26 +274,16 @@ export function IssuePartsTable() {
           items: cart.map((item) => ({
             partId: item.part.id,
             quantity: item.quantity,
-            unitPrice: parseFloat(item.part.salePrice || "0"),
+            unitPrice:
+              item.customPrice || parseFloat(item.part.salePrice || "0"),
           })),
           action: "save",
         }),
       });
 
-      console.log("Response status:", response.status);
-
-      let result;
-      try {
-        result = await response.json();
-        console.log("Response data:", result);
-      } catch (parseError) {
-        console.error("Error parsing response:", parseError);
-        throw new Error("پاسخ سرور نامعتبر است");
-      }
+      const result = await response.json();
 
       if (result.success) {
-        console.log("Success, generating PDF...");
-
         // Generate PDF after successful save
         await generateAndDownloadPDF(result.data.customerId);
 
@@ -295,20 +299,33 @@ export function IssuePartsTable() {
         // Redirect to records page
         router.push("/parts/records");
       } else {
-        const errorMessage =
-          result.error || result.message || "خطا در ایجاد سند";
-        console.error("API error:", errorMessage);
-        setError(errorMessage);
+        setError(result.message || "خطا در ایجاد سند");
       }
     } catch (error) {
-      console.error("Network error:", error);
-      setError(
-        "خطا در اتصال به سرور: " +
-          (error instanceof Error ? error.message : "نامعلوم")
-      );
+      console.error("Error saving issue:", error);
+      setError("خطا در اتصال به سرور");
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Customer selection handlers
+  const handleCustomerSelect = (customer: Customer | null) => {
+    setSelectedCustomer(customer);
+    if (customer) {
+      setCustomerName(customer.name);
+      setCustomerPhone(customer.phone || "");
+      setCustomerAddress(customer.address || "");
+      setIsNewCustomer(false);
+    }
+  };
+
+  const handleNewCustomer = () => {
+    setIsNewCustomer(true);
+    setSelectedCustomer(null);
+    setCustomerName("");
+    setCustomerPhone("");
+    setCustomerAddress("");
   };
 
   const handleReferToAdmin = async () => {
@@ -341,7 +358,8 @@ export function IssuePartsTable() {
           items: cart.map((item) => ({
             partId: item.part.id,
             quantity: item.quantity,
-            unitPrice: parseFloat(item.part.salePrice || "0"),
+            unitPrice:
+              item.customPrice || parseFloat(item.part.salePrice || "0"),
           })),
           action: "refer",
         }),
@@ -352,6 +370,8 @@ export function IssuePartsTable() {
       if (result.success) {
         alert("سند برای تأیید مدیر ارسال شد");
         setCart([]);
+        setSelectedCustomer(null);
+        setIsNewCustomer(false);
         setCustomerName("");
         setCustomerPhone("");
         setCustomerAddress("");
@@ -403,7 +423,7 @@ export function IssuePartsTable() {
           <CardHeader className="bg-mechanical/50 border-b border-border">
             <CardTitle className="flex items-center gap-2 text-foreground">
               <ShoppingCart className="h-5 w-5 text-primary" />
-              سبد صدور
+              سبد صادرات
               {cart.length > 0 && (
                 <Badge
                   variant="secondary"
@@ -415,40 +435,55 @@ export function IssuePartsTable() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 p-4">
-            {/* Customer Information */}
+            {/* Customer Selector */}
+            <CustomerSelector
+              onCustomerSelect={handleCustomerSelect}
+              onNewCustomer={handleNewCustomer}
+              disabled={isLoading}
+            />
+
+            {/* Show manual inputs only for new customers */}
+            {isNewCustomer && (
+              <div
+                className={`gap-4 ${isMobile ? "space-y-3" : "grid grid-cols-1 md:grid-cols-2"}`}
+              >
+                <div className="flex items-center gap-2">
+                  <User className="h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="نام مشتری"
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    disabled={isLoading}
+                    className="border-border focus:border-primary focus:ring-primary/20"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Phone className="h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="شماره تماس"
+                    value={customerPhone}
+                    onChange={(e) => setCustomerPhone(e.target.value)}
+                    disabled={isLoading}
+                    className="border-border focus:border-primary focus:ring-primary/20"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="آدرس"
+                    value={customerAddress}
+                    onChange={(e) => setCustomerAddress(e.target.value)}
+                    disabled={isLoading}
+                    className="border-border focus:border-primary focus:ring-primary/20"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Date and Invoice Fields */}
             <div
               className={`gap-4 ${isMobile ? "space-y-3" : "grid grid-cols-1 md:grid-cols-2"}`}
             >
-              <div className="flex items-center gap-2">
-                <User className="h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="نام مشتری"
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  disabled={isLoading}
-                  className="border-border focus:border-primary focus:ring-primary/20"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <Phone className="h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="شماره تماس"
-                  value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value)}
-                  disabled={isLoading}
-                  className="border-border focus:border-primary focus:ring-primary/20"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <MapPin className="h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="آدرس"
-                  value={customerAddress}
-                  onChange={(e) => setCustomerAddress(e.target.value)}
-                  disabled={isLoading}
-                  className="border-border focus:border-primary focus:ring-primary/20"
-                />
-              </div>
               <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-muted-foreground" />
                 <Input
@@ -524,14 +559,13 @@ export function IssuePartsTable() {
                           {item.part.name}
                         </p>
                         <div
-                          className={`flex ${isMobile ? "flex-col gap-1" : "items-center gap-4"} text-sm text-muted-foreground mt-1`}
+                          className={`flex ${isMobile ? "flex-col gap-2" : "items-center gap-4"} text-sm text-muted-foreground mt-1`}
                         >
-                          {/* 🚨 CRITICAL DEBUG: Show real stock data in cart */}
+                          {/* Stock Info */}
                           <span className="flex items-center gap-1">
                             <span>موجودی:</span>
                             <span
                               className={`font-mono font-bold ${item.part.currentStock <= item.part.minStock ? "text-red-600" : "text-green-600"}`}
-                              title="Real stock from Neon DB"
                             >
                               {item.part.currentStock}
                             </span>
@@ -539,17 +573,27 @@ export function IssuePartsTable() {
                               (حداقل: {item.part.minStock})
                             </span>
                           </span>
-                          <span>
-                            {parseFloat(
-                              item.part.salePrice || "0"
-                            ).toLocaleString()}{" "}
-                            افغانی
-                          </span>
-                        </div>
-                        {/* Debug info */}
-                        <div className="text-xs text-muted-foreground mt-1">
-                          Debug: ID={item.part.id} | Real Stock=
-                          {item.part.currentStock}
+
+                          {/* Price Input */}
+                          <div className="flex items-center gap-1">
+                            <span>قیمت:</span>
+                            <Input
+                              type="number"
+                              value={
+                                item.customPrice ||
+                                parseFloat(item.part.salePrice || "0")
+                              }
+                              onChange={(e) =>
+                                updateCustomPrice(
+                                  item.part.id,
+                                  parseFloat(e.target.value) || 0
+                                )
+                              }
+                              className="w-20 h-7 text-xs border-border focus:border-primary focus:ring-primary/20"
+                              disabled={isLoading}
+                            />
+                            <span>افغانی</span>
+                          </div>
                         </div>
                       </div>
 

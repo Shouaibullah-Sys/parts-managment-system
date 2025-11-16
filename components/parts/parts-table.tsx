@@ -605,24 +605,14 @@ export function PartsTable() {
           />
         </div>
 
-        <Select
-          value={sectionFilter || "all-sections"}
-          onValueChange={(value) =>
-            setSectionFilter(value === "all-sections" ? "" : value)
-          }
-        >
-          <SelectTrigger className="w-full sm:w-32 bg-background border-border">
-            <SelectValue placeholder="بخش" />
-          </SelectTrigger>
-          <SelectContent className="border-border bg-popover">
-            <SelectItem value="all-sections">همه بخش‌ها</SelectItem>
-            <SelectItem value="E">بخش E</SelectItem>
-            <SelectItem value="D">بخش D</SelectItem>
-            <SelectItem value="F">بخش F</SelectItem>
-            <SelectItem value="G">بخش G</SelectItem>
-            <SelectItem value="OLD">قدیمی</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="relative w-full sm:w-40">
+          <Input
+            placeholder="فیلتر بخش..."
+            value={sectionFilter}
+            onChange={(event) => setSectionFilter(event.target.value)}
+            className="bg-background border-border"
+          />
+        </div>
 
         <Select
           value={activeFilter || "all-status"}

@@ -23,13 +23,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -158,23 +151,15 @@ export function CreatePartDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Section *</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a section" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="E">Section E</SelectItem>
-                        <SelectItem value="D">Section D</SelectItem>
-                        <SelectItem value="F">Section F</SelectItem>
-                        <SelectItem value="G">Section G</SelectItem>
-                        <SelectItem value="OLD">OLD</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <Input
+                        placeholder="E, D, F, G, OLD, or custom"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Category section for the part (any text value allowed)
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

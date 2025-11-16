@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
 
     const url = new URL(request.url);
     const page = parseInt(url.searchParams.get("page") || "1", 10);
-    const limit = parseInt(url.searchParams.get("limit") || "10", 10);
+    const limit = parseInt(url.searchParams.get("limit") || "100", 10);
     const search = url.searchParams.get("search");
 
     const offset = (page - 1) * limit;
@@ -24,15 +24,26 @@ export async function GET(request: NextRequest) {
     // Build where conditions
     const whereConditions = [];
     if (search) {
-      whereConditions.push(like(customers.name, `%${search}%`));
+      whereConditions.push(
+        or(
+          like(customers.name, `%${search}%`),
+          like(customers.normalizedName, `%${search}%`),
+          like(parts.name, `%${search}%`),
+          like(parts.partNumber, `%${search}%`)
+        )
+      );
     }
 
-    // Build the main query with proper joins
+    // Build the main query with proper joins including payment info
     const query = db
       .select({
         id: sales.id,
         customerName: customers.name,
+        normalizedName: customers.normalizedName,
         totalAmount: sales.totalAmount,
+        paidAmount: sales.paidAmount,
+        outstanding: sales.outstanding,
+        isFullyPaid: sales.isFullyPaid,
         issueDate: sales.saleDate,
         quantity: sales.quantity,
         issuedBy: user.name,
@@ -40,7 +51,7 @@ export async function GET(request: NextRequest) {
         partName: parts.name,
       })
       .from(sales)
-      .innerJoin(customers, eq(sales.customerId, customers.id))
+      .leftJoin(customers, eq(sales.customerId, customers.id))
       .leftJoin(user, eq(sales.createdBy, user.id))
       .leftJoin(parts, eq(sales.partId, parts.id))
       .where(whereConditions.length > 0 ? and(...whereConditions) : undefined)
@@ -54,7 +65,7 @@ export async function GET(request: NextRequest) {
     const countQuery = db
       .select({ count: sql<number>`count(*)` })
       .from(sales)
-      .innerJoin(customers, eq(sales.customerId, customers.id))
+      .leftJoin(customers, eq(sales.customerId, customers.id))
       .leftJoin(user, eq(sales.createdBy, user.id))
       .leftJoin(parts, eq(sales.partId, parts.id))
       .where(whereConditions.length > 0 ? and(...whereConditions) : undefined);
@@ -63,12 +74,26 @@ export async function GET(request: NextRequest) {
     const total = Number(countResult[0]?.count || 0);
     const totalPages = Math.max(1, Math.ceil(total / limit));
 
-    // Format the response
+    // Format the response with payment information
     const formattedRecords = records.map((record) => ({
-      ...record,
+      id: record.id,
+      customerName: record.customerName || "نامشخص",
+      normalizedName: record.normalizedName || "",
       totalAmount: record.totalAmount?.toString() || "0",
+      paidAmount: record.paidAmount?.toString() || "0",
+      outstanding: record.outstanding?.toString() || "0",
+      isFullyPaid: record.isFullyPaid || false,
+      issueDate: record.issueDate
+        ? record.issueDate.toISOString()
+        : new Date().toISOString(),
+      quantity: record.quantity || 0,
+      issuedBy: record.issuedBy || "نامشخص",
+      partNumber: record.partNumber || "",
+      partName: record.partName || "نامشخص",
       itemCount: 1,
-      status: "completed" as const,
+      status: record.isFullyPaid
+        ? ("completed" as const)
+        : ("pending" as const),
     }));
 
     return ok(formattedRecords, {
