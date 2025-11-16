@@ -1,146 +1,333 @@
 // lib/pdf-generator.ts
-import PDFDocument from "pdfkit";
-import { customers, parts, user } from "@/db/schema";
+import { jsPDF } from "jspdf";
+import { format } from "date-fns";
+import fs from "fs/promises";
+import path from "path";
 
-interface SaleItem {
-  sale: any;
-  part: typeof parts.$inferSelect | null;
-  user: typeof user.$inferSelect | null;
-}
+import { Part } from "@/lib/types";
 
-interface InvoiceData {
-  customer: typeof customers.$inferSelect;
+// ----------------------
+// Types
+// ----------------------
+export type SaleItem = {
+  sale: {
+    quantity: number;
+    totalAmount: string | number;
+  };
+  part: Part | null;
+  user: { name: string } | null;
+};
+
+export interface InvoiceData {
+  customer: {
+    name: string;
+    phone?: string | null;
+    address?: string | null;
+  };
   sales: SaleItem[];
   issueId: number;
   createdAt: Date;
   createdBy: string;
 }
 
-export async function generateInvoicePDF(data: InvoiceData): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
+// ----------------------
+// Theme Colors
+// ----------------------
+const DARK_GRAY: [number, number, number] = [45, 45, 45];
+const DARK_RED: [number, number, number] = [139, 0, 0];
+const LIGHT_GRAY: [number, number, number] = [240, 240, 240];
+const TEXT_COLOR: [number, number, number] = [50, 50, 50];
+
+// ----------------------
+// Load Persian font
+// ----------------------
+const loadFontBase64 = async (): Promise<string> => {
+  try {
+    const fontPath = path.join(
+      process.cwd(),
+      "public",
+      "fonts",
+      "Vazirmatn-Regular.ttf"
+    );
+    const fontBuffer = await fs.readFile(fontPath);
+    return fontBuffer.toString("base64");
+  } catch {
+    console.warn("⚠️ Persian font not found, fallback to default.");
+    return "";
+  }
+};
+
+// ----------------------
+// Load logo (PNG)
+// ----------------------
+const loadLogoBase64 = async (): Promise<string> => {
+  try {
+    const logoPath = path.join(process.cwd(), "public", "logo.png");
+    const buffer = await fs.readFile(logoPath);
+    return `data:image/png;base64,${buffer.toString("base64")}`;
+  } catch {
+    console.warn("⚠️ logo.png missing");
+    return "";
+  }
+};
+
+// ----------------------
+// Generate Invoice PDF
+// ----------------------
+export async function generateInvoicePDF(
+  data: InvoiceData
+): Promise<Uint8Array> {
+  const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+
+  let y = 120;
+
+  // Load font
+  const fontBase64 = await loadFontBase64();
+  let fontLoaded = false;
+  if (fontBase64) {
     try {
-      const doc = new PDFDocument({
-        size: "A4",
-        margin: 50,
-        info: {
-          Title: `Invoice ${data.issueId}`,
-          Author: "Parts Management System",
-          Subject: `Invoice for ${data.customer.name}`,
-        },
-      });
-
-      const buffers: Buffer[] = [];
-      doc.on("data", (chunk: Buffer) => buffers.push(chunk));
-      doc.on("end", () => resolve(Buffer.concat(buffers)));
-      doc.on("error", reject);
-
-      // Use default font (no external font loading)
-      // PDFKit will use its built-in fonts
-
-      // Header
-      doc.fontSize(20).text("Parts Invoice", { align: "center" }).moveDown(0.5);
-
-      // Invoice info
-      doc
-        .fontSize(12)
-        .text(`Invoice ID: ${data.issueId}`, { align: "right" })
-        .text(`Date: ${new Date(data.createdAt).toLocaleDateString()}`, {
-          align: "right",
-        })
-        .text(`Created by: ${data.createdBy}`, { align: "right" })
-        .moveDown(1);
-
-      // Customer info
-      doc
-        .fontSize(14)
-        .text("Customer Information:", { align: "right" })
-        .moveDown(0.5);
-
-      doc
-        .fontSize(12)
-        .text(`Customer Name: ${data.customer.name}`, { align: "right" });
-
-      if (data.customer.phone) {
-        doc.text(`Phone: ${data.customer.phone}`, { align: "right" });
-      }
-
-      if (data.customer.address) {
-        doc.text(`Address: ${data.customer.address}`, { align: "right" });
-      }
-
-      doc.moveDown(1);
-
-      // Items table header
-      const tableTop = doc.y + 20;
-      doc
-        .fontSize(10)
-        .text("Item #", 50, tableTop)
-        .text("Part Number", 100, tableTop)
-        .text("Part Name", 200, tableTop)
-        .text("Qty", 350, tableTop)
-        .text("Unit Price", 400, tableTop)
-        .text("Total", 480, tableTop);
-
-      // Draw line under header
-      doc
-        .moveTo(50, tableTop + 15)
-        .lineTo(550, tableTop + 15)
-        .stroke();
-
-      // Items
-      let y = tableTop + 25;
-      let totalAmount = 0;
-
-      data.sales.forEach((saleItem, index) => {
-        if (y > 700) {
-          // New page if needed
-          doc.addPage();
-          y = 50;
-        }
-
-        const quantity = saleItem.sale.quantity;
-        const unitPrice = parseFloat(saleItem.sale.totalAmount) / quantity;
-        const itemTotal = parseFloat(saleItem.sale.totalAmount);
-
-        totalAmount += itemTotal;
-
-        doc
-          .text((index + 1).toString(), 50, y)
-          .text(saleItem.part?.partNumber || "Unknown", 100, y)
-          .text(saleItem.part?.name || "Unknown", 200, y, { width: 140 })
-          .text(quantity.toString(), 350, y)
-          .text(unitPrice.toLocaleString(), 400, y)
-          .text(itemTotal.toLocaleString(), 480, y);
-
-        y += 20;
-      });
-
-      // Total
-      const totalY = y + 10;
-      doc.moveTo(350, totalY).lineTo(550, totalY).stroke();
-
-      doc
-        .fontSize(12)
-        .text("Total Amount:", 350, totalY + 10)
-        .text(totalAmount.toLocaleString() + " AFN", 480, totalY + 10, {
-          align: "right",
-        });
-
-      // Footer
-      const footerY = 750;
-      doc
-        .fontSize(8)
-        .text("This document was generated automatically", 50, footerY, {
-          align: "center",
-        })
-        .text(new Date().toLocaleDateString(), 50, footerY + 12, {
-          align: "center",
-        });
-
-      doc.end();
-    } catch (error) {
-      console.error("Error in PDF generation:", error);
-      reject(error);
+      doc.addFileToVFS("vazirmatn.ttf", fontBase64);
+      doc.addFont("vazirmatn.ttf", "vazirmatn", "normal");
+      fontLoaded = true;
+    } catch (err) {
+      console.warn("Failed to load font", err);
     }
+  }
+
+  // Load logo
+  const logoBase64 = await loadLogoBase64();
+
+  // ----------------------
+  // WATERMARK background
+  // ----------------------
+  if (logoBase64) {
+    const wmSize = 300;
+    doc.setGState(new (doc as any).GState({ opacity: 0.1 }));
+    doc.addImage(
+      logoBase64,
+      "PNG",
+      (pageWidth - wmSize) / 2,
+      (pageHeight - wmSize) / 2,
+      wmSize,
+      wmSize,
+      "",
+      "FAST"
+    );
+    doc.setGState(new (doc as any).GState({ opacity: 1 }));
+  }
+
+  // ----------------------
+  // HEADER
+  // ----------------------
+  doc.setFillColor(...DARK_GRAY);
+  doc.rect(0, 0, pageWidth, 120, "F");
+
+  if (logoBase64) {
+    doc.addImage(logoBase64, "PNG", 40, 15, 70, 70);
+  }
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(22);
+  doc.setTextColor(...LIGHT_GRAY);
+  doc.text("Diplomasi Ltd", pageWidth / 2, 40, { align: "center" });
+
+  // --- NEW: Company Address (English) ---
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  doc.text("Kabul - Afghanistan | Main Road | Shop #12", pageWidth / 2, 60, {
+    align: "center",
   });
+
+  if (fontLoaded) {
+    doc.setFont("vazirmatn", "normal");
+    doc.setFontSize(14);
+    doc.text("بل پرزه جات وسایط", pageWidth / 2, 80, { align: "center" });
+
+    // --- NEW: Company Address (Dari) ---
+    doc.setFontSize(12);
+    doc.text(
+      "کابل - افغانستان | سرک عمومی | دکان شماره ۱۲",
+      pageWidth / 2,
+      100,
+      { align: "center" }
+    );
+  }
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.text(`Invoice ID: INV-${String(data.issueId).padStart(4, "0")}`, 40, 90);
+  doc.text(`Date: ${format(data.createdAt, "PPP")}`, pageWidth - 40, 90, {
+    align: "right",
+  });
+
+  y += 60;
+
+  // ----------------------
+  // TABLE HEADER
+  // ----------------------
+  const colWidth = (pageWidth - 80) / 6;
+
+  doc.setFillColor(...DARK_RED);
+  doc.rect(40, y, pageWidth - 80, 25, "F");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(255, 255, 255);
+
+  doc.text("#", 45, y + 17);
+  doc.text("Part No.", 45 + colWidth, y + 17);
+  doc.text("Name", 45 + colWidth * 2, y + 17);
+  doc.text("Qty", 45 + colWidth * 3, y + 17);
+  doc.text("Unit Price", 45 + colWidth * 4, y + 17);
+  doc.text("Total", 45 + colWidth * 5, y + 17);
+
+  y += 30;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(...TEXT_COLOR);
+
+  // ----------------------
+  // TABLE ROWS
+  // ----------------------
+  let totalAmount = 0;
+
+  data.sales.forEach((s, idx) => {
+    if (y > pageHeight - 140) {
+      doc.addPage();
+      y = 80;
+      // add watermark again if needed
+      if (logoBase64) {
+        const wmSize2 = 300;
+        doc.setGState(new (doc as any).GState({ opacity: 0.1 }));
+        doc.addImage(
+          logoBase64,
+          "PNG",
+          (pageWidth - wmSize2) / 2,
+          (pageHeight - wmSize2) / 2,
+          wmSize2,
+          wmSize2,
+          "",
+          "FAST"
+        );
+        doc.setGState(new (doc as any).GState({ opacity: 1 }));
+      }
+    }
+
+    const totalValue =
+      typeof s.sale.totalAmount === "string"
+        ? parseFloat(s.sale.totalAmount)
+        : s.sale.totalAmount;
+
+    const qty = s.sale.quantity;
+    const unitPrice = qty ? totalValue / qty : 0;
+
+    totalAmount += totalValue;
+
+    // alternating row background
+    if (idx % 2 === 0) {
+      doc.setFillColor(...LIGHT_GRAY);
+    } else {
+      doc.setFillColor(255, 255, 255);
+    }
+    doc.rect(40, y, pageWidth - 80, 20, "F");
+
+    doc.text(String(idx + 1), 45, y + 14);
+    doc.text(s.part?.partNumber || "N/A", 45 + colWidth, y + 14);
+    doc.text(s.part?.name || "N/A", 45 + colWidth * 2, y + 14);
+    doc.text(String(qty), 45 + colWidth * 3, y + 14);
+    doc.text(unitPrice.toFixed(2), 45 + colWidth * 4, y + 14);
+    doc.text(totalValue.toFixed(2), 45 + colWidth * 5, y + 14);
+
+    y += 20;
+  });
+
+  // ----------------------
+  // TOTAL BOX
+  // ----------------------
+  y += 30;
+
+  doc.setFillColor(...LIGHT_GRAY);
+  doc.rect(pageWidth - 200, y, 160, 40, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...DARK_RED);
+  doc.text("Total:", pageWidth - 180, y + 15);
+
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(...TEXT_COLOR);
+  doc.text(`${totalAmount.toFixed(2)} AFN`, pageWidth - 180, y + 35);
+
+  // ----------------------
+  // SIGNATURE & STAMP AREA (No borders)
+  // ----------------------
+  y += 100;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.setTextColor(...TEXT_COLOR);
+
+  doc.text("Authorized Signature", 40, y);
+  doc.text("Company Stamp", pageWidth - 200, y);
+
+  if (fontLoaded) {
+    doc.setFont("vazirmatn", "normal");
+    doc.text("امضاء مسئول", 40, y + 20);
+    doc.text("مهر شرکت", pageWidth - 200, y + 20);
+  }
+
+  // ----------------------
+  // FOOTER
+  // ----------------------
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(120, 120, 120);
+  doc.text(
+    "This invoice is system-generated and requires no signature.",
+    pageWidth / 2,
+    pageHeight - 30,
+    { align: "center" }
+  );
+
+  if (fontLoaded) {
+    doc.setFont("vazirmatn", "normal");
+    doc.text(
+      "این فاکتور توسط سیستم تولید شده و نیاز به امضاء ندارد.",
+      pageWidth / 2,
+      pageHeight - 15,
+      { align: "center" }
+    );
+  }
+
+  // ----------------------
+  // OUTPUT
+  // ----------------------
+  const buffer = doc.output("arraybuffer") as ArrayBuffer;
+  return new Uint8Array(buffer);
+}
+
+// ----------------------
+// Helpers for Blob/Base64
+// ----------------------
+export async function generateInvoiceBlob(data: InvoiceData): Promise<Blob> {
+  const uint8 = await generateInvoicePDF(data);
+  // create a proper ArrayBuffer copy to ensure we pass a plain ArrayBuffer
+  // (this avoids type errors when Uint8Array.buffer may be a SharedArrayBuffer)
+  const arrayBuffer = uint8.slice().buffer;
+  return new Blob([arrayBuffer], { type: "application/pdf" });
+}
+
+export async function generateInvoiceBase64(
+  data: InvoiceData
+): Promise<string> {
+  const uint8 = await generateInvoicePDF(data);
+  return Buffer.from(uint8).toString("base64");
+}
+
+export async function generateInvoiceDataURL(
+  data: InvoiceData
+): Promise<string> {
+  const base64 = await generateInvoiceBase64(data);
+  return `data:application/pdf;base64,${base64}`;
 }
