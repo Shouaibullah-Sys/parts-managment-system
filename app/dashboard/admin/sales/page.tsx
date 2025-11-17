@@ -3,6 +3,17 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useReactTable,
+  getCoreRowModel,
+  getPaginationRowModel,
+  flexRender,
+  ColumnDef,
+  ColumnFiltersState,
+  getFilteredRowModel,
+} from "@tanstack/react-table";
+import { format, startOfToday, startOfWeek, startOfMonth } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,8 +32,13 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   DollarSign,
   User,
@@ -35,6 +51,12 @@ import {
   CreditCard,
   Smartphone,
   Monitor,
+  MoreHorizontal,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Filter,
 } from "lucide-react";
 
 interface SaleRecord {
@@ -61,18 +83,87 @@ interface PaginationInfo {
   totalPages: number;
 }
 
-export default function AdminSalesPage() {
-  const [records, setRecords] = useState<SaleRecord[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [pagination, setPagination] = useState<PaginationInfo>({
-    page: 1,
-    limit: 100,
-    total: 0,
-    totalPages: 1,
+interface SalesResponse {
+  success: boolean;
+  data: SaleRecord[];
+  pagination: PaginationInfo;
+}
+
+// Date period types
+type DatePeriod = "today" | "week" | "month" | "lifetime";
+
+// Fetch sales data with React Query
+const fetchSalesData = async ({
+  page = 1,
+  limit = 100,
+  search = "",
+  fromDate = "",
+  toDate = "",
+  period = "today",
+}: {
+  page: number;
+  limit: number;
+  search: string;
+  fromDate: string;
+  toDate: string;
+  period: DatePeriod;
+}): Promise<SalesResponse> => {
+  const params = new URLSearchParams({
+    page: page.toString(),
+    limit: limit.toString(),
+    ...(search && { search }),
+    ...(fromDate && { fromDate }),
+    ...(toDate && { toDate }),
+    period,
   });
+
+  const response = await fetch(`/api/sales?${params}`);
+  if (!response.ok) {
+    throw new Error("Failed to fetch sales data");
+  }
+  return response.json();
+};
+
+export default function AdminSalesPage() {
+  const queryClient = useQueryClient();
+  const [isMobile, setIsMobile] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
+  const [dateRange, setDateRange] = useState({
+    from: format(startOfToday(), "yyyy-MM-dd"),
+    to: format(new Date(), "yyyy-MM-dd"),
+  });
+  const [datePeriod, setDatePeriod] = useState<DatePeriod>("today");
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+
+  // React Query for sales data
+  const {
+    data: salesData,
+    isLoading,
+    error,
+    isFetching,
+  } = useQuery({
+    queryKey: [
+      "sales",
+      {
+        search: searchTerm,
+        fromDate: dateRange.from,
+        toDate: dateRange.to,
+        period: datePeriod,
+      },
+    ],
+    queryFn: () =>
+      fetchSalesData({
+        page: 1,
+        limit: 100,
+        search: searchTerm,
+        fromDate: dateRange.from,
+        toDate: dateRange.to,
+        period: datePeriod,
+      }),
+  });
+
+  // Payment dialog state
   const [paymentDialog, setPaymentDialog] = useState<{
     isOpen: boolean;
     saleId: number | null;
@@ -87,6 +178,7 @@ export default function AdminSalesPage() {
     outstandingAmount: "0",
   });
 
+  // Bulk Payment Dialog State
   const [bulkPaymentDialog, setBulkPaymentDialog] = useState<{
     isOpen: boolean;
     customerName: string;
@@ -105,7 +197,6 @@ export default function AdminSalesPage() {
   const [paymentNote, setPaymentNote] = useState("");
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [isProcessingBulkPayment, setIsProcessingBulkPayment] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -114,124 +205,169 @@ export default function AdminSalesPage() {
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  useEffect(() => {
-    fetchSalesRecords(1, 100);
-  }, []);
+  // Apply date period filters
+  const applyDatePeriod = (period: DatePeriod) => {
+    const today = new Date();
+    let from = "";
+    let to = format(today, "yyyy-MM-dd");
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchSalesRecords(1, 100);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchTerm]);
-
-  const fetchSalesRecords = async (page = 1, limit = 100) => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const response = await fetch(
-        `/api/parts/records?page=${page}&limit=${limit}${
-          searchTerm ? `&search=${encodeURIComponent(searchTerm)}` : ""
-        }`
-      );
-      const result = await response.json();
-
-      if (result.success) {
-        setRecords(result.data || []);
-        if (result.pagination) {
-          setPagination(result.pagination);
-        }
-      } else {
-        setError("خطا در بارگذاری سوابق فروش");
-      }
-    } catch (error) {
-      console.error("Error fetching sales records:", error);
-      setError("خطا در اتصال به سرور");
-      setRecords([]);
-    } finally {
-      setIsLoading(false);
+    switch (period) {
+      case "today":
+        from = format(startOfToday(), "yyyy-MM-dd");
+        break;
+      case "week":
+        from = format(startOfWeek(today), "yyyy-MM-dd");
+        break;
+      case "month":
+        from = format(startOfMonth(today), "yyyy-MM-dd");
+        break;
+      case "lifetime":
+        from = "";
+        to = "";
+        break;
     }
+
+    setDateRange({ from, to });
+    setDatePeriod(period);
   };
 
-  const handleLoadAll = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const response = await fetch(`/api/parts/records?limit=10000`);
-      const result = await response.json();
+  // Define columns for TanStack Table
+  const salesColumns: ColumnDef<SaleRecord>[] = [
+    {
+      accessorKey: "customerName",
+      header: "مشتری",
+      cell: ({ row }) => (
+        <div className="flex items-center gap-2">
+          <User className="h-4 w-4 text-muted-foreground" />
+          {row.original.customerName}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "partName",
+      header: "قطعه",
+      cell: ({ row }) => (
+        <div className="space-y-1">
+          <div className="font-medium text-foreground">
+            {row.original.partName}
+          </div>
+          {row.original.partNumber && (
+            <span className="font-mono text-xs bg-primary/10 px-2 py-1 rounded">
+              {row.original.partNumber}
+            </span>
+          )}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "quantity",
+      header: "تعداد",
+      cell: ({ row }) => (
+        <div className="text-center">{row.original.quantity}</div>
+      ),
+    },
+    {
+      accessorKey: "issueDate",
+      header: "تاریخ",
+      cell: ({ row }) => (
+        <div className="flex items-center gap-1">
+          <Calendar className="h-3 w-3 text-muted-foreground" />
+          {new Date(row.original.issueDate).toLocaleDateString("fa-IR")}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "totalAmount",
+      header: "مبلغ کل",
+      cell: ({ row }) => (
+        <div className="font-medium">
+          {parseFloat(row.original.totalAmount).toLocaleString()} افغانی
+        </div>
+      ),
+    },
+    {
+      accessorKey: "paidAmount",
+      header: "پرداخت شده",
+      cell: ({ row }) => (
+        <div className="text-green-600 font-medium">
+          {parseFloat(row.original.paidAmount).toLocaleString()} افغانی
+        </div>
+      ),
+    },
+    {
+      accessorKey: "outstanding",
+      header: "باقیمانده",
+      cell: ({ row }) => (
+        <div className="text-amber-600 font-medium">
+          {parseFloat(row.original.outstanding).toLocaleString()} افغانی
+        </div>
+      ),
+    },
+    {
+      accessorKey: "isFullyPaid",
+      header: "وضعیت",
+      cell: ({ row }) =>
+        row.original.isFullyPaid ? (
+          <Badge className="bg-green-600">
+            <CheckCircle className="h-3 w-3 ml-1" />
+            پرداخت کامل
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="border-amber-600 text-amber-600">
+            <AlertCircle className="h-3 w-3 ml-1" />
+            بدهکار
+          </Badge>
+        ),
+    },
+    {
+      accessorKey: "issuedBy",
+      header: "صادر کننده",
+      cell: ({ row }) => (
+        <div className="flex items-center gap-1">
+          <User className="h-3 w-3 text-muted-foreground" />
+          <span className="text-sm">{row.original.issuedBy || "نامشخص"}</span>
+        </div>
+      ),
+    },
+    {
+      id: "actions",
+      header: "عملیات",
+      cell: ({ row }) => (
+        <div className="flex items-center gap-2">
+          {!row.original.isFullyPaid &&
+            parseFloat(row.original.outstanding) > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openPaymentDialog(row.original)}
+                className="border-green-500 text-green-600 hover:bg-green-50"
+              >
+                <CreditCard className="ml-2 h-3 w-3" />
+                پرداخت
+              </Button>
+            )}
+        </div>
+      ),
+    },
+  ];
 
-      if (result.success) {
-        setRecords(result.data || []);
-        if (result.pagination) {
-          setPagination(result.pagination);
-        }
-      } else {
-        setError("خطا در بارگذاری همه سوابق");
-      }
-    } catch (error) {
-      console.error("Error fetching all records:", error);
-      setError("خطا در اتصال به سرور");
-      setRecords([]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleAddPayment = async () => {
-    if (!paymentDialog.saleId || !paymentAmount) return;
-
-    setIsProcessingPayment(true);
-    try {
-      const paymentData = {
-        saleId: paymentDialog.saleId,
-        amount: parseFloat(paymentAmount),
-        note: paymentNote || undefined,
-        receivedBy: null,
-      };
-
-      console.log("Sending payment data:", paymentData);
-
-      const response = await fetch("/api/payments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(paymentData),
-      });
-
-      console.log("Payment response status:", response.status);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Payment error response:", errorText);
-        throw new Error(`HTTP ${response.status}: ${errorText}`);
-      }
-
-      const result = await response.json();
-      console.log("Payment result:", result);
-
-      if (result.newPaid !== undefined) {
-        await fetchSalesRecords(1, 100);
-        setPaymentDialog({
-          isOpen: false,
-          saleId: null,
-          customerName: "",
-          partName: "",
-          outstandingAmount: "0",
-        });
-        setPaymentAmount("");
-        setPaymentNote("");
-        alert("پرداخت با موفقیت ثبت شد");
-      } else {
-        console.error("Payment result missing newPaid:", result);
-        alert("خطا در ثبت پرداخت");
-      }
-    } catch (error) {
-      console.error("Error processing payment:", error);
-      const message = error instanceof Error ? error.message : "خطای نامشخص";
-      alert(`خطا در ثبت پرداخت: ${message}`);
-    } finally {
-      setIsProcessingPayment(false);
-    }
-  };
+  // TanStack Table instance
+  const table = useReactTable({
+    data: salesData?.data || [],
+    columns: salesColumns,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    onColumnFiltersChange: setColumnFilters,
+    state: {
+      columnFilters,
+    },
+    initialState: {
+      pagination: {
+        pageSize: 10,
+      },
+    },
+  });
 
   const openPaymentDialog = (record: SaleRecord) => {
     setPaymentDialog({
@@ -257,6 +393,47 @@ export default function AdminSalesPage() {
       totalOutstanding: customer.totalOutstanding,
     });
     setBulkPaymentAmount(customer.totalOutstanding.toString());
+  };
+
+  const handleAddPayment = async () => {
+    if (!paymentDialog.saleId || !paymentAmount) return;
+
+    setIsProcessingPayment(true);
+    try {
+      const paymentData = {
+        saleId: paymentDialog.saleId,
+        amount: parseFloat(paymentAmount),
+        note: paymentNote || undefined,
+        receivedBy: null,
+      };
+
+      const response = await fetch("/api/payments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(paymentData),
+      });
+
+      if (!response.ok) {
+        throw new Error("Payment failed");
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ["sales"] });
+      setPaymentDialog({
+        isOpen: false,
+        saleId: null,
+        customerName: "",
+        partName: "",
+        outstandingAmount: "0",
+      });
+      setPaymentAmount("");
+      setPaymentNote("");
+      alert("پرداخت با موفقیت ثبت شد");
+    } catch (error) {
+      console.error("Error processing payment:", error);
+      alert("خطا در ثبت پرداخت");
+    } finally {
+      setIsProcessingPayment(false);
+    }
   };
 
   const handleBulkPayment = async () => {
@@ -299,7 +476,7 @@ export default function AdminSalesPage() {
       console.log("Bulk payment result:", result);
 
       if (result.processedPayments !== undefined) {
-        await fetchSalesRecords(1, 100);
+        await queryClient.invalidateQueries({ queryKey: ["sales"] });
         setBulkPaymentDialog({
           isOpen: false,
           customerName: "",
@@ -333,21 +510,25 @@ export default function AdminSalesPage() {
     }
   };
 
-  const filteredRecords = records.filter((record) => {
-    const matchesSearch =
-      !searchTerm ||
-      record.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      record.normalizedName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      record.partName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      record.partNumber?.toLowerCase().includes(searchTerm.toLowerCase());
+  // Filter records for customer summary
+  const filteredRecords =
+    salesData?.data?.filter((record) => {
+      const matchesSearch =
+        !searchTerm ||
+        record.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        record.normalizedName
+          ?.toLowerCase()
+          .includes(searchTerm.toLowerCase()) ||
+        record.partName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        record.partNumber?.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesCustomer =
-      !selectedCustomer || record.normalizedName === selectedCustomer;
+      const matchesCustomer =
+        !selectedCustomer || record.normalizedName === selectedCustomer;
 
-    return matchesSearch && matchesCustomer;
-  });
+      return matchesSearch && matchesCustomer;
+    }) || [];
 
-  // Group by normalized customer name to show total per customer
+  // Customer summary calculation
   const customerSummary = filteredRecords.reduce(
     (acc, record) => {
       const key = record.normalizedName;
@@ -371,6 +552,198 @@ export default function AdminSalesPage() {
   );
 
   const customerSummaryArray = Object.values(customerSummary);
+
+  // Mobile Card Components
+  const MobileSaleCard = ({ record }: { record: SaleRecord }) => (
+    <Card className="mb-4 border-border bg-card">
+      <CardContent className="p-4 space-y-3">
+        <div className="flex justify-between items-start">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <User className="h-4 w-4 text-muted-foreground" />
+              <span className="font-medium">{record.customerName}</span>
+            </div>
+            <div className="text-sm text-muted-foreground">
+              {record.partName}
+            </div>
+            {record.partNumber && (
+              <div className="font-mono text-xs bg-primary/10 px-2 py-1 rounded inline-block">
+                {record.partNumber}
+              </div>
+            )}
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {!record.isFullyPaid && parseFloat(record.outstanding) > 0 && (
+                <DropdownMenuItem onClick={() => openPaymentDialog(record)}>
+                  <CreditCard className="ml-2 h-4 w-4" />
+                  ثبت پرداخت
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          <div className="space-y-1">
+            <div className="text-muted-foreground">تعداد</div>
+            <div>{record.quantity}</div>
+          </div>
+          <div className="space-y-1">
+            <div className="text-muted-foreground">تاریخ</div>
+            <div className="flex items-center gap-1">
+              <Calendar className="h-3 w-3" />
+              {new Date(record.issueDate).toLocaleDateString("fa-IR")}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2 text-sm">
+          <div className="space-y-1">
+            <div className="text-muted-foreground">مبلغ کل</div>
+            <div className="font-medium">
+              {parseFloat(record.totalAmount).toLocaleString()}
+            </div>
+          </div>
+          <div className="space-y-1">
+            <div className="text-muted-foreground">پرداخت شده</div>
+            <div className="text-green-600 font-medium">
+              {parseFloat(record.paidAmount).toLocaleString()}
+            </div>
+          </div>
+          <div className="space-y-1">
+            <div className="text-muted-foreground">باقیمانده</div>
+            <div className="text-amber-600 font-medium">
+              {parseFloat(record.outstanding).toLocaleString()}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-between items-center pt-2 border-t border-border">
+          <div>
+            {record.isFullyPaid ? (
+              <Badge className="bg-green-600">
+                <CheckCircle className="h-3 w-3 ml-1" />
+                پرداخت کامل
+              </Badge>
+            ) : (
+              <Badge
+                variant="outline"
+                className="border-amber-600 text-amber-600"
+              >
+                <AlertCircle className="h-3 w-3 ml-1" />
+                بدهکار
+              </Badge>
+            )}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            صادر کننده: <span>{record.issuedBy || "نامشخص"}</span>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  // Mobile Customer Card Component
+  const MobileCustomerCard = ({
+    customer,
+    index,
+  }: {
+    customer: any;
+    index: number;
+  }) => (
+    <Card
+      className={`mb-4 border-border bg-card cursor-pointer transition-colors ${
+        selectedCustomer === customer.normalizedName
+          ? "ring-2 ring-primary"
+          : ""
+      }`}
+      onClick={() => setSelectedCustomer(customer.normalizedName)}
+    >
+      <CardContent className="p-4 space-y-3">
+        <div className="flex justify-between items-start">
+          <div className="flex items-center gap-2">
+            <User className="h-4 w-4 text-muted-foreground" />
+            <span
+              className={`font-medium ${
+                selectedCustomer === customer.normalizedName
+                  ? "text-primary"
+                  : ""
+              }`}
+            >
+              {customer.customerName}
+            </span>
+            {selectedCustomer === customer.normalizedName && (
+              <Badge
+                variant="secondary"
+                className="text-xs bg-primary text-primary-foreground"
+              >
+                انتخاب شده
+              </Badge>
+            )}
+          </div>
+          <div className="text-sm text-muted-foreground">
+            {customer.salesCount} فروش
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2 text-sm">
+          <div className="space-y-1">
+            <div className="text-muted-foreground">کل فروش</div>
+            <div className="font-medium">
+              {customer.totalSales.toLocaleString()}
+            </div>
+          </div>
+          <div className="space-y-1">
+            <div className="text-muted-foreground">پرداخت شده</div>
+            <div className="text-green-600 font-medium">
+              {customer.totalPaid.toLocaleString()}
+            </div>
+          </div>
+          <div className="space-y-1">
+            <div className="text-muted-foreground">باقیمانده</div>
+            <div className="text-amber-600 font-medium">
+              {customer.totalOutstanding.toLocaleString()}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-between items-center pt-2 border-t border-border">
+          <div>
+            {customer.totalOutstanding <= 0 ? (
+              <Badge className="bg-green-600">پرداخت کامل</Badge>
+            ) : (
+              <Badge
+                variant="outline"
+                className="border-amber-600 text-amber-600"
+              >
+                بدهکار
+              </Badge>
+            )}
+          </div>
+          {customer.totalOutstanding > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                openBulkPaymentDialog(customer);
+              }}
+              className="border-green-500 text-green-600 hover:bg-green-50"
+            >
+              <CreditCard className="ml-2 h-3 w-3" />
+              پرداخت همه
+            </Button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
 
   return (
     <div className="container mx-auto py-6 px-4 sm:px-6 space-y-6">
@@ -400,12 +773,14 @@ export default function AdminSalesPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={handleLoadAll}
-            disabled={isLoading}
+            onClick={() =>
+              queryClient.invalidateQueries({ queryKey: ["sales"] })
+            }
+            disabled={isLoading || isFetching}
             className="border-primary text-primary hover:bg-primary hover:text-primary-foreground"
           >
             <Package className="mr-2 h-4 w-4" />
-            بارگذاری همه سوابق
+            بارگذاری مجدد
           </Button>
         </div>
       </div>
@@ -431,6 +806,97 @@ export default function AdminSalesPage() {
           </Button>
         </div>
       </div>
+
+      {/* Date Filter Section */}
+      <Card className="border-mechanical shadow-sm">
+        <CardHeader className="bg-mechanical/50 border-b border-border">
+          <CardTitle className="text-foreground flex items-center gap-2">
+            <Filter className="h-5 w-5" />
+            فیلتر تاریخ
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-4">
+          <div className="flex flex-col sm:flex-row gap-4">
+            {/* Quick Date Filters */}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant={datePeriod === "today" ? "default" : "outline"}
+                size="sm"
+                onClick={() => applyDatePeriod("today")}
+                className={
+                  datePeriod === "today"
+                    ? "bg-primary text-primary-foreground"
+                    : ""
+                }
+              >
+                امروز
+              </Button>
+              <Button
+                variant={datePeriod === "week" ? "default" : "outline"}
+                size="sm"
+                onClick={() => applyDatePeriod("week")}
+                className={
+                  datePeriod === "week"
+                    ? "bg-primary text-primary-foreground"
+                    : ""
+                }
+              >
+                این هفته
+              </Button>
+              <Button
+                variant={datePeriod === "month" ? "default" : "outline"}
+                size="sm"
+                onClick={() => applyDatePeriod("month")}
+                className={
+                  datePeriod === "month"
+                    ? "bg-primary text-primary-foreground"
+                    : ""
+                }
+              >
+                این ماه
+              </Button>
+              <Button
+                variant={datePeriod === "lifetime" ? "default" : "outline"}
+                size="sm"
+                onClick={() => applyDatePeriod("lifetime")}
+                className={
+                  datePeriod === "lifetime"
+                    ? "bg-primary text-primary-foreground"
+                    : ""
+                }
+              >
+                همه زمان
+              </Button>
+            </div>
+
+            {/* Custom Date Range */}
+            <div className="flex flex-wrap gap-2 items-center">
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-muted-foreground">از:</label>
+                <Input
+                  type="date"
+                  value={dateRange.from}
+                  onChange={(e) =>
+                    setDateRange((prev) => ({ ...prev, from: e.target.value }))
+                  }
+                  className="w-32"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-muted-foreground">تا:</label>
+                <Input
+                  type="date"
+                  value={dateRange.to}
+                  onChange={(e) =>
+                    setDateRange((prev) => ({ ...prev, to: e.target.value }))
+                  }
+                  className="w-32"
+                />
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-3">
@@ -502,34 +968,26 @@ export default function AdminSalesPage() {
               <User className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p>هیچ سابقه مشتری یافت نشد</p>
             </div>
+          ) : isMobile ? (
+            // Mobile Card View for Customers
+            <div className="space-y-4">
+              {customerSummaryArray.map((customer, idx) => (
+                <MobileCustomerCard key={idx} customer={customer} index={idx} />
+              ))}
+            </div>
           ) : (
-            <div
-              className={`rounded-md border border-border ${isMobile ? "overflow-x-auto" : ""}`}
-            >
-              <Table className={isMobile ? "min-w-full" : "w-full"}>
+            // Desktop Table View for Customers
+            <div className="rounded-md border border-border overflow-x-auto">
+              <Table className="min-w-full">
                 <TableHeader className="bg-muted/50">
                   <TableRow className="border-border">
-                    <TableHead className={isMobile ? "px-3 py-2" : ""}>
-                      نام مشتری
-                    </TableHead>
-                    <TableHead className={isMobile ? "px-3 py-2" : ""}>
-                      تعداد فروش
-                    </TableHead>
-                    <TableHead className={isMobile ? "px-3 py-2" : ""}>
-                      کل فروش
-                    </TableHead>
-                    <TableHead className={isMobile ? "px-3 py-2" : ""}>
-                      پرداخت شده
-                    </TableHead>
-                    <TableHead className={isMobile ? "px-3 py-2" : ""}>
-                      باقیمانده
-                    </TableHead>
-                    <TableHead className={isMobile ? "px-3 py-2" : ""}>
-                      وضعیت
-                    </TableHead>
-                    <TableHead className={isMobile ? "px-3 py-2" : ""}>
-                      عملیات
-                    </TableHead>
+                    <TableHead>نام مشتری</TableHead>
+                    <TableHead>تعداد فروش</TableHead>
+                    <TableHead>کل فروش</TableHead>
+                    <TableHead>پرداخت شده</TableHead>
+                    <TableHead>باقیمانده</TableHead>
+                    <TableHead>وضعیت</TableHead>
+                    <TableHead>عملیات</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -545,9 +1003,7 @@ export default function AdminSalesPage() {
                           : ""
                       }`}
                     >
-                      <TableCell
-                        className={`font-medium ${isMobile ? "px-3 py-3" : ""}`}
-                      >
+                      <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
                           <User className="h-4 w-4 text-muted-foreground" />
                           <span
@@ -569,27 +1025,19 @@ export default function AdminSalesPage() {
                           )}
                         </div>
                       </TableCell>
-                      <TableCell
-                        className={`text-center ${isMobile ? "px-3 py-3" : ""}`}
-                      >
+                      <TableCell className="text-center">
                         {customer.salesCount}
                       </TableCell>
-                      <TableCell
-                        className={`font-medium ${isMobile ? "px-3 py-3" : ""}`}
-                      >
+                      <TableCell className="font-medium">
                         {customer.totalSales.toLocaleString()} افغانی
                       </TableCell>
-                      <TableCell
-                        className={`text-green-600 font-medium ${isMobile ? "px-3 py-3" : ""}`}
-                      >
+                      <TableCell className="text-green-600 font-medium">
                         {customer.totalPaid.toLocaleString()} افغانی
                       </TableCell>
-                      <TableCell
-                        className={`text-amber-600 font-medium ${isMobile ? "px-3 py-3" : ""}`}
-                      >
+                      <TableCell className="text-amber-600 font-medium">
                         {customer.totalOutstanding.toLocaleString()} افغانی
                       </TableCell>
-                      <TableCell className={isMobile ? "px-3 py-3" : ""}>
+                      <TableCell>
                         {customer.totalOutstanding <= 0 ? (
                           <Badge className="bg-green-600">پرداخت کامل</Badge>
                         ) : (
@@ -601,7 +1049,7 @@ export default function AdminSalesPage() {
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell className={isMobile ? "px-3 py-3" : ""}>
+                      <TableCell>
                         <div className="flex items-center gap-2">
                           {customer.totalOutstanding > 0 && (
                             <Button
@@ -628,7 +1076,7 @@ export default function AdminSalesPage() {
         </CardContent>
       </Card>
 
-      {/* Detailed Sales Records */}
+      {/* Search and Table Section */}
       <Card className="border-mechanical shadow-lg">
         <CardHeader className="bg-mechanical/50 border-b border-border">
           <CardTitle className="text-foreground flex flex-col sm:flex-row sm:items-center gap-4">
@@ -644,156 +1092,135 @@ export default function AdminSalesPage() {
         <CardContent className="p-4">
           {error && (
             <div className="text-destructive text-sm bg-destructive/10 p-3 rounded border border-destructive/50 mb-4">
-              {error}
+              {(error as Error)?.message || "خطا در بارگذاری داده‌ها"}
             </div>
           )}
 
-          {isLoading ? (
+          {isLoading || isFetching ? (
             <div className="text-center py-8 flex items-center justify-center gap-2 text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
               در حال بارگذاری سوابق...
             </div>
-          ) : filteredRecords.length === 0 ? (
+          ) : !salesData?.data || salesData.data.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <DollarSign className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p>هیچ سابقه فروشی یافت نشد</p>
             </div>
-          ) : (
-            <div
-              className={`rounded-md border border-border ${isMobile ? "overflow-x-auto" : ""}`}
-            >
-              <Table className={isMobile ? "min-w-full" : "w-full"}>
-                <TableHeader className="bg-muted/50">
-                  <TableRow className="border-border">
-                    <TableHead className={isMobile ? "px-3 py-2" : ""}>
-                      مشتری
-                    </TableHead>
-                    <TableHead className={isMobile ? "px-3 py-2" : ""}>
-                      قطعه
-                    </TableHead>
-                    <TableHead className={isMobile ? "px-3 py-2" : ""}>
-                      تعداد
-                    </TableHead>
-                    <TableHead className={isMobile ? "px-3 py-2" : ""}>
-                      تاریخ
-                    </TableHead>
-                    <TableHead className={isMobile ? "px-3 py-2" : ""}>
-                      مبلغ کل
-                    </TableHead>
-                    <TableHead className={isMobile ? "px-3 py-2" : ""}>
-                      پرداخت شده
-                    </TableHead>
-                    <TableHead className={isMobile ? "px-3 py-2" : ""}>
-                      باقیمانده
-                    </TableHead>
-                    <TableHead className={isMobile ? "px-3 py-2" : ""}>
-                      وضعیت
-                    </TableHead>
-                    <TableHead className={isMobile ? "px-3 py-2" : ""}>
-                      صادر کننده
-                    </TableHead>
-                    <TableHead className={isMobile ? "px-3 py-2" : ""}>
-                      عملیات
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredRecords.map((record) => (
-                    <TableRow
-                      key={record.id}
-                      className="group hover:bg-accent/30 border-border transition-colors"
-                    >
-                      <TableCell
-                        className={`font-medium ${isMobile ? "px-3 py-3" : ""}`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <User className="h-4 w-4 text-muted-foreground" />
-                          {record.customerName}
-                        </div>
-                      </TableCell>
-                      <TableCell className={isMobile ? "px-3 py-3" : ""}>
-                        <div className="space-y-1">
-                          <div className="font-medium text-foreground">
-                            {record.partName}
-                          </div>
-                          {record.partNumber && (
-                            <span className="font-mono text-xs bg-primary/10 px-2 py-1 rounded">
-                              {record.partNumber}
-                            </span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell
-                        className={`text-center ${isMobile ? "px-3 py-3" : ""}`}
-                      >
-                        {record.quantity}
-                      </TableCell>
-                      <TableCell className={isMobile ? "px-3 py-3" : ""}>
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3 text-muted-foreground" />
-                          {new Date(record.issueDate).toLocaleDateString(
-                            "fa-IR"
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell
-                        className={`font-medium ${isMobile ? "px-3 py-3" : ""}`}
-                      >
-                        {parseFloat(record.totalAmount).toLocaleString()} افغانی
-                      </TableCell>
-                      <TableCell
-                        className={`text-green-600 font-medium ${isMobile ? "px-3 py-3" : ""}`}
-                      >
-                        {parseFloat(record.paidAmount).toLocaleString()} افغانی
-                      </TableCell>
-                      <TableCell
-                        className={`text-amber-600 font-medium ${isMobile ? "px-3 py-3" : ""}`}
-                      >
-                        {parseFloat(record.outstanding).toLocaleString()} افغانی
-                      </TableCell>
-                      <TableCell className={isMobile ? "px-3 py-3" : ""}>
-                        {record.isFullyPaid ? (
-                          <Badge className="bg-green-600">
-                            <CheckCircle className="h-3 w-3 ml-1" />
-                            پرداخت کامل
-                          </Badge>
-                        ) : (
-                          <Badge
-                            variant="outline"
-                            className="border-amber-600 text-amber-600"
-                          >
-                            <AlertCircle className="h-3 w-3 ml-1" />
-                            بدهکار
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className={isMobile ? "px-3 py-3" : ""}>
-                        <div className="flex items-center gap-1">
-                          <User className="h-3 w-3 text-muted-foreground" />
-                          {record.issuedBy}
-                        </div>
-                      </TableCell>
-                      <TableCell className={isMobile ? "px-3 py-3" : ""}>
-                        <div className="flex items-center gap-2">
-                          {!record.isFullyPaid &&
-                            parseFloat(record.outstanding) > 0 && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => openPaymentDialog(record)}
-                                className="border-green-500 text-green-600 hover:bg-green-50"
-                              >
-                                <CreditCard className="ml-2 h-3 w-3" />
-                                پرداخت
-                              </Button>
-                            )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+          ) : isMobile ? (
+            // Mobile Card View
+            <div className="space-y-4">
+              {filteredRecords.map((record) => (
+                <MobileSaleCard key={record.id} record={record} />
+              ))}
             </div>
+          ) : (
+            // Desktop Table View with TanStack Table
+            <>
+              <div className="rounded-md border border-border overflow-x-auto">
+                <Table>
+                  <TableHeader className="bg-muted/50">
+                    {table.getHeaderGroups().map((headerGroup) => (
+                      <TableRow key={headerGroup.id}>
+                        {headerGroup.headers.map((header) => (
+                          <TableHead key={header.id}>
+                            {flexRender(
+                              header.column.columnDef.header,
+                              header.getContext()
+                            )}
+                          </TableHead>
+                        ))}
+                      </TableRow>
+                    ))}
+                  </TableHeader>
+                  <TableBody>
+                    {table.getRowModel().rows?.length ? (
+                      table.getRowModel().rows.map((row) => (
+                        <TableRow
+                          key={row.id}
+                          data-state={row.getIsSelected() && "selected"}
+                          className="hover:bg-accent/30"
+                        >
+                          {row.getVisibleCells().map((cell) => (
+                            <TableCell key={cell.id}>
+                              {flexRender(
+                                cell.column.columnDef.cell,
+                                cell.getContext()
+                              )}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell
+                          colSpan={salesColumns.length}
+                          className="h-24 text-center"
+                        >
+                          هیچ نتیجه‌ای یافت نشد.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Pagination Controls */}
+              <div className="flex items-center justify-between space-x-2 py-4">
+                <div className="flex items-center space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => table.setPageIndex(0)}
+                    disabled={!table.getCanPreviousPage()}
+                  >
+                    <ChevronsLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => table.previousPage()}
+                    disabled={!table.getCanPreviousPage()}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => table.nextPage()}
+                    disabled={!table.getCanNextPage()}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+                    disabled={!table.getCanNextPage()}
+                  >
+                    <ChevronsRight className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm text-muted-foreground">
+                    صفحه {table.getState().pagination.pageIndex + 1} از{" "}
+                    {table.getPageCount()}
+                  </span>
+                  <select
+                    value={table.getState().pagination.pageSize}
+                    onChange={(e) => {
+                      table.setPageSize(Number(e.target.value));
+                    }}
+                    className="border rounded p-1"
+                  >
+                    {[10, 20, 30, 40, 50].map((pageSize) => (
+                      <option key={pageSize} value={pageSize}>
+                        نمایش {pageSize}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
