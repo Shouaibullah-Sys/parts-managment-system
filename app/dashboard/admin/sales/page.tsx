@@ -1,4 +1,5 @@
-// app/dashboard/admin/sales/page.tsx
+// app/dashboards/admin/sales/page.tsx
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -85,9 +86,25 @@ export default function AdminSalesPage() {
     partName: "",
     outstandingAmount: "0",
   });
+
+  const [bulkPaymentDialog, setBulkPaymentDialog] = useState<{
+    isOpen: boolean;
+    customerName: string;
+    normalizedName: string;
+    totalOutstanding: number;
+  }>({
+    isOpen: false,
+    customerName: "",
+    normalizedName: "",
+    totalOutstanding: 0,
+  });
+
+  const [bulkPaymentAmount, setBulkPaymentAmount] = useState("");
+  const [bulkPaymentNote, setBulkPaymentNote] = useState("");
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentNote, setPaymentNote] = useState("");
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [isProcessingBulkPayment, setIsProcessingBulkPayment] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -169,7 +186,7 @@ export default function AdminSalesPage() {
         saleId: paymentDialog.saleId,
         amount: parseFloat(paymentAmount),
         note: paymentNote || undefined,
-        receivedBy: null, // Admin user ID can be added here if needed
+        receivedBy: null,
       };
 
       console.log("Sending payment data:", paymentData);
@@ -192,7 +209,6 @@ export default function AdminSalesPage() {
       console.log("Payment result:", result);
 
       if (result.newPaid !== undefined) {
-        // Refresh records to show updated payment info
         await fetchSalesRecords(1, 100);
         setPaymentDialog({
           isOpen: false,
@@ -225,7 +241,96 @@ export default function AdminSalesPage() {
       partName: record.partName,
       outstandingAmount: record.outstanding,
     });
-    setPaymentAmount(record.outstanding); // Pre-fill with outstanding amount
+    setPaymentAmount(record.outstanding);
+  };
+
+  const openBulkPaymentDialog = (customer: any) => {
+    if (customer.totalOutstanding <= 0) {
+      alert("این مشتری هیچ بدهی ندارد");
+      return;
+    }
+
+    setBulkPaymentDialog({
+      isOpen: true,
+      customerName: customer.customerName,
+      normalizedName: customer.normalizedName,
+      totalOutstanding: customer.totalOutstanding,
+    });
+    setBulkPaymentAmount(customer.totalOutstanding.toString());
+  };
+
+  const handleBulkPayment = async () => {
+    if (!bulkPaymentDialog.normalizedName || !bulkPaymentAmount) return;
+
+    // Validate amount
+    const amount = parseFloat(bulkPaymentAmount);
+    if (amount <= 0) {
+      alert("مبلغ پرداخت باید بیشتر از صفر باشد");
+      return;
+    }
+
+    setIsProcessingBulkPayment(true);
+    try {
+      const paymentData = {
+        customerName: bulkPaymentDialog.customerName,
+        normalizedName: bulkPaymentDialog.normalizedName,
+        totalAmount: amount,
+        note: bulkPaymentNote || undefined,
+        receivedBy: null,
+      };
+
+      console.log("Sending bulk payment data:", paymentData);
+
+      const response = await fetch("/api/payments/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(paymentData),
+      });
+
+      console.log("Bulk payment response status:", response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Bulk payment error response:", errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log("Bulk payment result:", result);
+
+      if (result.processedPayments !== undefined) {
+        await fetchSalesRecords(1, 100);
+        setBulkPaymentDialog({
+          isOpen: false,
+          customerName: "",
+          normalizedName: "",
+          totalOutstanding: 0,
+        });
+        setBulkPaymentAmount("");
+        setBulkPaymentNote("");
+
+        // Show success message with details
+        let successMessage = `پرداخت انبوه با موفقیت ثبت شد.\n`;
+        successMessage += `${result.processedPayments} پرداخت پردازش شد.\n`;
+        successMessage += `مبلغ پرداختی: ${result.totalAmount.toLocaleString()} افغانی\n`;
+
+        if (result.remainingAmount > 0) {
+          successMessage += `مبلغ باقیمانده: ${result.remainingAmount.toLocaleString()} افغانی\n`;
+          successMessage += `(مبلغ پرداختی بیشتر از بدهی بود)`;
+        }
+
+        alert(successMessage);
+      } else {
+        console.error("Bulk payment result missing processedPayments:", result);
+        alert("خطا در ثبت پرداخت انبوه");
+      }
+    } catch (error) {
+      console.error("Error processing bulk payment:", error);
+      const message = error instanceof Error ? error.message : "خطای نامشخص";
+      alert(`خطا در ثبت پرداخت انبوه: ${message}`);
+    } finally {
+      setIsProcessingBulkPayment(false);
+    }
   };
 
   const filteredRecords = records.filter((record) => {
@@ -422,6 +527,9 @@ export default function AdminSalesPage() {
                     <TableHead className={isMobile ? "px-3 py-2" : ""}>
                       وضعیت
                     </TableHead>
+                    <TableHead className={isMobile ? "px-3 py-2" : ""}>
+                      عملیات
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -492,6 +600,24 @@ export default function AdminSalesPage() {
                             بدهکار
                           </Badge>
                         )}
+                      </TableCell>
+                      <TableCell className={isMobile ? "px-3 py-3" : ""}>
+                        <div className="flex items-center gap-2">
+                          {customer.totalOutstanding > 0 && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openBulkPaymentDialog(customer);
+                              }}
+                              className="border-green-500 text-green-600 hover:bg-green-50"
+                            >
+                              <CreditCard className="ml-2 h-3 w-3" />
+                              پرداخت همه
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -776,6 +902,113 @@ export default function AdminSalesPage() {
                       <>
                         <CreditCard className="ml-2 h-4 w-4" />
                         ثبت پرداخت
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Payment Dialog */}
+      <Dialog
+        open={bulkPaymentDialog.isOpen}
+        onOpenChange={(open) =>
+          setBulkPaymentDialog((prev) => ({ ...prev, isOpen: open }))
+        }
+      >
+        <DialogContent className="max-w-md border-mechanical bg-background">
+          <DialogHeader>
+            <DialogTitle className="text-center text-lg font-bold bg-linear-to-r from-primary to-primary/80 bg-clip-text text-transparent">
+              پرداخت انبوه - {bulkPaymentDialog.customerName}
+            </DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-4">
+                <div className="bg-mechanical/50 p-3 rounded-lg border border-border">
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">مشتری:</span>
+                      <span className="font-medium text-foreground">
+                        {bulkPaymentDialog.customerName}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">مجموع بدهی:</span>
+                      <span className="font-bold text-amber-600">
+                        {bulkPaymentDialog.totalOutstanding.toLocaleString()}{" "}
+                        افغانی
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">
+                    مبلغ پرداخت
+                  </label>
+                  <Input
+                    type="number"
+                    value={bulkPaymentAmount}
+                    onChange={(e) => setBulkPaymentAmount(e.target.value)}
+                    placeholder={`مبلغ تا ${bulkPaymentDialog.totalOutstanding.toLocaleString()} افغانی`}
+                    step="0.01"
+                    min="0"
+                    max={bulkPaymentDialog.totalOutstanding}
+                    className="text-right border-border focus:border-primary focus:ring-primary/20"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    می‌توانید مبلغی کمتر یا بیشتر از بدهی پرداخت کنید. مبلغ
+                    اضافی برگشت داده می‌شود.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">
+                    یادداشت (اختیاری)
+                  </label>
+                  <Input
+                    value={bulkPaymentNote}
+                    onChange={(e) => setBulkPaymentNote(e.target.value)}
+                    placeholder="یادداشت اضافی"
+                    className="text-right border-border focus:border-primary focus:ring-primary/20"
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    variant="outline"
+                    onClick={() =>
+                      setBulkPaymentDialog({
+                        isOpen: false,
+                        customerName: "",
+                        normalizedName: "",
+                        totalOutstanding: 0,
+                      })
+                    }
+                    className="flex-1 border-border text-foreground hover:bg-accent hover:text-accent-foreground"
+                  >
+                    انصراف
+                  </Button>
+                  <Button
+                    onClick={handleBulkPayment}
+                    disabled={
+                      !bulkPaymentAmount ||
+                      parseFloat(bulkPaymentAmount) <= 0 ||
+                      isProcessingBulkPayment
+                    }
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white shadow-md"
+                  >
+                    {isProcessingBulkPayment ? (
+                      <>
+                        <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                        در حال پردازش...
+                      </>
+                    ) : (
+                      <>
+                        <CreditCard className="ml-2 h-4 w-4" />
+                        ثبت پرداخت انبوه
                       </>
                     )}
                   </Button>

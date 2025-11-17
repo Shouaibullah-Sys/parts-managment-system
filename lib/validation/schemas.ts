@@ -22,3 +22,11 @@ export const addPaymentSchema = z.object({
   note: z.string().optional(),
   receivedBy: z.string().optional().nullable(),
 });
+
+export const addBulkPaymentSchema = z.object({
+  customerName: z.string().min(1),
+  normalizedName: z.string().min(1),
+  totalAmount: z.number().nonnegative(),
+  note: z.string().optional(),
+  receivedBy: z.string().optional().nullable(),
+});
