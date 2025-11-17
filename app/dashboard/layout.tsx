@@ -100,41 +100,6 @@ export default function DashboardLayout({
     return null;
   }
 
-  const navigation = [
-    {
-      name: "Dashboard",
-      href: "/dashboard",
-      icon: BarChart3,
-      roles: ["admin", "staff"],
-    },
-    {
-      name: "Parts Management",
-      href: "/parts",
-      icon: Package,
-      roles: ["admin", "staff"],
-    },
-    ...(user.role === "admin"
-      ? [
-          {
-            name: "User Management",
-            href: "/dashboard/admin",
-            icon: Users,
-            roles: ["admin"],
-          },
-        ]
-      : []),
-    ...(user.role === "admin"
-      ? [
-          {
-            name: "Settings",
-            href: "/dashboard/admin",
-            icon: Settings,
-            roles: ["admin"],
-          },
-        ]
-      : []),
-  ];
-
   const isActiveRoute = (href: string) => {
     if (href === "/dashboard") {
       return pathname === "/dashboard" || pathname === "/dashboard/";
@@ -148,31 +113,6 @@ export default function DashboardLayout({
 
       {/* Navigation Sidebar */}
       <div className="flex">
-        <aside className="w-64 bg-card border-r border-border min-h-[calc(100vh-73px)] mt-[73px]">
-          <nav className="p-4 space-y-2">
-            {navigation.map((item) => {
-              const Icon = item.icon;
-              const active = isActiveRoute(item.href);
-
-              return (
-                <Link key={item.name} href={item.href}>
-                  <Button
-                    variant={active ? "default" : "ghost"}
-                    className={`w-full justify-start gap-3 ${
-                      active
-                        ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                        : "hover:bg-accent hover:text-accent-foreground"
-                    }`}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {item.name}
-                  </Button>
-                </Link>
-              );
-            })}
-          </nav>
-        </aside>
-
         {/* Main Content */}
         <main className="flex-1 p-6 mt-[73px]">{children}</main>
       </div>

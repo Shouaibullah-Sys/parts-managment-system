@@ -13,31 +13,32 @@ type AddPaymentInput = {
 export async function addPayment(input: AddPaymentInput) {
   const { saleId, amount, note, receivedBy = null } = input;
 
-  return await db.transaction(async (tx) => {
-    const saleRow = (
-      await tx.select().from(sales).where(eq(sales.id, saleId))
-    )[0];
-    if (!saleRow) throw new Error("Sale not found");
+  // First, get the current sale record
+  const saleRows = await db.select().from(sales).where(eq(sales.id, saleId));
 
-    const newPaid = Number(saleRow.paidAmount) + Number(amount);
-    const newOutstanding = Number(saleRow.totalAmount) - newPaid;
+  const saleRow = saleRows[0];
+  if (!saleRow) throw new Error("Sale not found");
 
-    await tx.insert(payments).values({
-      saleId,
-      amount: amount.toString(),
-      note,
-      receivedBy,
-    });
+  const newPaid = Number(saleRow.paidAmount) + Number(amount);
+  const newOutstanding = Number(saleRow.totalAmount) - newPaid;
 
-    await tx
-      .update(sales)
-      .set({
-        paidAmount: newPaid.toString(),
-        outstanding: newOutstanding.toString(),
-        isFullyPaid: newOutstanding <= 0,
-      })
-      .where(eq(sales.id, saleId));
-
-    return { newPaid, newOutstanding };
+  // Insert the payment record
+  await db.insert(payments).values({
+    saleId,
+    amount: amount.toString(),
+    note,
+    receivedBy,
   });
+
+  // Update the sale record
+  await db
+    .update(sales)
+    .set({
+      paidAmount: newPaid.toString(),
+      outstanding: newOutstanding.toString(),
+      isFullyPaid: newOutstanding <= 0,
+    })
+    .where(eq(sales.id, saleId));
+
+  return { newPaid, newOutstanding };
 }
