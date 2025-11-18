@@ -37,7 +37,7 @@ export async function GET(
     return ok({
       ...part,
       currentStock: currentStock,
-      isLowStock: currentStock < (part.minStock || 0),
+      isLowStock: currentStock < (Number(part.minStock) || 0),
     });
   } catch (err) {
     return serverError(err);
@@ -90,6 +90,66 @@ export async function PUT(
       .where(eq(parts.id, numericId))
       .returning();
     return ok(updated);
+  } catch (err) {
+    return serverError(err);
+  }
+}
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await requireAuth(request);
+    if (!session?.user) return unauthorized();
+
+    // role check - allow both admin and staff for priority actions
+    const [roleRow] = await db
+      .select({ role: user.role })
+      .from(user)
+      .where(eq(user.id, session.user.id))
+      .limit(1);
+
+    if (!roleRow) return unauthorized();
+
+    const { id } = await params;
+    const numericId = Number(id);
+    if (!numericId) return bad("Invalid ID");
+
+    const body = await request.json();
+    const { section, cost_price, sale_price } = body;
+
+    // Build update object
+    const updateData: any = {};
+    if (section !== undefined) updateData.section = section;
+    if (cost_price !== undefined) updateData.costPrice = cost_price;
+    if (sale_price !== undefined) updateData.salePrice = sale_price;
+
+    if (Object.keys(updateData).length === 0) {
+      return bad("No valid fields to update");
+    }
+
+    // Get the existing part to know the part number
+    const [existingPart] = await db
+      .select()
+      .from(parts)
+      .where(eq(parts.id, numericId))
+      .limit(1);
+
+    if (!existingPart) return notFound("Part not found");
+
+    // Update all parts with the same part number
+    const updatedParts = await db
+      .update(parts)
+      .set(updateData)
+      .where(eq(parts.partNumber, existingPart.partNumber))
+      .returning();
+
+    return ok({
+      updatedCount: updatedParts.length,
+      data: updatedParts,
+      message: `Successfully updated ${updatedParts.length} parts with part number ${existingPart.partNumber}`,
+    });
   } catch (err) {
     return serverError(err);
   }

@@ -26,14 +26,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Start a transaction
-    const results = await db.transaction(async (tx) => {
-      const updateResults = [];
+    // Process updates without transactions (Neon HTTP driver doesn't support transactions)
+    const updateResults = [];
+    const errors = [];
 
-      for (const item of body) {
-        if (item.requested_quantity > 0) {
+    for (const item of body) {
+      if (item.requested_quantity > 0) {
+        try {
           // Update part current stock
-          const updatedPart = await tx
+          const updatedPart = await db
             .update(parts)
             .set({
               currentStock: item.current_stock + item.requested_quantity,
@@ -41,32 +42,62 @@ export async function POST(request: NextRequest) {
             .where(eq(parts.id, item.id))
             .returning();
 
-          // Create inventory transaction record
-          await tx.insert(inventory).values({
-            partId: item.id,
-            change: item.requested_quantity,
-            reason: "import",
-            referenceId: null,
-            createdBy: session.user.id,
-          });
+          if (updatedPart.length > 0) {
+            // Create inventory transaction record
+            await db.insert(inventory).values({
+              partId: item.id,
+              change: item.requested_quantity,
+              reason: "import",
+              referenceId: null,
+              createdBy: session.user.id,
+            });
 
-          updateResults.push({
+            updateResults.push({
+              id: item.id,
+              part_number: item.part_number,
+              previous_stock: item.current_stock,
+              new_stock: item.current_stock + item.requested_quantity,
+              added_quantity: item.requested_quantity,
+            });
+          }
+        } catch (itemError) {
+          console.error(`Error updating part ${item.id}:`, itemError);
+          errors.push({
             id: item.id,
             part_number: item.part_number,
-            previous_stock: item.current_stock,
-            new_stock: item.current_stock + item.requested_quantity,
-            added_quantity: item.requested_quantity,
+            error:
+              itemError instanceof Error ? itemError.message : "Unknown error",
           });
         }
       }
+    }
 
-      return updateResults;
-    });
+    const results = updateResults;
+
+    // Log any errors for debugging
+    if (errors.length > 0) {
+      console.warn(
+        `Bulk update completed with ${errors.length} errors:`,
+        errors
+      );
+    }
 
     return Response.json({
-      success: true,
-      message: `Successfully updated ${results.length} parts`,
-      data: results,
+      success: results.length > 0,
+      message:
+        errors.length === 0
+          ? `Successfully updated ${results.length} parts`
+          : `Updated ${results.length} parts with ${errors.length} errors`,
+      data: {
+        updated: results,
+        errors: errors,
+        summary: {
+          totalProcessed: body.filter((item) => item.requested_quantity > 0)
+            .length,
+          successful: results.length,
+          failed: errors.length,
+        },
+      },
     });
   } catch (error) {
     console.error("Error in bulk update:", error);

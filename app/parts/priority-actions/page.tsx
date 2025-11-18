@@ -28,19 +28,32 @@ import {
   Trash2,
   Upload,
   FileText,
+  Info,
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
-import {
-  usePriorityActionsStore,
-  LowStockPart,
-} from "@/stores/priority-actions-store";
 import {
   exportToExcel,
   importFromExcel,
   generateExcelTemplate,
   ExcelPart,
 } from "@/lib/excel-utils";
+
+// Types
+interface LowStockPart {
+  id: number;
+  part_number: string;
+  name: string;
+  section: string;
+  min_stock: number;
+  current_stock: number;
+  cost_price: string;
+  sale_price: string;
+  requested_quantity: number;
+  deficit: number;
+  total_cost: number;
+  selected: boolean;
+}
 
 // API function
 const fetchLowStockParts = async (): Promise<LowStockPart[]> => {
@@ -90,24 +103,29 @@ const bulkUpdateParts = async (data: LowStockPart[]) => {
   return response.json();
 };
 
-export default function PriorityActionsPage() {
-  const {
-    parts,
-    isLoading: storeLoading,
-    setParts,
-    setLoading,
-    updateSelected,
-    updateSelectAll,
-    updateQuantity,
-    bulkSetQuantity,
-    bulkCalculateForDeficit,
-    clearAllRequestedQuantities,
-    importFromExcel: importDataToStore,
-  } = usePriorityActionsStore();
+// Update part details API
+const updatePartDetails = async (
+  partId: number,
+  updates: { section?: string; cost_price?: string; sale_price?: string }
+) => {
+  const response = await fetch(`/api/parts/${partId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(updates),
+  });
 
+  if (!response.ok) throw new Error("Failed to update part details");
+  return response.json();
+};
+
+export default function PriorityActionsPage() {
+  const [parts, setParts] = useState<LowStockPart[]>([]);
   const [selectAll, setSelectAll] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [updatingParts, setUpdatingParts] = useState<Set<number>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const {
@@ -121,14 +139,14 @@ export default function PriorityActionsPage() {
     refetchOnWindowFocus: false,
   });
 
-  // Initialize store with data from API
+  // Initialize state with data from API
   useEffect(() => {
     if (data) {
       setParts(data);
     }
-  }, [data, setParts]);
+  }, [data]);
 
-  const isLoading = queryLoading || storeLoading;
+  const isLoading = queryLoading;
 
   // Calculate totals
   const totals = useMemo(() => {
@@ -149,30 +167,172 @@ export default function PriorityActionsPage() {
 
   // Handle individual part selection
   const handlePartSelect = (id: number, selected: boolean) => {
-    updateSelected(id, selected);
+    setParts((prev) =>
+      prev.map((part) => (part.id === id ? { ...part, selected } : part))
+    );
   };
 
   // Handle select all
   const handleSelectAll = (selected: boolean) => {
     setSelectAll(selected);
-    updateSelectAll(selected);
+    setParts((prev) => prev.map((part) => ({ ...part, selected })));
   };
 
   // Handle quantity change
   const handleQuantityChange = (id: number, quantity: number) => {
-    updateQuantity(id, quantity);
+    setParts((prev) =>
+      prev.map((part) => {
+        if (part.id === id) {
+          const requestedQuantity = Math.max(0, quantity);
+          const totalCost =
+            requestedQuantity * parseFloat(part.cost_price || "0");
+          return {
+            ...part,
+            requested_quantity: requestedQuantity,
+            total_cost: totalCost,
+          };
+        }
+        return part;
+      })
+    );
+  };
+
+  // Handle section change
+  const handleSectionChange = async (id: number, section: string) => {
+    const part = parts.find((p) => p.id === id);
+    if (!part) return;
+
+    // Update local state first
+    setParts((prev) =>
+      prev.map((p) => {
+        if (p.part_number === part.part_number) {
+          return { ...p, section };
+        }
+        return p;
+      })
+    );
+
+    // Find all parts with same part number to update in database
+    const samePartNumberParts = parts.filter(
+      (p) => p.part_number === part.part_number
+    );
+
+    try {
+      setUpdatingParts((prev) => new Set(prev).add(id));
+
+      // Update all parts with same part number in database
+      const updatePromises = samePartNumberParts.map((p) =>
+        updatePartDetails(p.id, { section })
+      );
+
+      await Promise.all(updatePromises);
+      toast.success(
+        `بخش برای ${samePartNumberParts.length} قطعه با شماره ${part.part_number} بروزرسانی شد`
+      );
+    } catch (error) {
+      console.error("Error updating section:", error);
+      toast.error("خطا در بروزرسانی بخش");
+    } finally {
+      setUpdatingParts((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(id);
+        return newSet;
+      });
+    }
+  };
+
+  // Handle cost price change
+  const handleCostPriceChange = async (id: number, cost_price: string) => {
+    const part = parts.find((p) => p.id === id);
+    if (!part) return;
+
+    const costPriceNum = parseFloat(cost_price) || 0;
+    const salePriceNum = costPriceNum * 1.2; // 20% markup
+    const sale_price = salePriceNum.toFixed(2);
+
+    // Update local state first
+    setParts((prev) =>
+      prev.map((p) => {
+        if (p.part_number === part.part_number) {
+          const totalCost = p.requested_quantity * costPriceNum;
+          return {
+            ...p,
+            cost_price,
+            sale_price,
+            total_cost: totalCost,
+          };
+        }
+        return p;
+      })
+    );
+
+    // Find all parts with same part number to update in database
+    const samePartNumberParts = parts.filter(
+      (p) => p.part_number === part.part_number
+    );
+
+    try {
+      setUpdatingParts((prev) => new Set(prev).add(id));
+
+      // Update all parts with same part number in database
+      const updatePromises = samePartNumberParts.map((p) =>
+        updatePartDetails(p.id, { cost_price, sale_price })
+      );
+
+      await Promise.all(updatePromises);
+      toast.success(
+        `قیمت برای ${samePartNumberParts.length} قطعه با شماره ${part.part_number} بروزرسانی شد`
+      );
+    } catch (error) {
+      console.error("Error updating cost price:", error);
+      toast.error("خطا در بروزرسانی قیمت");
+    } finally {
+      setUpdatingParts((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(id);
+        return newSet;
+      });
+    }
   };
 
   // Bulk operations
   const handleBulkSetQuantity = (quantity: number) => {
-    bulkSetQuantity(quantity);
+    setParts((prev) =>
+      prev.map((part) => {
+        if (part.selected) {
+          const requestedQuantity = Math.max(0, quantity);
+          const totalCost =
+            requestedQuantity * parseFloat(part.cost_price || "0");
+          return {
+            ...part,
+            requested_quantity: requestedQuantity,
+            total_cost: totalCost,
+          };
+        }
+        return part;
+      })
+    );
     toast.success(
       `مقدار ${quantity.toLocaleString("fa-IR")} برای ${totals.selectedItems} مورد تنظیم شد`
     );
   };
 
   const handleBulkCalculateForDeficit = () => {
-    bulkCalculateForDeficit();
+    setParts((prev) =>
+      prev.map((part) => {
+        if (part.selected) {
+          const requestedQuantity = part.deficit;
+          const totalCost =
+            requestedQuantity * parseFloat(part.cost_price || "0");
+          return {
+            ...part,
+            requested_quantity: requestedQuantity,
+            total_cost: totalCost,
+          };
+        }
+        return part;
+      })
+    );
     toast.success(`مقدار کمبود برای ${totals.selectedItems} مورد محاسبه شد`);
   };
 
@@ -228,8 +388,28 @@ export default function PriorityActionsPage() {
         return;
       }
 
-      // Import data to store
-      importDataToStore(importedData);
+      // Import data to state
+      setParts((prev) =>
+        prev.map((part) => {
+          const importedPart = importedData.find(
+            (item) => item.part_number === part.part_number
+          );
+
+          if (importedPart && importedPart.requested_quantity > 0) {
+            const requestedQuantity = importedPart.requested_quantity;
+            const totalCost =
+              requestedQuantity * parseFloat(part.cost_price || "0");
+
+            return {
+              ...part,
+              requested_quantity: requestedQuantity,
+              total_cost: totalCost,
+              selected: true,
+            };
+          }
+          return part;
+        })
+      );
 
       const importedWithQuantity = importedData.filter(
         (item) => item.requested_quantity > 0
@@ -273,19 +453,30 @@ export default function PriorityActionsPage() {
     try {
       const updateResult = await bulkUpdateParts(partsToUpdate);
 
-      if (updateResult.success) {
-        // Refresh data to get updated current stock
-        await refetch();
+      // Refresh data to get updated current stock
+      await refetch();
 
-        toast.success(
-          `موجودی ${partsToUpdate.length} قطعه با موفقیت بروزرسانی شد`
-        );
+      if (updateResult.success && updateResult.data) {
+        const { updated, errors, summary } = updateResult.data;
+
+        if (updated.length > 0) {
+          toast.success(`موجودی ${updated.length} قطعه با موفقیت بروزرسانی شد`);
+        }
+
+        if (errors.length > 0) {
+          console.warn("Bulk update errors:", errors);
+          toast.error(
+            `بروزرسانی ${summary.totalProcessed} مورد: ${updated.length} موفق، ${errors.length} ناموفق`
+          );
+        }
       } else {
         toast.error("خطا در بروزرسانی موجودی");
       }
     } catch (error) {
       console.error("Bulk update error:", error);
-      toast.error("خطا در بروزرسانی موجودی");
+      toast.error(
+        error instanceof Error ? error.message : "خطا در بروزرسانی موجودی"
+      );
     } finally {
       setIsUpdating(false);
     }
@@ -293,7 +484,13 @@ export default function PriorityActionsPage() {
 
   // Clear all requested quantities
   const handleClearAll = () => {
-    clearAllRequestedQuantities();
+    setParts((prev) =>
+      prev.map((part) => ({
+        ...part,
+        requested_quantity: 0,
+        total_cost: 0,
+      }))
+    );
     setSelectAll(false);
     toast.success("همه مقادیر درخواستی پاک شدند");
   };
@@ -303,6 +500,18 @@ export default function PriorityActionsPage() {
     refetch();
     toast.success("اطلاعات بروزرسانی شد");
   };
+
+  // Group parts by part number to show related parts
+  const partsByNumber = useMemo(() => {
+    const groups: { [key: string]: LowStockPart[] } = {};
+    parts.forEach((part) => {
+      if (!groups[part.part_number]) {
+        groups[part.part_number] = [];
+      }
+      groups[part.part_number].push(part);
+    });
+    return groups;
+  }, [parts]);
 
   if (isLoading) {
     return (
@@ -519,25 +728,6 @@ export default function PriorityActionsPage() {
           </div>
         </div>
       )}
-
-      {/* Instructions */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h3 className="font-medium text-blue-900 mb-2">راهنمای استفاده:</h3>
-        <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
-          <li>
-            می‌توانید فایل اکسل را برای استفاده در آینده (۳-۵ ماه later) ذخیره
-            کنید
-          </li>
-          <li>
-            برای وارد کردن داده‌های قدیمی، از دکمه "وارد کردن اکسل" استفاده کنید
-          </li>
-          <li>
-            سیستم به طور خودکار مقدار درخواستی را بر اساس شماره قطعه پر می‌کند
-          </li>
-          <li>پس از وارد کردن داده‌ها، با یک کلیک موجودی را بروزرسانی کنید</li>
-        </ul>
-      </div>
-
       {/* Main Table */}
       <div className="bg-card border rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
@@ -559,6 +749,7 @@ export default function PriorityActionsPage() {
                 <TableHead>مقدار درخواستی</TableHead>
                 <TableHead>موجودی جدید</TableHead>
                 <TableHead>قیمت واحد</TableHead>
+                <TableHead>قیمت فروش</TableHead>
                 <TableHead>مجموع هزینه</TableHead>
                 <TableHead>وضعیت</TableHead>
               </TableRow>
@@ -568,6 +759,9 @@ export default function PriorityActionsPage() {
                 const isCritical = part.current_stock === 0;
                 const isLowStock = part.current_stock < part.min_stock / 2;
                 const newStock = part.current_stock + part.requested_quantity;
+                const samePartNumberCount =
+                  partsByNumber[part.part_number]?.length || 0;
+                const isUpdatingPart = updatingParts.has(part.id);
 
                 return (
                   <TableRow
@@ -593,15 +787,35 @@ export default function PriorityActionsPage() {
                       />
                     </TableCell>
                     <TableCell className="font-mono font-medium whitespace-nowrap">
-                      {part.part_number}
+                      <div className="flex items-center gap-2">
+                        {part.part_number}
+                        {samePartNumberCount > 1 && (
+                          <Badge
+                            variant="outline"
+                            className="text-xs bg-blue-50"
+                          >
+                            {samePartNumberCount}
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="font-medium max-w-xs truncate">
                       {part.name}
                     </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-xs">
-                        {part.section}
-                      </Badge>
+                    <TableCell className="whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={part.section}
+                          onChange={(e) =>
+                            handleSectionChange(part.id, e.target.value)
+                          }
+                          className="w-16 text-center"
+                          disabled={isUpdatingPart}
+                        />
+                        {isUpdatingPart && (
+                          <RefreshCw className="h-3 w-3 animate-spin text-muted-foreground" />
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
                       {part.min_stock.toLocaleString("fa-IR")}
@@ -649,7 +863,24 @@ export default function PriorityActionsPage() {
                       )}
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
-                      {parseFloat(part.cost_price || "0").toLocaleString(
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={part.cost_price}
+                          onChange={(e) =>
+                            handleCostPriceChange(part.id, e.target.value)
+                          }
+                          className="w-24 text-center"
+                          disabled={isUpdatingPart}
+                        />
+                        {isUpdatingPart && (
+                          <RefreshCw className="h-3 w-3 animate-spin text-muted-foreground" />
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      {parseFloat(part.sale_price || "0").toLocaleString(
                         "fa-IR"
                       )}{" "}
                       افغانی
