@@ -222,7 +222,7 @@ export function PartDetails({ partId }: PartDetailsProps) {
               <CardDescription>Last 10 transactions</CardDescription>
             </CardHeader>
             <CardContent>
-              {part.recentTransactions.length > 0 ? (
+              {part.recentTransactions && part.recentTransactions.length > 0 ? (
                 <div className="space-y-2">
                   {part.recentTransactions.slice(0, 5).map((transaction) => (
                     <div

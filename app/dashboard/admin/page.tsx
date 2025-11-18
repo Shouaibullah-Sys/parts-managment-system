@@ -52,6 +52,10 @@ import {
   startOfWeek,
   startOfMonth,
   subDays,
+  isSameDay,
+  isSameWeek,
+  isSameMonth,
+  differenceInDays,
 } from "date-fns";
 import { faIR } from "date-fns/locale";
 
@@ -97,6 +101,7 @@ interface DateRange {
 }
 
 // API functions - Updated to include date range
+// Updated API functions with better error handling
 const fetchDashboardStats = async (
   dateRange?: DateRange
 ): Promise<DashboardStats> => {
@@ -108,11 +113,26 @@ const fetchDashboardStats = async (
     params.append("to", dateRange.to.toISOString());
   }
 
-  const response = await fetch(`/api/dashboard/stats?${params.toString()}`);
-  if (!response.ok) throw new Error("Failed to fetch dashboard stats");
-  return response.json();
+  try {
+    const response = await fetch(`/api/dashboard/stats?${params.toString()}`);
+    if (!response.ok) throw new Error("Failed to fetch dashboard stats");
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching dashboard stats:", error);
+    // Return default stats to prevent UI breaking
+    return {
+      totalSales: 0,
+      totalPaid: 0,
+      totalOutstanding: 0,
+      totalCustomers: 0,
+      totalParts: 0,
+      lowStockCount: 0,
+      todaySales: 0,
+      monthlySales: 0,
+      paymentCompletionRate: 0,
+    };
+  }
 };
-
 const fetchLowStockItems = async (): Promise<LowStockItem[]> => {
   const response = await fetch("/api/parts?limit=1000");
   if (!response.ok) throw new Error("Failed to fetch parts data");
@@ -142,18 +162,59 @@ const fetchSalesTrend = async (
   dateRange?: DateRange
 ): Promise<SalesTrend[]> => {
   const params = new URLSearchParams();
-  if (dateRange?.from) {
+
+  // If no date range provided, default to last 7 days
+  if (!dateRange?.from) {
+    dateRange = {
+      from: subDays(new Date(), 7),
+      to: new Date(),
+    };
+  }
+
+  if (dateRange.from) {
     params.append("from", dateRange.from.toISOString());
   }
-  if (dateRange?.to) {
+  if (dateRange.to) {
     params.append("to", dateRange.to.toISOString());
   }
 
-  const response = await fetch(
-    `/api/dashboard/sales-trend?${params.toString()}`
-  );
-  if (!response.ok) throw new Error("Failed to fetch sales trend");
-  return response.json();
+  try {
+    console.log("🔄 Frontend: Calling sales-trend API with:", {
+      url: `/api/dashboard/sales-trend?${params.toString()}`,
+      dateRange,
+      fromISO: dateRange.from?.toISOString(),
+      toISO: dateRange.to?.toISOString(),
+    });
+
+    const response = await fetch(
+      `/api/dashboard/sales-trend?${params.toString()}`
+    );
+
+    console.log("📡 Frontend: API Response status:", response.status);
+    console.log(
+      "📡 Frontend: API Response headers:",
+      Object.fromEntries(response.headers.entries())
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("❌ Frontend: API Error:", errorText);
+      throw new Error(
+        `Failed to fetch sales trend: ${response.status} - ${errorText}`
+      );
+    }
+
+    const data = await response.json();
+    console.log("✅ Frontend: API Response data:", data);
+
+    // Ensure we return an array even if API returns null/undefined
+    const result = Array.isArray(data) ? data : [];
+    console.log("📊 Frontend: Final processed data:", result);
+    return result;
+  } catch (error) {
+    console.error("❌ Frontend: Error in fetchSalesTrend:", error);
+    return [];
+  }
 };
 
 const fetchPaymentStatus = async (
@@ -316,35 +377,185 @@ const DateRangePicker = ({
     </Popover>
   );
 };
-// Chart components (simplified - you can replace with actual chart libraries)
+
+// Helper function to get dynamic sales title and date range text
+const getSalesCardInfo = (dateRange: DateRange) => {
+  const today = startOfToday();
+  const weekStart = startOfWeek(new Date(), { locale: faIR });
+  const monthStart = startOfMonth(new Date());
+  const lifetimeStart = new Date(2020, 0, 1);
+
+  // Check if it's today
+  if (isSameDay(dateRange.from, today) && isSameDay(dateRange.to, today)) {
+    return {
+      title: "فروش امروز",
+      dateText: format(today, "yyyy/MM/dd", { locale: faIR }),
+    };
+  }
+
+  // Check if it's this week
+  if (
+    isSameDay(dateRange.from, weekStart) &&
+    isSameDay(dateRange.to, today) &&
+    isSameWeek(dateRange.from, dateRange.to, { locale: faIR })
+  ) {
+    return {
+      title: "فروش این هفته",
+      dateText: "این هفته",
+    };
+  }
+
+  // Check if it's this month
+  if (
+    isSameDay(dateRange.from, monthStart) &&
+    isSameDay(dateRange.to, today) &&
+    isSameMonth(dateRange.from, dateRange.to)
+  ) {
+    return {
+      title: "فروش این ماه",
+      dateText: "این ماه",
+    };
+  }
+
+  // Check if it's lifetime
+  if (
+    isSameDay(dateRange.from, lifetimeStart) &&
+    isSameDay(dateRange.to, today)
+  ) {
+    return {
+      title: "فروش کل",
+      dateText: "همه زمانها",
+    };
+  }
+
+  // Check if it's a custom single day
+  if (isSameDay(dateRange.from, dateRange.to)) {
+    return {
+      title: "فروش روز",
+      dateText: format(dateRange.from, "yyyy/MM/dd", { locale: faIR }),
+    };
+  }
+
+  // Check if it's a custom range (less than 7 days)
+  const dayDifference = differenceInDays(dateRange.to, dateRange.from);
+  if (dayDifference <= 7) {
+    return {
+      title: `فروش ${dayDifference} روزه`,
+      dateText: `${format(dateRange.from, "yyyy/MM/dd", { locale: faIR })} - ${format(dateRange.to, "yyyy/MM/dd", { locale: faIR })}`,
+    };
+  }
+
+  // Default custom range
+  return {
+    title: "فروش در بازه انتخابی",
+    dateText: `${format(dateRange.from, "yyyy/MM/dd", { locale: faIR })} - ${format(dateRange.to, "yyyy/MM/dd", { locale: faIR })}`,
+  };
+};
+
+// Enhanced Chart components with better visualization
 const SalesTrendChart = ({ data }: { data: SalesTrend[] }) => {
-  const maxSales = Math.max(...data.map((item) => item.sales), 1);
+  // Filter out any invalid data and ensure we have sales data
+  const validData =
+    data?.filter((item) => item && item.date && item.sales !== undefined) || [];
+
+  console.log("📈 Chart Component - Raw data:", data);
+  console.log("📈 Chart Component - Valid data:", validData);
+
+  if (validData.length === 0) {
+    console.log("📈 Chart Component - No valid data, showing empty state");
+    return (
+      <div className="flex flex-col items-center justify-center h-48 sm:h-64 text-muted-foreground">
+        <BarChart3 className="h-12 w-12 mb-2 opacity-50" />
+        <p>داده‌ای برای نمایش وجود ندارد</p>
+        <p className="text-xs mt-1">اطلاعات فروش در بازه انتخاب شده یافت نشد</p>
+      </div>
+    );
+  }
+
+  const maxSales = Math.max(...validData.map((item) => item.sales), 1);
+  const maxPayments = Math.max(...validData.map((item) => item.payments), 1);
+  const maxValue = Math.max(maxSales, maxPayments);
+
+  console.log("📈 Chart Component - Max sales:", maxSales);
+  console.log("📈 Chart Component - Max payments:", maxPayments);
+  console.log("📈 Chart Component - Max value:", maxValue);
 
   return (
-    <div className="w-full h-48 sm:h-64 flex items-end justify-between gap-1 sm:gap-2 pt-4">
-      {data.map((item, index) => (
-        <div key={index} className="flex flex-col items-center flex-1">
-          <div className="text-xs text-muted-foreground mb-1 hidden sm:block">
-            {new Date(item.date).toLocaleDateString("fa-IR")}
+    <div className="w-full h-48 sm:h-64 flex items-end justify-between gap-2 sm:gap-4 pt-8 px-2 relative">
+      {/* Chart Grid Lines */}
+      <div className="absolute inset-0 flex flex-col justify-between">
+        {[0.2, 0.4, 0.6, 0.8, 1].map((line, index) => (
+          <div
+            key={index}
+            className="border-t border-gray-200 dark:border-gray-700 w-full"
+          />
+        ))}
+      </div>
+
+      {validData.map((item, index) => (
+        <div
+          key={`${item.date}-${index}`}
+          className="flex flex-col items-center flex-1 z-10"
+        >
+          {/* Date Label - Always visible on mobile */}
+          <div className="text-xs text-muted-foreground mb-2">
+            {format(new Date(item.date), "dd/MM", { locale: faIR })}
           </div>
-          <div className="flex items-end gap-0.5 sm:gap-1 w-full justify-center">
+
+          {/* Bars Container */}
+          <div className="flex items-end gap-1 w-full h-32 justify-center">
+            {/* Sales Bar */}
             <div
-              className="bg-blue-500 rounded-t w-3/4 transition-all duration-300 hover:bg-blue-600"
-              style={{ height: `${(item.sales / maxSales) * 80}%` }}
-              title={`فروش: ${item.sales.toLocaleString("fa-IR")}`}
-            />
+              className="bg-blue-500 rounded-t transition-all duration-500 hover:bg-blue-600 min-h-0.5 relative group"
+              style={{
+                height: `${Math.max((item.sales / maxValue) * 80, 2)}%`,
+                width: "24px",
+              }}
+              title={`فروش: ${item.sales.toLocaleString("fa-IR")} افغانی`}
+            >
+              <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-black text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                {item.sales.toLocaleString("fa-IR")}
+              </div>
+            </div>
+
+            {/* Payments Bar */}
             <div
-              className="bg-green-500 rounded-t w-3/4 transition-all duration-300 hover:bg-green-600"
-              style={{ height: `${(item.payments / maxSales) * 80}%` }}
-              title={`پرداختی: ${item.payments.toLocaleString("fa-IR")}`}
-            />
+              className="bg-green-500 rounded-t transition-all duration-500 hover:bg-green-600 min-h-0.5 relative group"
+              style={{
+                height: `${Math.max((item.payments / maxValue) * 80, 2)}%`,
+                width: "24px",
+              }}
+              title={`پرداختی: ${item.payments.toLocaleString("fa-IR")} افغانی`}
+            >
+              <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-black text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                {item.payments.toLocaleString("fa-IR")}
+              </div>
+            </div>
+          </div>
+
+          {/* Data Values Below */}
+          <div className="mt-1 text-xs text-center">
+            <div className="text-blue-600 font-medium">
+              {item.sales > 0 ? item.sales.toLocaleString("fa-IR") : "0"}
+            </div>
+            <div className="text-green-600 font-medium">
+              {item.payments > 0 ? item.payments.toLocaleString("fa-IR") : "0"}
+            </div>
           </div>
         </div>
       ))}
+
+      {/* Y-axis Labels */}
+      <div className="absolute left-0 top-0 h-full flex flex-col justify-between text-xs text-muted-foreground">
+        <span>{maxValue.toLocaleString("fa-IR")}</span>
+        <span>{(maxValue * 0.75).toLocaleString("fa-IR")}</span>
+        <span>{(maxValue * 0.5).toLocaleString("fa-IR")}</span>
+        <span>{(maxValue * 0.25).toLocaleString("fa-IR")}</span>
+        <span>0</span>
+      </div>
     </div>
   );
 };
-
 const PaymentStatusChart = ({ data }: { data: PaymentStatus }) => {
   const total = data.fullyPaid + data.partiallyPaid + data.notPaid;
   if (total === 0)
@@ -525,6 +736,9 @@ export default function AdminDashboard() {
     to: new Date(),
   });
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Get dynamic sales card info based on date range
+  const salesCardInfo = getSalesCardInfo(dateRange);
 
   // Queries with date range
   const {
@@ -774,7 +988,13 @@ export default function AdminDashboard() {
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
                   <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5" />
-                  روند فروش (۷ روز گذشته)
+                  روند فروش
+                  {dateRange.from && dateRange.to && (
+                    <span className="text-xs text-muted-foreground">
+                      ({format(dateRange.from, "yyyy/MM/dd", { locale: faIR })}{" "}
+                      - {format(dateRange.to, "yyyy/MM/dd", { locale: faIR })})
+                    </span>
+                  )}
                 </CardTitle>
                 <CardDescription className="text-xs sm:text-sm">
                   فروش روزانه و جمع‌آوری پرداختی‌ها
@@ -784,27 +1004,35 @@ export default function AdminDashboard() {
                 {trendLoading ? (
                   <div className="flex items-center justify-center h-48 sm:h-64">
                     <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+                    <span className="mr-2 text-sm text-muted-foreground">
+                      در حال بارگذاری...
+                    </span>
                   </div>
                 ) : salesTrend && salesTrend.length > 0 ? (
-                  <SalesTrendChart data={salesTrend} />
+                  <>
+                    <SalesTrendChart data={salesTrend} />
+                    <div className="flex justify-center gap-4 mt-4 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 bg-blue-500 rounded"></div>
+                        فروش
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 bg-green-500 rounded"></div>
+                        پرداختی‌ها
+                      </div>
+                    </div>
+                  </>
                 ) : (
-                  <div className="flex items-center justify-center h-48 sm:h-64 text-muted-foreground">
-                    اطلاعات فروشی موجود نیست
+                  <div className="flex flex-col items-center justify-center h-48 sm:h-64 text-muted-foreground">
+                    <BarChart3 className="h-12 w-12 mb-2 opacity-50" />
+                    <p>اطلاعات فروشی موجود نیست</p>
+                    <p className="text-xs mt-1">
+                      برای بازه انتخاب شده داده‌ای یافت نشد
+                    </p>
                   </div>
                 )}
-                <div className="flex justify-center gap-4 mt-4 text-xs text-muted-foreground">
-                  <div className="flex items-center gap-1">
-                    <div className="w-3 h-3 bg-blue-500 rounded"></div>
-                    فروش
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <div className="w-3 h-3 bg-green-500 rounded"></div>
-                    پرداختی‌ها
-                  </div>
-                </div>
               </CardContent>
             </Card>
-
             {/* Payment Status Chart */}
             <Card>
               <CardHeader className="pb-3">
@@ -837,16 +1065,16 @@ export default function AdminDashboard() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-xs sm:text-sm font-medium">
-                  فروش امروز
+                  {salesCardInfo.title}
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-lg sm:text-2xl font-bold">
-                  {stats?.todaySales?.toLocaleString("fa-IR") || 0} افغانی
+                  {stats?.totalSales?.toLocaleString("fa-IR") || 0} افغانی
                 </div>
                 <div className="flex items-center text-xs text-muted-foreground mt-1">
-                  <Calendar className="h-3 w-3 ml-1" />
-                  {new Date().toLocaleDateString("fa-IR")}
+                  <CalendarIcon className="h-3 w-3 ml-1" />
+                  {salesCardInfo.dateText}
                 </div>
               </CardContent>
             </Card>
@@ -1132,14 +1360,14 @@ export default function AdminDashboard() {
             <CardContent>
               <div className="space-y-3">
                 {actualLowStockCount > 0 && (
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border rounded-lg bg-red-50 border-red-200 gap-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border rounded-lg dark:bg-stone-950 border-red-200 gap-3">
                     <div className="flex items-center gap-3">
                       <AlertTriangle className="h-5 w-5 text-red-600" />
                       <div>
-                        <div className="font-medium text-red-900 text-sm sm:text-base">
+                        <div className="font-medium text-red-500 text-sm sm:text-base">
                           تکمیل موجودی
                         </div>
-                        <div className="text-xs sm:text-sm text-red-700">
+                        <div className="text-xs sm:text-sm text-red-400">
                           {actualLowStockCount.toLocaleString("fa-IR")} مورد زیر
                           سطح حداقل موجودی هستند
                         </div>
@@ -1148,7 +1376,7 @@ export default function AdminDashboard() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="border-red-300 text-red-700 whitespace-nowrap"
+                      className="border-red-300 text-red-500 whitespace-nowrap"
                       asChild
                     >
                       <Link href="/parts/manage">مدیریت قطعات</Link>
@@ -1157,14 +1385,14 @@ export default function AdminDashboard() {
                 )}
 
                 {stats?.totalOutstanding && stats.totalOutstanding > 0 && (
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border rounded-lg bg-amber-50 border-amber-200 gap-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border rounded-lg dark:bg-stone-950 border-amber-200 gap-3">
                     <div className="flex items-center gap-3">
                       <CreditCard className="h-5 w-5 text-amber-600" />
                       <div>
-                        <div className="font-medium text-amber-900 text-sm sm:text-base">
+                        <div className="font-medium dark:text-amber-500 text-sm sm:text-base">
                           جمع‌آوری پرداختی‌ها
                         </div>
-                        <div className="text-xs sm:text-sm text-amber-700">
+                        <div className="text-xs sm:text-sm text-amber-400">
                           {stats.totalOutstanding.toLocaleString("fa-IR")}{" "}
                           افغانی پرداخت معوق
                         </div>
@@ -1173,7 +1401,7 @@ export default function AdminDashboard() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="border-amber-300 text-amber-700 whitespace-nowrap"
+                      className="border-amber-300 text-amber-500 whitespace-nowrap"
                       asChild
                     >
                       <Link href="/dashboards/admin/sales">بررسی فروش</Link>
@@ -1181,7 +1409,7 @@ export default function AdminDashboard() {
                   </div>
                 )}
 
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border rounded-lg bg-blue-50 border-blue-200 gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border rounded-lg dark:bg-stone-950 border-blue-200 gap-3">
                   <div className="flex items-center gap-3">
                     <TrendingUp className="h-5 w-5 text-blue-600" />
                     <div>

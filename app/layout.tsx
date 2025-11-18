@@ -19,7 +19,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL("https://your-domain.com"),
   title: {
-    default: "Parts Management System - Diplomasi LTD",
+    default: "Diplomasi LTD",
     template: "%s | Parts Management System - Diplomasi LTD",
   },
   description:

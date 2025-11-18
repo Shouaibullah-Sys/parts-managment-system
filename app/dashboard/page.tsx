@@ -10,7 +10,7 @@ export default async function Dashboard() {
     headers: await headers(),
   });
 
-  if (!session) {
+  if (!session?.user) {
     redirect("/login");
   }
 
