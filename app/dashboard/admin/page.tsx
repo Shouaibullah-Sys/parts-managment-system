@@ -1379,7 +1379,9 @@ export default function AdminDashboard() {
                       className="border-red-300 text-red-500 whitespace-nowrap"
                       asChild
                     >
-                      <Link href="/parts/manage">مدیریت قطعات</Link>
+                      <Link href="/parts/priority-actions">
+                        اقدامات اولویت‌دار
+                      </Link>
                     </Button>
                   </div>
                 )}
