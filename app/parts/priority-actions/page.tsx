@@ -1,7 +1,7 @@
 // app/parts/priority-actions/page.tsx
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,74 +22,25 @@ import {
   Calculator,
   AlertTriangle,
   CheckSquare,
-  Square,
   FileSpreadsheet,
+  Save,
+  Edit,
+  Trash2,
+  Upload,
+  FileText,
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
-
-// Types
-interface LowStockPart {
-  id: number;
-  part_number: string;
-  name: string;
-  section: string;
-  min_stock: number;
-  current_stock: number;
-  cost_price: string;
-  sale_price: string;
-  requested_quantity: number;
-  deficit: number;
-  total_cost: number;
-  selected: boolean;
-}
-
-// Excel export utility
-const exportToExcel = (data: LowStockPart[]) => {
-  const headers = [
-    "شماره قطعه",
-    "نام قطعه",
-    "بخش",
-    "حداقل موجودی",
-    "موجودی فعلی",
-    "کمبود",
-    "مقدار درخواستی",
-    "قیمت واحد (افغانی)",
-    "مجموع هزینه (افغانی)",
-  ];
-
-  const csvContent = [
-    headers.join(","),
-    ...data.map((item) =>
-      [
-        item.part_number,
-        `"${item.name}"`,
-        item.section,
-        item.min_stock,
-        item.current_stock,
-        item.deficit,
-        item.requested_quantity || 0,
-        item.cost_price,
-        item.total_cost || 0,
-      ].join(",")
-    ),
-  ].join("\n");
-
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-  const link = document.createElement("a");
-  const url = URL.createObjectURL(blob);
-  link.setAttribute("href", url);
-  link.setAttribute(
-    "download",
-    `priority-actions-${new Date().toISOString().split("T")[0]}.csv`
-  );
-  link.style.visibility = "hidden";
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-
-  toast.success("فایل با موفقیت صادر شد");
-};
+import {
+  usePriorityActionsStore,
+  LowStockPart,
+} from "@/stores/priority-actions-store";
+import {
+  exportToExcel,
+  importFromExcel,
+  generateExcelTemplate,
+  ExcelPart,
+} from "@/lib/excel-utils";
 
 // API function
 const fetchLowStockParts = async (): Promise<LowStockPart[]> => {
@@ -125,27 +76,69 @@ const fetchLowStockParts = async (): Promise<LowStockPart[]> => {
   return lowStockParts;
 };
 
-export default function PriorityActionsPage() {
-  const [parts, setParts] = useState<LowStockPart[]>([]);
-  const [selectAll, setSelectAll] = useState(false);
-
-  const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ["low-stock-parts"],
-    queryFn: fetchLowStockParts,
+// Bulk update parts API
+const bulkUpdateParts = async (data: LowStockPart[]) => {
+  const response = await fetch("/api/parts/bulk-update-stock", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(data),
   });
 
+  if (!response.ok) throw new Error("Failed to update parts");
+  return response.json();
+};
+
+export default function PriorityActionsPage() {
+  const {
+    parts,
+    isLoading: storeLoading,
+    setParts,
+    setLoading,
+    updateSelected,
+    updateSelectAll,
+    updateQuantity,
+    bulkSetQuantity,
+    bulkCalculateForDeficit,
+    clearAllRequestedQuantities,
+    importFromExcel: importDataToStore,
+  } = usePriorityActionsStore();
+
+  const [selectAll, setSelectAll] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const {
+    data,
+    isLoading: queryLoading,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ["low-stock-parts"],
+    queryFn: fetchLowStockParts,
+    refetchOnWindowFocus: false,
+  });
+
+  // Initialize store with data from API
   useEffect(() => {
     if (data) {
       setParts(data);
     }
-  }, [data]);
+  }, [data, setParts]);
+
+  const isLoading = queryLoading || storeLoading;
 
   // Calculate totals
   const totals = useMemo(() => {
-    const selectedParts = parts.filter((part) => part.selected);
+    const selectedParts = parts.filter(
+      (part) => part.selected && part.requested_quantity > 0
+    );
     return {
       totalItems: parts.length,
-      selectedItems: selectedParts.length,
+      selectedItems: parts.filter((part) => part.selected).length,
+      itemsWithQuantity: selectedParts.length,
       totalRequestedQuantity: selectedParts.reduce(
         (sum, part) => sum + part.requested_quantity,
         0
@@ -156,113 +149,153 @@ export default function PriorityActionsPage() {
 
   // Handle individual part selection
   const handlePartSelect = (id: number, selected: boolean) => {
-    setParts((prev) =>
-      prev.map((part) => (part.id === id ? { ...part, selected } : part))
-    );
-    updateSelectAllState();
+    updateSelected(id, selected);
   };
 
   // Handle select all
   const handleSelectAll = (selected: boolean) => {
     setSelectAll(selected);
-    setParts((prev) => prev.map((part) => ({ ...part, selected })));
-  };
-
-  // Update select all checkbox state
-  const updateSelectAllState = () => {
-    const selectedCount = parts.filter((part) => part.selected).length;
-    setSelectAll(selectedCount === parts.length && parts.length > 0);
+    updateSelectAll(selected);
   };
 
   // Handle quantity change
   const handleQuantityChange = (id: number, quantity: number) => {
-    setParts((prev) =>
-      prev.map((part) => {
-        if (part.id === id) {
-          const requestedQuantity = Math.max(0, quantity);
-          const totalCost =
-            requestedQuantity * parseFloat(part.cost_price || "0");
-          return {
-            ...part,
-            requested_quantity: requestedQuantity,
-            total_cost: totalCost,
-          };
-        }
-        return part;
-      })
-    );
+    updateQuantity(id, quantity);
   };
 
   // Bulk operations
   const handleBulkSetQuantity = (quantity: number) => {
-    setParts((prev) =>
-      prev.map((part) => {
-        if (part.selected) {
-          const requestedQuantity = Math.max(0, quantity);
-          const totalCost =
-            requestedQuantity * parseFloat(part.cost_price || "0");
-          return {
-            ...part,
-            requested_quantity: requestedQuantity,
-            total_cost: totalCost,
-          };
-        }
-        return part;
-      })
-    );
+    bulkSetQuantity(quantity);
     toast.success(
       `مقدار ${quantity.toLocaleString("fa-IR")} برای ${totals.selectedItems} مورد تنظیم شد`
     );
   };
 
-  const handleBulkCalculateForAll = () => {
-    setParts((prev) =>
-      prev.map((part) => {
-        if (part.selected) {
-          const requestedQuantity = part.deficit;
-          const totalCost =
-            requestedQuantity * parseFloat(part.cost_price || "0");
-          return {
-            ...part,
-            requested_quantity: requestedQuantity,
-            total_cost: totalCost,
-          };
-        }
-        return part;
-      })
-    );
+  const handleBulkCalculateForDeficit = () => {
+    bulkCalculateForDeficit();
     toast.success(`مقدار کمبود برای ${totals.selectedItems} مورد محاسبه شد`);
   };
 
-  const handleBulkCalculateForDeficit = () => {
-    setParts((prev) =>
-      prev.map((part) => {
-        if (part.selected) {
-          const requestedQuantity = part.deficit;
-          const totalCost =
-            requestedQuantity * parseFloat(part.cost_price || "0");
-          return {
-            ...part,
-            requested_quantity: requestedQuantity,
-            total_cost: totalCost,
-          };
-        }
-        return part;
-      })
-    );
-    toast.success(`مقدار کمبود برای ${totals.selectedItems} مورد تنظیم شد`);
+  // Export to Excel
+  const handleExport = () => {
+    const partsToExport = parts
+      .filter((part) => part.requested_quantity > 0)
+      .map((part) => ({
+        part_number: part.part_number,
+        name: part.name,
+        section: part.section,
+        min_stock: part.min_stock,
+        current_stock: part.current_stock,
+        deficit: part.deficit,
+        requested_quantity: part.requested_quantity,
+        cost_price: part.cost_price,
+        total_cost: part.total_cost,
+      }));
+
+    if (partsToExport.length === 0) {
+      toast.error("هیچ موردی با مقدار درخواستی موجود نیست");
+      return;
+    }
+
+    try {
+      exportToExcel(partsToExport);
+      toast.success("فایل اکسل با موفقیت صادر شد");
+    } catch (error) {
+      console.error("Export error:", error);
+      toast.error("خطا در صادر کردن فایل اکسل");
+    }
   };
 
-  // Export selected data
-  const handleExport = () => {
-    const selectedParts = parts.filter(
+  // Handle file import
+  const handleFileImport = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Check file type
+    if (!file.name.endsWith(".xlsx") && !file.name.endsWith(".xls")) {
+      toast.error("لطفا یک فایل اکسل معتبر انتخاب کنید");
+      return;
+    }
+
+    setIsImporting(true);
+    try {
+      const importedData = await importFromExcel(file);
+
+      if (importedData.length === 0) {
+        toast.error("هیچ داده‌ای در فایل یافت نشد");
+        return;
+      }
+
+      // Import data to store
+      importDataToStore(importedData);
+
+      const importedWithQuantity = importedData.filter(
+        (item) => item.requested_quantity > 0
+      ).length;
+      toast.success(
+        `داده‌های ${importedWithQuantity} مورد با موفقیت وارد شدند`
+      );
+
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    } catch (error) {
+      console.error("Import error:", error);
+      toast.error(
+        error instanceof Error ? error.message : "خطا در وارد کردن فایل"
+      );
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  // Generate template
+  const handleGenerateTemplate = () => {
+    generateExcelTemplate();
+    toast.success("قالب اکسل با موفقیت ایجاد شد");
+  };
+
+  // Bulk update current stock
+  const handleBulkUpdate = async () => {
+    const partsToUpdate = parts.filter(
       (part) => part.selected && part.requested_quantity > 0
     );
-    if (selectedParts.length === 0) {
+
+    if (partsToUpdate.length === 0) {
       toast.error("هیچ مورد انتخاب شده‌ای با مقدار درخواستی موجود نیست");
       return;
     }
-    exportToExcel(selectedParts);
+
+    setIsUpdating(true);
+    try {
+      const updateResult = await bulkUpdateParts(partsToUpdate);
+
+      if (updateResult.success) {
+        // Refresh data to get updated current stock
+        await refetch();
+
+        toast.success(
+          `موجودی ${partsToUpdate.length} قطعه با موفقیت بروزرسانی شد`
+        );
+      } else {
+        toast.error("خطا در بروزرسانی موجودی");
+      }
+    } catch (error) {
+      console.error("Bulk update error:", error);
+      toast.error("خطا در بروزرسانی موجودی");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  // Clear all requested quantities
+  const handleClearAll = () => {
+    clearAllRequestedQuantities();
+    setSelectAll(false);
+    toast.success("همه مقادیر درخواستی پاک شدند");
   };
 
   // Refresh data
@@ -308,6 +341,15 @@ export default function PriorityActionsPage() {
 
   return (
     <div className="container mx-auto py-6 px-4 sm:px-6 space-y-6">
+      {/* Hidden file input */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileImport}
+        accept=".xlsx,.xls"
+        className="hidden"
+      />
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-4">
@@ -337,20 +379,50 @@ export default function PriorityActionsPage() {
             <RefreshCw className="h-4 w-4 ml-1" />
             بروزرسانی
           </Button>
+          <Button variant="outline" size="sm" onClick={handleGenerateTemplate}>
+            <FileText className="h-4 w-4 ml-1" />
+            دریافت قالب
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isImporting}
+          >
+            {isImporting ? (
+              <RefreshCw className="h-4 w-4 animate-spin ml-1" />
+            ) : (
+              <Upload className="h-4 w-4 ml-1" />
+            )}
+            وارد کردن اکسل
+          </Button>
           <Button
             variant="outline"
             size="sm"
             onClick={handleExport}
-            disabled={totals.selectedItems === 0}
+            disabled={totals.itemsWithQuantity === 0}
           >
             <Download className="h-4 w-4 ml-1" />
             خروجی اکسل
+          </Button>
+          <Button
+            variant="default"
+            size="sm"
+            onClick={handleBulkUpdate}
+            disabled={totals.itemsWithQuantity === 0 || isUpdating}
+          >
+            {isUpdating ? (
+              <RefreshCw className="h-4 w-4 animate-spin ml-1" />
+            ) : (
+              <Save className="h-4 w-4 ml-1" />
+            )}
+            بروزرسانی موجودی
           </Button>
         </div>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5">
         <div className="bg-card border rounded-lg p-4">
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-red-600" />
@@ -367,6 +439,15 @@ export default function PriorityActionsPage() {
           </div>
           <div className="text-2xl font-bold mt-1">
             {totals.selectedItems.toLocaleString("fa-IR")}
+          </div>
+        </div>
+        <div className="bg-card border rounded-lg p-4">
+          <div className="flex items-center gap-2">
+            <Edit className="h-5 w-5 text-green-600" />
+            <span className="text-sm font-medium">آماده بروزرسانی</span>
+          </div>
+          <div className="text-2xl font-bold mt-1">
+            {totals.itemsWithQuantity.toLocaleString("fa-IR")}
           </div>
         </div>
         <div className="bg-card border rounded-lg p-4">
@@ -392,39 +473,70 @@ export default function PriorityActionsPage() {
       {/* Bulk Actions */}
       {totals.selectedItems > 0 && (
         <div className="bg-card border rounded-lg p-4">
-          <h3 className="font-medium mb-3">عملیات گروهی</h3>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleBulkSetQuantity(10)}
-            >
-              تنظیم ۱۰ عدد برای همه
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleBulkSetQuantity(50)}
-            >
-              تنظیم ۵۰ عدد برای همه
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleBulkSetQuantity(100)}
-            >
-              تنظیم ۱۰۰ عدد برای همه
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleBulkCalculateForDeficit}
-            >
-              محاسبه کمبود برای همه
-            </Button>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <h3 className="font-medium">
+              عملیات گروهی ({totals.selectedItems} مورد انتخاب شده)
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleBulkSetQuantity(10)}
+              >
+                تنظیم ۱۰ عدد
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleBulkSetQuantity(50)}
+              >
+                تنظیم ۵۰ عدد
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleBulkSetQuantity(100)}
+              >
+                تنظیم ۱۰۰ عدد
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleBulkCalculateForDeficit}
+              >
+                محاسبه کمبود
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleClearAll}
+                className="text-red-600 border-red-200 hover:bg-red-50"
+              >
+                <Trash2 className="h-4 w-4 ml-1" />
+                پاک کردن همه
+              </Button>
+            </div>
           </div>
         </div>
       )}
+
+      {/* Instructions */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <h3 className="font-medium text-blue-900 mb-2">راهنمای استفاده:</h3>
+        <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
+          <li>
+            می‌توانید فایل اکسل را برای استفاده در آینده (۳-۵ ماه later) ذخیره
+            کنید
+          </li>
+          <li>
+            برای وارد کردن داده‌های قدیمی، از دکمه "وارد کردن اکسل" استفاده کنید
+          </li>
+          <li>
+            سیستم به طور خودکار مقدار درخواستی را بر اساس شماره قطعه پر می‌کند
+          </li>
+          <li>پس از وارد کردن داده‌ها، با یک کلیک موجودی را بروزرسانی کنید</li>
+        </ul>
+      </div>
 
       {/* Main Table */}
       <div className="bg-card border rounded-lg overflow-hidden">
@@ -445,6 +557,7 @@ export default function PriorityActionsPage() {
                 <TableHead>موجودی فعلی</TableHead>
                 <TableHead>کمبود</TableHead>
                 <TableHead>مقدار درخواستی</TableHead>
+                <TableHead>موجودی جدید</TableHead>
                 <TableHead>قیمت واحد</TableHead>
                 <TableHead>مجموع هزینه</TableHead>
                 <TableHead>وضعیت</TableHead>
@@ -454,6 +567,7 @@ export default function PriorityActionsPage() {
               {parts.map((part) => {
                 const isCritical = part.current_stock === 0;
                 const isLowStock = part.current_stock < part.min_stock / 2;
+                const newStock = part.current_stock + part.requested_quantity;
 
                 return (
                   <TableRow
@@ -464,6 +578,10 @@ export default function PriorityActionsPage() {
                         : isLowStock
                           ? "bg-orange-50 dark:bg-orange-950/20"
                           : ""
+                    } ${
+                      part.requested_quantity > 0
+                        ? "bg-green-50 dark:bg-green-950/20"
+                        : ""
                     }`}
                   >
                     <TableCell>
@@ -522,6 +640,15 @@ export default function PriorityActionsPage() {
                       />
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
+                      {part.requested_quantity > 0 ? (
+                        <span className="text-green-600 font-medium">
+                          {newStock.toLocaleString("fa-IR")}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
                       {parseFloat(part.cost_price || "0").toLocaleString(
                         "fa-IR"
                       )}{" "}
@@ -540,14 +667,18 @@ export default function PriorityActionsPage() {
                             ? "bg-red-600 text-xs"
                             : isLowStock
                               ? "border-orange-600 text-orange-600 bg-orange-50 text-xs"
-                              : "border-amber-600 text-amber-600 bg-amber-50 text-xs"
+                              : part.requested_quantity > 0
+                                ? "border-green-600 text-green-600 bg-green-50 text-xs"
+                                : "border-amber-600 text-amber-600 bg-amber-50 text-xs"
                         }
                       >
                         {isCritical
                           ? "تمام شده"
                           : isLowStock
                             ? "بحرانی"
-                            : "موجودی کم"}
+                            : part.requested_quantity > 0
+                              ? "آماده بروزرسانی"
+                              : "موجودی کم"}
                       </Badge>
                     </TableCell>
                   </TableRow>
