@@ -6,8 +6,8 @@ import type { NextRequest } from "next/server";
 import { requireAuth } from "@/lib/auth-session";
 import { ok, bad, unauthorized, serverError } from "@/lib/api-response";
 import { db } from "@/db/drizzle";
-import { parts, inventory, customers, sales, user } from "@/db/schema";
-import { eq, sql, and, desc } from "drizzle-orm";
+import { parts, customers, sales, user } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import { generateInvoicePDF, SaleItem } from "@/lib/pdf-generator";
 
 export async function GET(
@@ -19,70 +19,74 @@ export async function GET(
     if (!session?.user) return unauthorized();
 
     const { id } = await params;
-    const issueId = parseInt(id);
-    if (isNaN(issueId)) return bad("شناسه سند معتبر نیست");
+    const salesId = parseInt(id);
+    if (isNaN(salesId)) return bad("شناسه فروش معتبر نیست");
 
-    const customerData = await db
-      .select()
-      .from(customers)
-      .where(eq(customers.id, issueId))
+    // Get sale data with all necessary joins in one query
+    const salesData = await db
+      .select({ sale: sales, part: parts, customer: customers, user: user })
+      .from(sales)
+      .where(eq(sales.id, salesId))
+      .leftJoin(parts, eq(sales.partId, parts.id))
+      .leftJoin(customers, eq(sales.customerId, customers.id))
+      .leftJoin(user, eq(sales.createdBy, user.id))
       .limit(1);
-    if (customerData.length === 0) return bad("سند یافت نشد");
 
-    const customer = customerData[0];
+    if (salesData.length === 0) return bad("فروش یافت نشد");
+
+    const sale = salesData[0].sale;
+    const customer = salesData[0].customer;
+    const userInfo = salesData[0].user;
+
+    if (!customer) return bad("مشتری یافت نشد");
+
     const invoiceCustomer = {
       name: customer.name,
       phone: customer.phone ?? undefined,
       address: customer.address ?? undefined,
     };
 
-    const salesData = await db
-      .select({ sale: sales, part: parts, user: user })
-      .from(sales)
-      .where(eq(sales.customerId, issueId))
-      .leftJoin(parts, eq(sales.partId, parts.id))
-      .leftJoin(user, eq(sales.createdBy, user.id));
-
-    if (salesData.length === 0) return bad("هیچ فروشی برای این سند یافت نشد");
-
-    const invoiceSales: SaleItem[] = salesData.map((s) => ({
-      sale: {
-        quantity: s.sale.quantity,
-        totalAmount: s.sale.totalAmount,
+    const invoiceSales: SaleItem[] = [
+      {
+        sale: {
+          quantity: sale.quantity,
+          totalAmount: sale.totalAmount,
+        },
+        part: salesData[0].part
+          ? {
+              id: salesData[0].part.id,
+              partNumber: salesData[0].part.partNumber,
+              name: salesData[0].part.name,
+              section: salesData[0].part.section ?? "E",
+              minStock: salesData[0].part.minStock ?? 0,
+              currentStock: salesData[0].part.currentStock ?? 0,
+              costPrice: salesData[0].part.costPrice,
+              salePrice: salesData[0].part.salePrice,
+              active: salesData[0].part.active ?? true,
+              createdAt: salesData[0].part.createdAt ?? new Date(),
+            }
+          : null,
+        user: userInfo
+          ? {
+              name: userInfo.name ?? "نامشخص",
+            }
+          : null,
       },
-      part: s.part
-        ? {
-            id: s.part.id,
-            partNumber: s.part.partNumber,
-            name: s.part.name,
-            section: s.part.section ?? "E",
-            minStock: s.part.minStock ?? 0,
-            costPrice: s.part.costPrice,
-            salePrice: s.part.salePrice,
-            active: s.part.active ?? true,
-            createdAt: s.part.createdAt ?? new Date(),
-          }
-        : null,
-      user: s.user
-        ? {
-            name: s.user.name ?? "نامشخص",
-          }
-        : null,
-    }));
+    ];
 
     const pdfBuffer = await generateInvoicePDF({
       customer: invoiceCustomer,
       sales: invoiceSales,
-      issueId,
-      createdAt: salesData[0]?.sale.saleDate ?? new Date(),
-      createdBy: salesData[0]?.user?.name ?? "نامشخص",
+      issueId: salesId,
+      createdAt: sale.saleDate ?? new Date(),
+      createdBy: userInfo?.name ?? "نامشخص",
     });
 
     return new Response(new Uint8Array(pdfBuffer), {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="invoice-${issueId}.pdf"`,
+        "Content-Disposition": `attachment; filename="invoice-${salesId}.pdf"`,
       },
     });
   } catch (err) {

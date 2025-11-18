@@ -4,7 +4,7 @@ import { createSale } from "@/lib/services/sale";
 import { createSaleSchema } from "@/lib/validation/schemas";
 import { db } from "@/db/drizzle";
 import { sales, customers, parts, payments, user } from "@/db/schema";
-import { eq, and, gte, lte, ilike, sql, count } from "drizzle-orm";
+import { eq, and, gte, lte, sql, count } from "drizzle-orm";
 import {
   startOfToday,
   startOfWeek,
@@ -130,10 +130,10 @@ async function fetchSalesData(params: {
   // Search filter - search in customer name, part name, or part number
   if (search) {
     const searchCondition = sql`
-      (${customers.name} ILIKE ${`%${search}%`} OR 
-       ${parts.name} ILIKE ${`%${search}%`} OR 
-       ${parts.partNumber} ILIKE ${`%${search}%`})
-    `;
+        (${customers.name} ILIKE ${`%${search}%`} OR 
+        ${parts.name} ILIKE ${`%${search}%`} OR 
+        ${parts.partNumber} ILIKE ${`%${search}%`})
+      `;
     whereConditions.push(searchCondition);
   }
 
@@ -157,11 +157,11 @@ async function fetchSalesData(params: {
       partName: parts.name,
       // Calculate actual paid amount from payments table
       actualPaidAmount: sql<string>`COALESCE(
-        (SELECT SUM(${payments.amount})
-         FROM ${payments}
-         WHERE ${payments.saleId} = ${sales.id}),
-        ${sales.paidAmount}
-      )`,
+          (SELECT SUM(${payments.amount})
+          FROM ${payments}
+          WHERE ${payments.saleId} = ${sales.id}),
+          ${sales.paidAmount}
+        )`,
     })
     .from(sales)
     .leftJoin(customers, eq(sales.customerId, customers.id))

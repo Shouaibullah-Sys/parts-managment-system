@@ -27,25 +27,25 @@ export async function GET(request: NextRequest) {
     }
     whereConditions.push(eq(parts.active, true));
 
-    // Simple parts query first
-    const partsData = await db
-      .select({
-        id: parts.id,
-        partNumber: parts.partNumber,
-        name: parts.name,
-        section: parts.section,
-        minStock: parts.minStock,
-        currentStock: parts.currentStock,
-        costPrice: parts.costPrice,
-        salePrice: parts.salePrice,
-        active: parts.active,
-        createdAt: parts.createdAt,
-      })
-      .from(parts)
-      .where(and(...whereConditions))
-      .orderBy(parts.partNumber)
-      .limit(limit)
-      .offset(offset);
+    // Parts query using currentStock column directly
+    const partsData = await db.execute(sql`
+      SELECT
+        p.id,
+        p.part_number AS "partNumber",
+        p.name,
+        p.section,
+        p.min_stock AS "minStock",
+        p.cost_price AS "costPrice",
+        p.sale_price AS "salePrice",
+        p.active,
+        p.created_at AS "createdAt",
+        p.current_stock AS "currentStock"
+      FROM parts p
+      WHERE p.active = true
+      ${search ? sql`AND (${or(like(parts.partNumber, `%${search}%`), like(parts.name, `%${search}%`))})` : sql``}
+      ORDER BY p.part_number
+      LIMIT ${limit} OFFSET ${offset}
+    `);
 
     // Get total count
     const countResult = await db
@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
 
     return Response.json({
       success: true,
-      data: partsData,
+      data: partsData.rows || partsData,
       pagination: {
         page,
         limit,

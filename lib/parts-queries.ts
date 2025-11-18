@@ -42,13 +42,23 @@ export async function listParts(opts: {
     : undefined;
 
   const [items, countRes] = await Promise.all([
-    db
-      .select()
-      .from(parts)
-      .where(whereClause)
-      .orderBy(parts.partNumber)
-      .limit(limit)
-      .offset(offset),
+    db.execute(sql`
+      SELECT
+        p.id,
+        p.part_number AS "partNumber",
+        p.name,
+        p.section,
+        p.min_stock AS "minStock",
+        p.cost_price AS "costPrice",
+        p.sale_price AS "salePrice",
+        p.active,
+        p.created_at AS "createdAt",
+        p.current_stock AS "currentStock"
+      FROM parts p
+      ${whereClause ? sql`WHERE ${whereClause}` : sql``}
+      ORDER BY p.part_number
+      LIMIT ${limit} OFFSET ${offset}
+    `),
     db
       .select({ count: sql<number>`count(*)` })
       .from(parts)
@@ -59,7 +69,7 @@ export async function listParts(opts: {
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
   return {
-    items,
+    items: items.rows || [],
     pagination: {
       page,
       limit,
@@ -70,24 +80,43 @@ export async function listParts(opts: {
 }
 
 export async function getPartById(id: number) {
-  const res = await db.select().from(parts).where(eq(parts.id, id)).limit(1);
-  return res[0] ?? null;
+  const res = await db.execute(sql`
+    SELECT
+      p.id,
+      p.part_number AS "partNumber",
+      p.name,
+      p.section,
+      p.min_stock AS "minStock",
+      p.cost_price AS "costPrice",
+      p.sale_price AS "salePrice",
+      p.active,
+      p.created_at AS "createdAt",
+      p.current_stock AS "currentStock"
+    FROM parts p
+    WHERE p.id = ${id}
+    LIMIT 1
+  `);
+  return res.rows?.[0] ?? null;
 }
 
 export async function lowStockParts() {
-  return db
-    .select({
-      part: parts,
-      currentStock: parts.currentStock,
-    })
-    .from(parts)
-    .where(
-      and(
-        eq(parts.active, true),
-        sql`${parts.currentStock} < ${parts.minStock}`
-      )
-    )
-    .orderBy(parts.partNumber);
+  const res = await db.execute(sql`
+    SELECT
+      p.id,
+      p.part_number AS "partNumber",
+      p.name,
+      p.section,
+      p.min_stock AS "minStock",
+      p.cost_price AS "costPrice",
+      p.sale_price AS "salePrice",
+      p.active,
+      p.created_at AS "createdAt",
+      p.current_stock AS "currentStock"
+    FROM parts p
+    WHERE p.active = true AND p.current_stock < p.min_stock
+    ORDER BY p.part_number
+  `);
+  return res.rows || [];
 }
 
 export async function getPartInventoryHistory(
