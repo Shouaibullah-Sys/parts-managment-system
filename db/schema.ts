@@ -15,7 +15,7 @@ export const role = pgEnum("role", ["staff", "admin"]);
 
 export type Role = (typeof role.enumValues)[number];
 
-// Extended user table with role
+// Extended user table with role and notification settings
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
@@ -28,6 +28,13 @@ export const user = pgTable("user", {
   approved: boolean("approved")
     .$defaultFn(() => false)
     .notNull(),
+  phone: varchar("phone", { length: 20 }),
+  smsNotifications: boolean("sms_notifications")
+    .$defaultFn(() => false)
+    .notNull(),
+  pushNotifications: boolean("push_notifications")
+    .$defaultFn(() => true)
+    .notNull(),
   createdAt: timestamp("created_at")
     .$defaultFn(() => new Date())
     .notNull(),
@@ -37,6 +44,20 @@ export const user = pgTable("user", {
 });
 
 export type User = typeof user.$inferSelect;
+
+// Push subscriptions table for web push notifications
+export const pushSubscriptions = pgTable("push_subscriptions", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  endpoint: text("endpoint").notNull(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  createdAt: timestamp("created_at")
+    .$defaultFn(() => new Date())
+    .notNull(),
+});
 
 export const session = pgTable("session", {
   id: text("id").primaryKey(),
@@ -182,6 +203,7 @@ export const verification = pgTable("verification", {
 
 export const schema = {
   user,
+  pushSubscriptions,
   session,
   account,
   verification,

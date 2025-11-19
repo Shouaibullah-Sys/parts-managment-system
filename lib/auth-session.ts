@@ -1,6 +1,6 @@
 // lib/auth-session.ts
 import type { NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
+import { auth } from "./auth";
 
 /**
  * Use request.headers (the Request instance) rather than next/headers() which

@@ -43,6 +43,13 @@
       "when": 1763324318118,
       "tag": "0005_groovy_moira_mactaggert",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1732013253000,
+      "tag": "0006_add_phone_and_notification_fields",
+      "breakpoints": true
     }
   ]
 }
