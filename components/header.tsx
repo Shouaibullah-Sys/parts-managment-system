@@ -168,19 +168,8 @@ const getNavigationConfig = (
     ];
   }
 
-  // Staff role - comprehensive for both desktop and mobile
+  // Staff role - only the 3 specific menu items as requested
   return [
-    {
-      title: "دشبورد",
-      items: [
-        {
-          name: "دشبورد کارمند",
-          href: "/dashboard/staff",
-          icon: BarChart3,
-          description: "دشبورد کارمند و نمای کلی",
-        },
-      ],
-    },
     {
       title: "موجودی",
       items: commonItems,
@@ -382,7 +371,10 @@ export function Header() {
                 <span className="font-bold text-lg leading-none block md:hidden lg:hidden">
                   سیستم قطعات
                 </span>
-                <span className="text-sm text-muted-foreground block md:hidden lg:hidden">
+                <span className="text-xs text-muted-foreground block md:hidden lg:hidden">
+                  {userRole === "admin" ? "دشبورد ادمین" : "دشبورد کارمند"}
+                </span>
+                <span className="text-xs text-muted-foreground block md:hidden lg:hidden">
                   سیستم موجودی
                 </span>
               </div>
@@ -463,7 +455,7 @@ export function Header() {
                   <div className="flex flex-col">
                     <span className="font-bold text-md">سیستم قطعات</span>
                     <span className="text-xs text-muted-foreground">
-                      حالت {userRole === "admin" ? "ادمین" : "کارمند"}
+                      {userRole === "admin" ? "دشبورد ادمین" : "دشبورد کارمند"}
                     </span>
                   </div>
                 </div>
