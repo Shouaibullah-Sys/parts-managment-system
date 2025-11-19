@@ -62,7 +62,7 @@ export function PartDetails({ partId }: PartDetailsProps) {
         <Card>
           <CardContent className="pt-6">
             <div className="text-center text-red-600">
-              Part not found or error loading part details.
+              قطعه یافت نشد یا خطا در بارگذاری جزئیات قطعه.
             </div>
           </CardContent>
         </Card>
@@ -82,15 +82,13 @@ export function PartDetails({ partId }: PartDetailsProps) {
         </Link>
         <div className="flex-1">
           <h1 className="text-3xl font-bold tracking-tight">{part.name}</h1>
-          <p className="text-muted-foreground">
-            Part Number: {part.partNumber}
-          </p>
+          <p className="text-muted-foreground">شماره قطعه: {part.partNumber}</p>
         </div>
         {isAdmin && (
           <Link href={`/parts/${part.id}/edit`}>
             <Button>
               <Edit className="mr-2 h-4 w-4" />
-              Edit Part
+              ویرایش قطعه
             </Button>
           </Link>
         )}
@@ -103,20 +101,20 @@ export function PartDetails({ partId }: PartDetailsProps) {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Package className="h-5 w-5" />
-                Part Information
+                اطلاعات قطعه
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">
-                    Part Number
+                    شماره قطعه
                   </label>
                   <p className="font-mono">{part.partNumber}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">
-                    Section
+                    بخش
                   </label>
                   <div>
                     <Badge variant="outline">{part.section}</Badge>
@@ -124,17 +122,17 @@ export function PartDetails({ partId }: PartDetailsProps) {
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">
-                    Minimum Stock
+                    حداقل موجودی
                   </label>
                   <p>{part.minStock}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">
-                    Status
+                    وضعیت
                   </label>
                   <div>
                     <Badge variant={part.active ? "default" : "secondary"}>
-                      {part.active ? "Active" : "Inactive"}
+                      {part.active ? "فعال" : "غیرفعال"}
                     </Badge>
                   </div>
                 </div>
@@ -147,28 +145,28 @@ export function PartDetails({ partId }: PartDetailsProps) {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <DollarSign className="h-5 w-5" />
-                Pricing
+                قیمت‌گذاری
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">
-                    Cost Price
+                    قیمت خرید
                   </label>
                   <p className="text-lg font-mono">
                     {part.costPrice
-                      ? `$${parseFloat(part.costPrice).toFixed(2)}`
+                      ? `${parseFloat(part.costPrice).toFixed(2)}`
                       : "-"}
                   </p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">
-                    Sale Price
+                    قیمت فروش
                   </label>
                   <p className="text-lg font-mono">
                     {part.salePrice
-                      ? `$${parseFloat(part.salePrice).toFixed(2)}`
+                      ? `${parseFloat(part.salePrice).toFixed(2)}`
                       : "-"}
                   </p>
                 </div>
@@ -184,14 +182,14 @@ export function PartDetails({ partId }: PartDetailsProps) {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Box className="h-5 w-5" />
-                Stock Status
+                وضعیت موجودی
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-sm text-muted-foreground">
-                    Current Stock
+                    موجودی فعلی
                   </span>
                   <span className="font-mono font-bold">
                     {part.currentStock}
@@ -199,7 +197,7 @@ export function PartDetails({ partId }: PartDetailsProps) {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-muted-foreground">
-                    Minimum Stock
+                    حداقل موجودی
                   </span>
                   <span className="font-mono">{part.minStock}</span>
                 </div>
@@ -207,7 +205,7 @@ export function PartDetails({ partId }: PartDetailsProps) {
                   <div className="flex items-center gap-2 p-2 bg-yellow-50 border border-yellow-200 rounded">
                     <AlertTriangle className="h-4 w-4 text-yellow-600" />
                     <span className="text-sm text-yellow-700">
-                      Low stock alert
+                      هشدار موجودی کم
                     </span>
                   </div>
                 )}
@@ -218,8 +216,8 @@ export function PartDetails({ partId }: PartDetailsProps) {
           {/* Recent Activity */}
           <Card>
             <CardHeader>
-              <CardTitle>Recent Activity</CardTitle>
-              <CardDescription>Last 10 transactions</CardDescription>
+              <CardTitle>فعالیت‌های اخیر</CardTitle>
+              <CardDescription>آخرین ۱۰ تراکنش</CardDescription>
             </CardHeader>
             <CardContent>
               {part.recentTransactions && part.recentTransactions.length > 0 ? (
@@ -245,7 +243,7 @@ export function PartDetails({ partId }: PartDetailsProps) {
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  No recent activity
+                  فعالیت اخیری وجود ندارد
                 </p>
               )}
             </CardContent>

@@ -174,10 +174,10 @@ export function ExpenseForm({
       <Card>
         <CardHeader>
           <CardTitle className="text-xl">
-            {expense ? "Edit Expense" : "Add New Expense"}
+            {expense ? "ویرایش مصرف" : "افزودن مصرف جدید"}
           </CardTitle>
           <CardDescription>
-            {expense ? "Update expense details" : "Enter expense information"}
+            {expense ? "بروزرسانی جزئیات مصرف" : "وارد کردن اطلاعات مصرف"}
           </CardDescription>
         </CardHeader>
         <CardContent>

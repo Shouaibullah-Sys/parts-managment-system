@@ -1,7 +1,6 @@
 // app/dashboard/staff/page.tsx
 "use client";
 
-import Link from "next/link";
 import { Package, FileText, BarChart3, Plus, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,11 +10,10 @@ export default function StaffDashboard() {
     <div className="container mx-auto py-6">
       <div className="mb-8 text-center">
         <h1 className="text-4xl font-bold mb-3 bg-linear-to-r from-primary to-primary/80 bg-clip-text">
-          Staff Dashboard
+          دشبورد کارمند
         </h1>
         <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-          Manage parts inventory, track stock levels, and assist with daily
-          operations
+          مدیریت موجودی قطعات، پیگیری سطح موجودی و کمک به عملیات روزانه
         </p>
       </div>
 
@@ -27,18 +25,18 @@ export default function StaffDashboard() {
                 <div className="p-2 rounded-lg bg-primary/10">
                   <Package className="h-6 w-6 text-primary" />
                 </div>
-                Parts Management
+                مدیریت قطعات
               </CardTitle>
               <Button variant="outline" size="sm">
                 <Plus className="h-4 w-4 mr-2" />
-                View
+                مشاهده
               </Button>
             </div>
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground">
-              View and search parts inventory, check stock levels, and view part
-              details
+              مشاهده و جستجوی موجودی قطعات، بررسی سطح موجودی و مشاهده جزئیات
+              قطعات
             </p>
           </CardContent>
         </Card>
@@ -50,18 +48,17 @@ export default function StaffDashboard() {
                 <div className="p-2 rounded-lg bg-orange-100 dark:bg-orange-950">
                   <ShoppingCart className="h-6 w-6 text-orange-600 dark:text-orange-400" />
                 </div>
-                Issue Parts
+                صدور قطعات
               </CardTitle>
               <Button variant="outline" size="sm">
                 <Plus className="h-4 w-4 mr-2" />
-                View
+                مشاهده
               </Button>
             </div>
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground">
-              Search parts, create issue orders for customers, and generate
-              bills
+              جستجوی قطعات، ایجاد سفارشات صدور برای مشتریان و تولید صورتحساب
             </p>
           </CardContent>
         </Card>
@@ -73,17 +70,17 @@ export default function StaffDashboard() {
                 <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-950">
                   <FileText className="h-6 w-6 text-blue-600 dark:text-blue-400" />
                 </div>
-                Issue Records
+                سوابق صدور
               </CardTitle>
               <Button variant="outline" size="sm">
                 <Plus className="h-4 w-4 mr-2" />
-                View
+                مشاهده
               </Button>
             </div>
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground">
-              View all parts issue records and transaction history
+              مشاهده تمام سوابق صدور قطعات و تاریخچه تراکنش‌ها
             </p>
           </CardContent>
         </Card>
@@ -95,17 +92,17 @@ export default function StaffDashboard() {
                 <div className="p-2 rounded-lg bg-green-100 dark:bg-green-950">
                   <BarChart3 className="h-6 w-6 text-green-600 dark:text-green-400" />
                 </div>
-                Reports
+                گزارش‌ها
               </CardTitle>
               <Button variant="outline" size="sm">
                 <Plus className="h-4 w-4 mr-2" />
-                View
+                مشاهده
               </Button>
             </div>
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground">
-              Generate inventory reports, stock analysis, and sales summaries
+              تولید گزارش‌های موجودی، تحلیل موجودی و خلاصه فروش
             </p>
           </CardContent>
         </Card>

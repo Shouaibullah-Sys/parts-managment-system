@@ -96,10 +96,10 @@ export function CreatePartDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[525px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create New Part</DialogTitle>
+          <DialogTitle>ایجاد قطعه جدید</DialogTitle>
           <DialogDescription>
-            Add a new part to your inventory. All fields marked with * are
-            required.
+            یک قطعه جدید به موجودی خود اضافه کنید. تمام فیلدهای علامت‌گذاری شده
+            با * الزامی هستند.
           </DialogDescription>
         </DialogHeader>
 
@@ -118,7 +118,7 @@ export function CreatePartDialog({
                 name="partNumber"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Part Number *</FormLabel>
+                    <FormLabel>شماره قطعه *</FormLabel>
                     <FormControl>
                       <Input placeholder="ABC-123" {...field} />
                     </FormControl>
@@ -133,9 +133,9 @@ export function CreatePartDialog({
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Part Name *</FormLabel>
+                    <FormLabel>نام قطعه *</FormLabel>
                     <FormControl>
-                      <Input placeholder="Engine Oil Filter" {...field} />
+                      <Input placeholder="فیلتر روغن موتور" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -150,15 +150,15 @@ export function CreatePartDialog({
                 name="section"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Section *</FormLabel>
+                    <FormLabel>بخش *</FormLabel>
                     <FormControl>
                       <Input
-                        placeholder="E, D, F, G, OLD, or custom"
+                        placeholder="E, D, F, G, OLD, یا سفارشی"
                         {...field}
                       />
                     </FormControl>
                     <FormDescription>
-                      Category section for the part (any text value allowed)
+                      بخش دسته‌بندی برای قطعه (هر مقدار متنی مجاز است)
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -171,7 +171,7 @@ export function CreatePartDialog({
                 name="minStock"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Minimum Stock</FormLabel>
+                    <FormLabel>حداقل موجودی</FormLabel>
                     <FormControl>
                       <Input
                         type="number"
@@ -192,7 +192,7 @@ export function CreatePartDialog({
                 name="currentStock"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Current Stock</FormLabel>
+                    <FormLabel>موجودی فعلی</FormLabel>
                     <FormControl>
                       <Input
                         type="number"
@@ -203,7 +203,7 @@ export function CreatePartDialog({
                       />
                     </FormControl>
                     <FormDescription>
-                      Initial stock quantity for this part
+                      مقدار موجودی اولیه برای این قطعه
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -218,7 +218,7 @@ export function CreatePartDialog({
                 name="costPrice"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Cost Price</FormLabel>
+                    <FormLabel>قیمت خرید</FormLabel>
                     <FormControl>
                       <Input
                         type="number"
@@ -240,7 +240,7 @@ export function CreatePartDialog({
                 name="salePrice"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Sale Price</FormLabel>
+                    <FormLabel>قیمت فروش</FormLabel>
                     <FormControl>
                       <Input
                         type="number"
@@ -263,8 +263,7 @@ export function CreatePartDialog({
               parseFloat(salePrice) < parseFloat(costPrice) && (
                 <Alert variant="destructive">
                   <AlertDescription>
-                    Sale price is less than cost price. This will result in a
-                    loss.
+                    قیمت فروش کمتر از قیمت خرید است. این منجر به ضرر خواهد شد.
                   </AlertDescription>
                 </Alert>
               )}
@@ -276,9 +275,9 @@ export function CreatePartDialog({
               render={({ field }) => (
                 <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
                   <div className="space-y-0.5">
-                    <FormLabel className="text-base">Active</FormLabel>
+                    <FormLabel className="text-base">فعال</FormLabel>
                     <FormDescription>
-                      Inactive parts won't appear in sales and imports
+                      قطعات غیرفعال در فروش و واردات نمایش داده نمی‌شوند
                     </FormDescription>
                   </div>
                   <FormControl>
@@ -298,13 +297,13 @@ export function CreatePartDialog({
                 onClick={() => handleOpenChange(false)}
                 disabled={createPartMutation.isPending}
               >
-                Cancel
+                لغو
               </Button>
               <Button type="submit" disabled={createPartMutation.isPending}>
                 {createPartMutation.isPending && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
-                Create Part
+                ایجاد قطعه
               </Button>
             </DialogFooter>
           </form>

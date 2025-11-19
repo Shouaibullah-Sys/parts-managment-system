@@ -117,7 +117,7 @@ export function EditPartForm({ partId }: EditPartFormProps) {
     return (
       <div className="container max-w-2xl mx-auto py-6">
         <Alert variant="destructive">
-          <AlertDescription>Part not found</AlertDescription>
+          <AlertDescription>قطعه یافت نشد</AlertDescription>
         </Alert>
       </div>
     );
@@ -132,15 +132,15 @@ export function EditPartForm({ partId }: EditPartFormProps) {
           </Button>
         </Link>
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Edit Part</h1>
-          <p className="text-muted-foreground">Update part information</p>
+          <h1 className="text-3xl font-bold tracking-tight">ویرایش قطعه</h1>
+          <p className="text-muted-foreground">بروزرسانی اطلاعات قطعه</p>
         </div>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle>{part.partNumber}</CardTitle>
-          <CardDescription>Update the details for this part.</CardDescription>
+          <CardDescription>جزئیات این قطعه را بروزرسانی کنید.</CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>
@@ -157,7 +157,7 @@ export function EditPartForm({ partId }: EditPartFormProps) {
                   name="partNumber"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Part Number *</FormLabel>
+                      <FormLabel>شماره قطعه *</FormLabel>
                       <FormControl>
                         <Input placeholder="ABC-123" {...field} />
                       </FormControl>
@@ -171,9 +171,9 @@ export function EditPartForm({ partId }: EditPartFormProps) {
                   name="name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Part Name *</FormLabel>
+                      <FormLabel>نام قطعه *</FormLabel>
                       <FormControl>
-                        <Input placeholder="Engine Oil Filter" {...field} />
+                        <Input placeholder="فیلتر روغن موتور" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -187,15 +187,15 @@ export function EditPartForm({ partId }: EditPartFormProps) {
                   name="section"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Section *</FormLabel>
+                      <FormLabel>بخش *</FormLabel>
                       <FormControl>
                         <Input
-                          placeholder="E, D, F, G, OLD, or custom"
+                          placeholder="E, D, F, G, OLD, یا سفارشی"
                           {...field}
                         />
                       </FormControl>
                       <FormDescription>
-                        Category section for the part (any text value allowed)
+                        بخش دسته‌بندی برای قطعه (هر مقدار متنی مجاز است)
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -207,7 +207,7 @@ export function EditPartForm({ partId }: EditPartFormProps) {
                   name="minStock"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Minimum Stock</FormLabel>
+                      <FormLabel>حداقل موجودی</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
@@ -228,7 +228,7 @@ export function EditPartForm({ partId }: EditPartFormProps) {
                   name="currentStock"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Current Stock</FormLabel>
+                      <FormLabel>موجودی فعلی</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
@@ -238,9 +238,7 @@ export function EditPartForm({ partId }: EditPartFormProps) {
                           value={field.value as number}
                         />
                       </FormControl>
-                      <FormDescription>
-                        Current available quantity
-                      </FormDescription>
+                      <FormDescription>مقدار موجود فعلی</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -253,7 +251,7 @@ export function EditPartForm({ partId }: EditPartFormProps) {
                   name="costPrice"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Cost Price</FormLabel>
+                      <FormLabel>قیمت خرید</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
@@ -273,7 +271,7 @@ export function EditPartForm({ partId }: EditPartFormProps) {
                   name="salePrice"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Sale Price</FormLabel>
+                      <FormLabel>قیمت فروش</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
@@ -294,8 +292,7 @@ export function EditPartForm({ partId }: EditPartFormProps) {
                 parseFloat(salePrice) < parseFloat(costPrice) && (
                   <Alert variant="destructive">
                     <AlertDescription>
-                      Sale price is less than cost price. This will result in a
-                      loss.
+                      قیمت فروش کمتر از قیمت خرید است. این منجر به ضرر خواهد شد.
                     </AlertDescription>
                   </Alert>
                 )}
@@ -306,9 +303,9 @@ export function EditPartForm({ partId }: EditPartFormProps) {
                 render={({ field }) => (
                   <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
                     <div className="space-y-0.5">
-                      <FormLabel className="text-base">Active</FormLabel>
+                      <FormLabel className="text-base">فعال</FormLabel>
                       <FormDescription>
-                        Inactive parts won't appear in sales and imports
+                        قطعات غیرفعال در فروش و واردات نمایش داده نمی‌شوند
                       </FormDescription>
                     </div>
                     <FormControl>
@@ -328,13 +325,13 @@ export function EditPartForm({ partId }: EditPartFormProps) {
                   onClick={() => router.push("/parts")}
                   disabled={updatePartMutation.isPending}
                 >
-                  Cancel
+                  لغو
                 </Button>
                 <Button type="submit" disabled={updatePartMutation.isPending}>
                   {updatePartMutation.isPending && (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   )}
-                  Update Part
+                  بروزرسانی قطعه
                 </Button>
               </div>
             </form>
