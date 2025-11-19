@@ -31,7 +31,10 @@ import {
   Info,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import Loader from "@/components/loader";
+import { authClient } from "@/lib/auth-client";
 import {
   exportToExcel,
   importFromExcel,
@@ -126,7 +129,49 @@ export default function PriorityActionsPage() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [updatingParts, setUpdatingParts] = useState<Set<number>>(new Set());
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
+
+  // Authentication and role check
+  useEffect(() => {
+    const checkAdminAccess = async () => {
+      try {
+        const session = await authClient.getSession();
+
+        if (!session?.data?.user) {
+          router.push("/login");
+          return;
+        }
+
+        // Check if user is approved
+        const approvalResponse = await fetch("/api/user/approval-status");
+        if (approvalResponse.ok) {
+          const { approved, role } = await approvalResponse.json();
+
+          if (!approved) {
+            await authClient.signOut();
+            router.push("/login");
+            return;
+          }
+
+          // Check admin role
+          if (role !== "admin") {
+            setAuthError("دسترسی ممنوع. امتیازات مدیریت مورد نیاز است.");
+            return;
+          }
+        }
+
+        setAuthLoading(false);
+      } catch (error) {
+        console.error("Error checking admin access:", error);
+        router.push("/login");
+      }
+    };
+
+    checkAdminAccess();
+  }, [router]);
 
   const {
     data,
@@ -513,16 +558,48 @@ export default function PriorityActionsPage() {
     return groups;
   }, [parts]);
 
+  // Show authentication loading
+  if (authLoading) {
+    return (
+      <div className="container mx-auto py-6 px-4 sm:px-6">
+        <div className="flex items-center justify-center min-h-96">
+          <Loader
+            title="در حال بررسی دسترسی..."
+            subtitle="لطفاً منتظر بمانید"
+            size="md"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Show authentication error
+  if (authError) {
+    return (
+      <div className="container mx-auto py-6 px-4 sm:px-6">
+        <div className="text-center py-8">
+          <AlertTriangle className="h-12 w-12 text-destructive mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-destructive mb-2">
+            دسترسی ممنوع
+          </h2>
+          <p className="text-muted-foreground mb-4">{authError}</p>
+          <Button onClick={() => router.push("/dashboard/staff")}>
+            بازگشت به داشبورد کارمند
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="container mx-auto py-6 px-4 sm:px-6">
         <div className="flex items-center justify-center min-h-96">
-          <div className="text-center">
-            <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
-            <p className="text-muted-foreground">
-              در حال بارگذاری اقدامات اولویت‌دار...
-            </p>
-          </div>
+          <Loader
+            title="در حال بارگذاری اقدامات اولویت‌دار..."
+            subtitle="لطفاً منتظر بمانید"
+            size="md"
+          />
         </div>
       </div>
     );
@@ -562,12 +639,6 @@ export default function PriorityActionsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-4">
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/dashboard/admin">
-              <ArrowLeft className="h-4 w-4 ml-1" />
-              بازگشت به داشبورد
-            </Link>
-          </Button>
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight bg-linear-to-r from-primary to-primary/80 bg-clip-text text-transparent">
               اقدامات اولویت‌دار

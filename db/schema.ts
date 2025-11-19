@@ -1,3 +1,5 @@
+// db/schema.ts
+
 import {
   boolean,
   pgEnum,
@@ -192,6 +194,21 @@ export const searchIndex = pgTable("search_index", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// --- جدول هزینه‌های روزانه ---
+export const expenses = pgTable("expenses", {
+  id: serial("id").primaryKey(),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+  category: varchar("category", { length: 100 }).notNull(),
+  expenseDate: timestamp("expense_date").defaultNow(),
+  receiptNumber: varchar("receipt_number", { length: 100 }),
+  vendor: varchar("vendor", { length: 255 }),
+  createdBy: text("created_by").references(() => user.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const verification = pgTable("verification", {
   id: text("id").primaryKey(),
   identifier: text("identifier").notNull(),
@@ -215,4 +232,5 @@ export const schema = {
   importItems,
   inventory,
   searchIndex,
+  expenses,
 };

@@ -82,16 +82,16 @@ export default function Home() {
           {/* Main Heading in Dari */}
           <h1
             ref={headingRef}
-            className="text-5xl font-extrabold tracking-tight text-[#8B0000]"
+            className="text-5xl font-extrabold tracking-tight text-[#a00000]"
             dir="rtl"
           >
-            سیستم مدیریت قطعات یدکی بنز
+            سیستم مدیریت قطعات بنز
           </h1>
 
           {/* Description */}
           <p
             ref={textRef}
-            className="text-lg max-w-2xl text-gray-800 dark:text-gray-200 leading-relaxed"
+            className="text-lg max-w-2xl text-gray-300 dark:text-gray-200 leading-relaxed"
             dir="rtl"
           >
             یک سیستم جامع، مدرن و پیشرفته برای مدیریت موجودی، ردیابی سفارش‌ها،
@@ -108,7 +108,7 @@ export default function Home() {
               </Button>
             </Link>
             <Link href="/signup">
-              <Button className="bg-gray-700 dark:bg-gray-300 dark:text-black text-white hover:bg-gray-800 px-8 py-3 text-lg">
+              <Button className="bg-gray-300 dark:bg-gray-300 dark:text-black text-[#ad0000] hover:bg-gray-100 px-8 py-3 text-lg">
                 ثبت‌نام
               </Button>
             </Link>

@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { SmartSearchEngine } from "./smart-search-engine";
 import { CustomerSelector } from "./customer-selector";
+import Loader from "@/components/loader";
 
 // Define interfaces
 interface Customer {
@@ -825,9 +826,12 @@ export function IssueRecordsTable() {
           )}
 
           {isLoading ? (
-            <div className="text-center py-8 flex items-center justify-center gap-2 text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              در حال بارگذاری سوابق...
+            <div className="flex items-center justify-center py-8">
+              <Loader
+                title="در حال بارگذاری سوابق..."
+                subtitle="لطفاً منتظر بمانید"
+                size="sm"
+              />
             </div>
           ) : filteredRecords.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">

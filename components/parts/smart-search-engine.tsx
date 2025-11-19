@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Search, Zap, Clock, Sparkles, AlertTriangle } from "lucide-react";
+import Loader from "@/components/loader";
 
 interface Part {
   id: number;
@@ -369,11 +370,12 @@ export function SmartSearchEngine({ onPartSelect }: SmartSearchEngineProps) {
 
         {/* Search Results */}
         {isLoading ? (
-          <div className="text-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-            <p className="text-sm text-muted-foreground mt-2">
-              در حال جستجوی هوشمند...
-            </p>
+          <div className="flex items-center justify-center py-8">
+            <Loader
+              title="در حال جستجوی هوشمند..."
+              subtitle="لطفاً منتظر بمانید"
+              size="sm"
+            />
           </div>
         ) : results.length > 0 ? (
           <div className="border rounded-lg max-h-96 overflow-y-auto">

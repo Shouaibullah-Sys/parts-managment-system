@@ -86,6 +86,9 @@ importers:
       drizzle-orm:
         specifier: ^0.44.7
         version: 0.44.7(@neondatabase/serverless@1.0.2)(@types/pg@8.15.6)(kysely@0.28.8)
+      framer-motion:
+        specifier: ^12.23.24
+        version: 12.23.24(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       fuse.js:
         specifier: ^7.1.0
         version: 7.1.0

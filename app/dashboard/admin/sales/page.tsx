@@ -58,6 +58,7 @@ import {
   ChevronsRight,
   Filter,
 } from "lucide-react";
+import Loader from "@/components/loader";
 
 interface SaleRecord {
   id: number;
@@ -959,9 +960,12 @@ export default function AdminSalesPage() {
         </CardHeader>
         <CardContent className="p-4">
           {isLoading ? (
-            <div className="text-center py-8 flex items-center justify-center gap-2 text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              در حال بارگذاری سوابق...
+            <div className="flex items-center justify-center py-8">
+              <Loader
+                title="در حال بارگذاری سوابق..."
+                subtitle="لطفاً منتظر بمانید"
+                size="sm"
+              />
             </div>
           ) : customerSummaryArray.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
@@ -1097,9 +1101,12 @@ export default function AdminSalesPage() {
           )}
 
           {isLoading || isFetching ? (
-            <div className="text-center py-8 flex items-center justify-center gap-2 text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              در حال بارگذاری سوابق...
+            <div className="flex items-center justify-center py-8">
+              <Loader
+                title="در حال بارگذاری سوابق..."
+                subtitle="لطفاً منتظر بمانید"
+                size="sm"
+              />
             </div>
           ) : !salesData?.data || salesData.data.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">

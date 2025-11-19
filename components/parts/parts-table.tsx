@@ -58,6 +58,7 @@ import { useParts, useDeletePart } from "@/hooks/use-parts";
 import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { EditPartDialog } from "./edit-part-dialog";
+import Loader from "@/components/loader";
 
 export function PartsTable() {
   const router = useRouter();
@@ -674,12 +675,13 @@ export function PartsTable() {
               <TableRow>
                 <TableCell
                   colSpan={columns.length}
-                  className="h-24 text-center"
+                  className="h-32 text-center"
                 >
-                  <div className="flex items-center justify-center gap-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                    در حال بارگیری پرزه...
-                  </div>
+                  <Loader
+                    title="در حال بارگیری قطعات..."
+                    subtitle="لطفاً منتظر بمانید"
+                    size="sm"
+                  />
                 </TableCell>
               </TableRow>
             ) : table.getRowModel().rows?.length ? (

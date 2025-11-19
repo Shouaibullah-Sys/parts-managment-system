@@ -2,14 +2,14 @@
 export const runtime = "nodejs";
 
 import { NextRequest } from "next/server";
-import { requireAuth } from "../../../../lib/auth-session";
+import { requireAuth } from "@/lib/auth-session";
 import {
   checkLowStockNotifications,
   getAdminUsers,
   getNotificationPriority,
-} from "../../../../lib/notifications";
-import { db } from "../../../../db/drizzle";
-import { user } from "../../../../db/schema";
+} from "@/lib/notifications";
+import { db } from "@/db/drizzle";
+import { user } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
 export async function GET(request: NextRequest) {

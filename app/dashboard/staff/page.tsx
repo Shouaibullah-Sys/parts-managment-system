@@ -20,81 +20,75 @@ export default function StaffDashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-        <Card className="hover:shadow-lg transition-shadow cursor-pointer border-mechanical">
-          <Link href="/parts/manage">
-            <CardHeader className="pb-4">
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-primary/10">
-                    <Package className="h-6 w-6 text-primary" />
-                  </div>
-                  Parts Management
-                </CardTitle>
-                <Button variant="outline" size="sm">
-                  <Plus className="h-4 w-4 mr-2" />
-                  View
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">
-                View and search parts inventory, check stock levels, and view
-                part details
-              </p>
-            </CardContent>
-          </Link>
+        <Card className="hover:shadow-lg transition-shadow border-mechanical">
+          <CardHeader className="pb-4">
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <Package className="h-6 w-6 text-primary" />
+                </div>
+                Parts Management
+              </CardTitle>
+              <Button variant="outline" size="sm">
+                <Plus className="h-4 w-4 mr-2" />
+                View
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground">
+              View and search parts inventory, check stock levels, and view part
+              details
+            </p>
+          </CardContent>
         </Card>
 
-        <Card className="hover:shadow-lg transition-shadow cursor-pointer border-mechanical">
-          <Link href="/issue-parts">
-            <CardHeader className="pb-4">
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-orange-100 dark:bg-orange-950">
-                    <ShoppingCart className="h-6 w-6 text-orange-600 dark:text-orange-400" />
-                  </div>
-                  Issue Parts
-                </CardTitle>
-                <Button variant="outline" size="sm">
-                  <Plus className="h-4 w-4 mr-2" />
-                  View
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">
-                Search parts, create issue orders for customers, and generate
-                bills
-              </p>
-            </CardContent>
-          </Link>
+        <Card className="hover:shadow-lg transition-shadow border-mechanical">
+          <CardHeader className="pb-4">
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-orange-100 dark:bg-orange-950">
+                  <ShoppingCart className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+                </div>
+                Issue Parts
+              </CardTitle>
+              <Button variant="outline" size="sm">
+                <Plus className="h-4 w-4 mr-2" />
+                View
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground">
+              Search parts, create issue orders for customers, and generate
+              bills
+            </p>
+          </CardContent>
         </Card>
 
-        <Card className="hover:shadow-lg transition-shadow cursor-pointer border-mechanical">
-          <Link href="/issue-records">
-            <CardHeader className="pb-4">
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-950">
-                    <FileText className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                  </div>
-                  Issue Records
-                </CardTitle>
-                <Button variant="outline" size="sm">
-                  <Plus className="h-4 w-4 mr-2" />
-                  View
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">
-                View all parts issue records and transaction history
-              </p>
-            </CardContent>
-          </Link>
+        <Card className="hover:shadow-lg transition-shadow border-mechanical">
+          <CardHeader className="pb-4">
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-950">
+                  <FileText className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                </div>
+                Issue Records
+              </CardTitle>
+              <Button variant="outline" size="sm">
+                <Plus className="h-4 w-4 mr-2" />
+                View
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground">
+              View all parts issue records and transaction history
+            </p>
+          </CardContent>
         </Card>
 
-        <Card className="hover:shadow-lg transition-shadow cursor-pointer border-mechanical">
+        <Card className="hover:shadow-lg transition-shadow border-mechanical">
           <CardHeader className="pb-4">
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-3">
@@ -116,41 +110,6 @@ export default function StaffDashboard() {
           </CardContent>
         </Card>
       </div>
-
-      {/* Quick Actions */}
-      <Card className="border-mechanical">
-        <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-4">
-            <Link href="/parts/manage">
-              <Button
-                variant="outline"
-                className="border-primary text-primary hover:bg-primary hover:text-primary-foreground"
-              >
-                <Package className="h-4 w-4 mr-2" />
-                Browse Parts
-              </Button>
-            </Link>
-            <Link href="/issue-parts">
-              <Button
-                variant="outline"
-                className="border-orange-600 text-orange-600 hover:bg-orange-50"
-              >
-                <ShoppingCart className="h-4 w-4 mr-2" />
-                Issue Parts
-              </Button>
-            </Link>
-            <Link href="/issue-records">
-              <Button variant="outline">
-                <FileText className="h-4 w-4 mr-2" />
-                View Records
-              </Button>
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }

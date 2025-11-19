@@ -21,6 +21,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import Link from "next/link";
+import Loader from "@/components/loader";
 
 interface LowStockNotification {
   id: number;
@@ -182,9 +183,11 @@ export function LowStockNotifications() {
         <ScrollArea className="h-80">
           {isLoading ? (
             <div className="flex items-center justify-center p-8">
-              <div className="text-center text-muted-foreground">
-                در حال بارگذاری...
-              </div>
+              <Loader
+                title="در حال بارگذاری هشدارها..."
+                subtitle="لطفاً منتظر بمانید"
+                size="sm"
+              />
             </div>
           ) : totalNotifications === 0 ? (
             <div className="flex flex-col items-center justify-center p-8 text-center">

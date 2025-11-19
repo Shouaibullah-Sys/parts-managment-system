@@ -1,5 +1,5 @@
 // app/layout.tsx
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
@@ -90,12 +90,6 @@ export const metadata: Metadata = {
   manifest: "/site.webmanifest",
   category: "business",
   classification: "Inventory Management, Parts Tracking, Business Management",
-  viewport: "width=device-width, initial-scale=1",
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
-  ],
-  colorScheme: "light dark",
   verification: {
     google: "google-site-verification-code", // Replace with actual code
   },
@@ -105,6 +99,16 @@ export const metadata: Metadata = {
     "apple-mobile-web-app-status-bar-style": "default",
     "msapplication-TileColor": "#000000",
   },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
+  ],
+  colorScheme: "light dark",
 };
 
 export default function RootLayout({
