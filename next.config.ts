@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /* config options here */
+  turbopack: {}, // Empty turbopack config to fix worker errors
+
   webpack: (config, { isServer }) => {
     if (!isServer) {
       // Exclude Node.js modules that might try to access stdout/stderr in browser
