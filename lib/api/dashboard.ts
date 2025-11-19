@@ -199,9 +199,9 @@ export const fetchLowStockItems = async (): Promise<LowStockItem[]> => {
         COALESCE(SUM(i.change), 0) as current_stock
       FROM parts p
       LEFT JOIN inventory_transactions i ON p.id = i.part_id
-      WHERE COALESCE(SUM(i.change), 0) < p.min_stock
-        AND p.active != false
+      WHERE p.active != false
       GROUP BY p.id, p.part_number, p.name, p.min_stock, p.section, p.cost_price, p.sale_price
+      HAVING COALESCE(SUM(i.change), 0) < p.min_stock
       ORDER BY current_stock ASC
       LIMIT 100
     `);
