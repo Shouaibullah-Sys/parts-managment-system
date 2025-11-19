@@ -74,12 +74,28 @@ export const fetchDashboardStats = async (
         params.append("to", dateRange.to.toISOString());
       }
 
-      const response = await fetch(`/api/dashboard/stats?${params.toString()}`);
+      const response = await fetch(
+        `/api/dashboard/stats?${params.toString()}`,
+        {
+          // Add caching headers to prevent excessive requests
+          cache: "no-cache",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
       if (!response.ok) throw new Error("Failed to fetch dashboard stats");
       return await response.json();
     }
 
     // If we're on the server, use direct database queries
+    // Note: This should only run in server-side contexts
+    if (typeof window !== "undefined") {
+      throw new Error(
+        "Dashboard stats should be fetched via API routes on client side"
+      );
+    }
+
     const today = startOfToday();
     const monthStart = startOfMonth(new Date());
 

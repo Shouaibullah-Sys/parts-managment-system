@@ -77,6 +77,10 @@ function getStartOfMonth(date: Date): Date {
 
 export async function GET(req: Request) {
   try {
+    // Log only in non-browser environments to prevent stdout errors
+    if (typeof window === "undefined") {
+      console.log("Expense reports API called");
+    }
     const { searchParams } = new URL(req.url);
     const from = searchParams.get("from");
     const to = searchParams.get("to");

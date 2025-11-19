@@ -7,15 +7,20 @@ import { subDays, format } from "date-fns";
 
 export async function GET(request: Request) {
   try {
-    console.log("=== SALES TREND API CALLED ===");
-    console.log("URL:", request.url);
-    console.log("Headers:", Object.fromEntries(request.headers.entries()));
+    // Only log in non-browser environments
+    if (typeof window === "undefined") {
+      console.log("=== SALES TREND API CALLED ===");
+      console.log("URL:", request.url);
+      console.log("Headers:", Object.fromEntries(request.headers.entries()));
+    }
     const { searchParams } = new URL(request.url);
     const from = searchParams.get("from");
     const to = searchParams.get("to");
 
-    console.log("From:", from);
-    console.log("To:", to);
+    if (typeof window === "undefined") {
+      console.log("From:", from);
+      console.log("To:", to);
+    }
 
     // Build the query with proper date filtering
     let query = sql`
