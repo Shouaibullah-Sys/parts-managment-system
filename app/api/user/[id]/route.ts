@@ -24,9 +24,11 @@ export async function GET(
     }
 
     // Only allow users to fetch their own data or admins to fetch any user data
-    const currentUser = await db.query.user.findFirst({
-      where: eq(user.id, session.user.id),
-    });
+    const [currentUser] = await db
+      .select({ role: user.role })
+      .from(user)
+      .where(eq(user.id, session.user.id))
+      .limit(1);
 
     if (!currentUser) {
       return NextResponse.json(
@@ -44,9 +46,11 @@ export async function GET(
     }
 
     // Fetch the requested user
-    const requestedUser = await db.query.user.findFirst({
-      where: eq(user.id, id),
-    });
+    const [requestedUser] = await db
+      .select()
+      .from(user)
+      .where(eq(user.id, id))
+      .limit(1);
 
     if (!requestedUser) {
       return NextResponse.json(

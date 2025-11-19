@@ -16,9 +16,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user is admin
-    const currentUser = await db.query.user.findFirst({
-      where: eq(user.id, session.user.id),
-    });
+    const [currentUser] = await db
+      .select({ role: user.role })
+      .from(user)
+      .where(eq(user.id, session.user.id))
+      .limit(1);
 
     if (!currentUser || currentUser.role !== "admin") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });

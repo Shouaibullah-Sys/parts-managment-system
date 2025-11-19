@@ -5,15 +5,20 @@ import * as webpush from "web-push";
 // npx web-push generate-vapid-keys
 
 const vapidKeys = {
-  publicKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-  privateKey: process.env.VAPID_PRIVATE_KEY!,
+  publicKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+  privateKey: process.env.VAPID_PRIVATE_KEY,
 };
 
-webpush.setVapidDetails(
-  "mailto:abdulsaboor.saboor2024@gmail.com",
-  vapidKeys.publicKey,
-  vapidKeys.privateKey
-);
+// Only set VAPID details if both keys are available
+if (vapidKeys.publicKey && vapidKeys.privateKey) {
+  webpush.setVapidDetails(
+    "mailto:abdulsaboor.saboor2024@gmail.com",
+    vapidKeys.publicKey,
+    vapidKeys.privateKey
+  );
+} else {
+  console.warn("VAPID keys not found. Push notifications will be disabled.");
+}
 
 export interface PushSubscription {
   endpoint: string;
@@ -30,6 +35,12 @@ export async function sendPushNotification(
   data?: any
 ) {
   try {
+    // Check if VAPID keys are configured
+    if (!vapidKeys.publicKey || !vapidKeys.privateKey) {
+      console.warn("Push notifications disabled: VAPID keys not configured");
+      return false;
+    }
+
     const payload = JSON.stringify({
       title,
       body,
@@ -79,6 +90,12 @@ export async function sendBulkPushNotifications(
   body: string,
   data?: any
 ) {
+  // Check if VAPID keys are configured
+  if (!vapidKeys.publicKey || !vapidKeys.privateKey) {
+    console.warn("Push notifications disabled: VAPID keys not configured");
+    return { successful: 0, failed: 0, disabled: true };
+  }
+
   const results = await Promise.allSettled(
     subscriptions.map((sub) => sendPushNotification(sub, title, body, data))
   );
@@ -89,7 +106,7 @@ export async function sendBulkPushNotifications(
   const failed = results.length - successful;
 
   console.log(`Push notifications: ${successful} successful, ${failed} failed`);
-  return { successful, failed };
+  return { successful, failed, disabled: false };
 }
 
 // Helper function to delete invalid subscriptions

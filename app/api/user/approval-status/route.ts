@@ -16,13 +16,11 @@ export async function GET(request: NextRequest) {
     }
 
     // Check user approval status
-    const currentUser = await db.query.user.findFirst({
-      where: eq(user.id, session.user.id),
-      columns: {
-        approved: true,
-        role: true,
-      },
-    });
+    const [currentUser] = await db
+      .select({ approved: user.approved, role: user.role })
+      .from(user)
+      .where(eq(user.id, session.user.id))
+      .limit(1);
 
     if (!currentUser) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });

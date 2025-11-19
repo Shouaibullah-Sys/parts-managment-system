@@ -7,20 +7,11 @@ import { schema } from "./schema";
 config({ path: ".env" }); // or .env.local
 
 // Create a more robust connection with error handling
-let db: ReturnType<typeof drizzle>;
+const sql = neon(process.env.DATABASE_URL!);
 
-try {
-  const sql = neon(process.env.DATABASE_URL!);
+const db = drizzle(sql, { schema });
 
-  db = drizzle(sql, { schema });
-
-  console.log("Database connection initialized successfully");
-} catch (error) {
-  console.error("Failed to initialize database connection:", error);
-  throw new Error(
-    "Database connection failed. Please check your DATABASE_URL and network connectivity."
-  );
-}
+console.log("Database connection initialized successfully");
 
 export { db };
 export default db;

@@ -16,28 +16,30 @@ export async function GET(request: NextRequest) {
     }
 
     // Check if user is admin
-    const currentUser = await db.query.user.findFirst({
-      where: eq(user.id, session.user.id),
-    });
+    const [currentUser] = await db
+      .select({ role: user.role })
+      .from(user)
+      .where(eq(user.id, session.user.id))
+      .limit(1);
 
     if (!currentUser || currentUser.role !== "admin") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     // Get all users with their information
-    const users = await db.query.user.findMany({
-      orderBy: desc(user.createdAt),
-      columns: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        approved: true,
-        emailVerified: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+    const users = await db
+      .select({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        approved: user.approved,
+        emailVerified: user.emailVerified,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      })
+      .from(user)
+      .orderBy(desc(user.createdAt));
 
     return NextResponse.json({
       success: true,

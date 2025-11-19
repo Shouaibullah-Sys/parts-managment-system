@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db/drizzle";
-import { user } from "@/db/schema";
+import { schema } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
@@ -16,9 +16,11 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Check if user is admin
-    const currentUser = await db.query.user.findFirst({
-      where: eq(user.id, session.user.id),
-    });
+    const [currentUser] = await db
+      .select()
+      .from(schema.user)
+      .where(eq(schema.user.id, session.user.id))
+      .limit(1);
 
     if (!currentUser || currentUser.role !== "admin") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -43,12 +45,12 @@ export async function DELETE(request: NextRequest) {
 
     // Delete the user
     const deletedUser = await db
-      .delete(user)
-      .where(eq(user.id, userId))
+      .delete(schema.user)
+      .where(eq(schema.user.id, userId))
       .returning({
-        id: user.id,
-        name: user.name,
-        email: user.email,
+        id: schema.user.id,
+        name: schema.user.name,
+        email: schema.user.email,
       });
 
     if (!deletedUser.length) {

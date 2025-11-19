@@ -15,9 +15,11 @@ export default async function Dashboard() {
   }
 
   // Get current user to check role
-  const currentUser = await db.query.user.findFirst({
-    where: eq(user.id, session.user.id),
-  });
+  const [currentUser] = await db
+    .select()
+    .from(user)
+    .where(eq(user.id, session.user.id))
+    .limit(1);
 
   if (!currentUser) {
     redirect("/login");

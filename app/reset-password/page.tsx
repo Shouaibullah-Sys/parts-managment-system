@@ -1,9 +1,14 @@
 // app/reset-password/page.tsx
 "use client";
 
+import { Suspense } from "react";
 import Link from "next/link";
 import { ResetPasswordForm } from "@/components/forms/reset-password-form";
 import Image from "next/image";
+
+function ResetPasswordFormWrapper() {
+  return <ResetPasswordForm />;
+}
 
 export default function ResetPasswordPage() {
   return (
@@ -27,7 +32,9 @@ export default function ResetPasswordPage() {
             دیپلوماسی لیمتد
           </span>
         </Link>
-        <ResetPasswordForm />
+        <Suspense fallback={<div>در حال بارگیری...</div>}>
+          <ResetPasswordFormWrapper />
+        </Suspense>
       </div>
     </div>
   );
