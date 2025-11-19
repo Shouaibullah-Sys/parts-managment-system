@@ -2,9 +2,13 @@
 import { NextResponse } from "next/server";
 import { getCustomerBalance } from "@/lib/services/customer";
 
-export async function GET(req: Request, context: { params: { id: string } }) {
+export async function GET(
+  req: Request,
+  context: { params: Promise<{ id: string }> }
+) {
   try {
-    const id = Number(context.params.id);
+    const { id: customerId } = await context.params;
+    const id = Number(customerId);
     if (!id) return NextResponse.json({ error: "invalid id" }, { status: 400 });
 
     const balance = await getCustomerBalance(id);
