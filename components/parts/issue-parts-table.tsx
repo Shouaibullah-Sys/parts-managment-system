@@ -125,8 +125,11 @@ export function IssuePartsTable() {
       const result = await response.json();
 
       if (result.success) {
-        // Generate PDF after successful save
-        await generateAndDownloadPDF(result.data.customerId);
+        // Generate PDF after successful save with the sale IDs
+        await generateAndDownloadPDF(
+          result.data.customerId,
+          result.data.salesIds
+        );
 
         // Reset form
         setCart([]);
@@ -152,22 +155,31 @@ export function IssuePartsTable() {
     }
   };
 
-  const generateAndDownloadPDF = async (customerId: number) => {
+  const generateAndDownloadPDF = async (
+    customerId: number,
+    salesIds?: number[]
+  ) => {
     try {
-      const response = await fetch(`/api/issue-parts/${customerId}/pdf`);
+      // Build URL with sale IDs if provided
+      const url =
+        salesIds && salesIds.length > 0
+          ? `/api/issue-parts/${customerId}/pdf?saleIds=${salesIds.join(",")}`
+          : `/api/issue-parts/${customerId}/pdf`;
+
+      const response = await fetch(url);
       if (!response.ok) {
         throw new Error("Failed to generate PDF");
       }
 
       const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      const downloadUrl = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.style.display = "none";
-      a.href = url;
+      a.href = downloadUrl;
       a.download = `invoice-${customerId}.pdf`;
       document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(url);
+      window.URL.revokeObjectURL(downloadUrl);
       document.body.removeChild(a);
     } catch (error) {
       console.error("Error downloading PDF:", error);
@@ -285,8 +297,11 @@ export function IssuePartsTable() {
       const result = await response.json();
 
       if (result.success) {
-        // Generate PDF after successful save
-        await generateAndDownloadPDF(result.data.customerId);
+        // Generate PDF after successful save with the sale IDs
+        await generateAndDownloadPDF(
+          result.data.customerId,
+          result.data.salesIds
+        );
 
         // Reset form
         setCart([]);

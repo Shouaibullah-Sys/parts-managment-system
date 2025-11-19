@@ -218,6 +218,7 @@ export async function POST(request: NextRequest) {
       message: "سند با موفقیت ایجاد شد",
       issueId: customer.id,
       customerId: customer.id,
+      salesIds: salesRecords.map((s) => s.id), // Return array of sale IDs
       salesCount: salesRecords.length,
       totalAmount: totalAmount,
       action: "saved",

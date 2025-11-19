@@ -7,7 +7,7 @@ import { requireAuth } from "@/lib/auth-session";
 import { ok, bad, unauthorized, serverError } from "@/lib/api-response";
 import { db } from "@/db/drizzle";
 import { parts, customers, sales, user } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, desc, inArray } from "drizzle-orm";
 import { generateInvoicePDF, SaleItem } from "@/lib/pdf-generator";
 
 export async function GET(
@@ -19,22 +19,47 @@ export async function GET(
     if (!session?.user) return unauthorized();
 
     const { id } = await params;
-    const salesId = parseInt(id);
-    if (isNaN(salesId)) return bad("شناسه فروش معتبر نیست");
 
-    // Get sale data with all necessary joins in one query
-    const salesData = await db
-      .select({ sale: sales, part: parts, customer: customers, user: user })
-      .from(sales)
-      .where(eq(sales.id, salesId))
-      .leftJoin(parts, eq(sales.partId, parts.id))
-      .leftJoin(customers, eq(sales.customerId, customers.id))
-      .leftJoin(user, eq(sales.createdBy, user.id))
-      .limit(1);
+    // Check if we have sale IDs in query params (new approach)
+    const { searchParams } = new URL(request.url);
+    const saleIdsParam = searchParams.get("saleIds");
+
+    let salesData;
+
+    if (saleIdsParam) {
+      // New approach: fetch specific sales by IDs
+      const saleIds = saleIdsParam.split(",").map((id) => parseInt(id.trim()));
+
+      if (saleIds.some(isNaN)) {
+        return bad("شناسه‌های فروش معتبر نیستند");
+      }
+
+      salesData = await db
+        .select({ sale: sales, part: parts, customer: customers, user: user })
+        .from(sales)
+        .where(inArray(sales.id, saleIds))
+        .leftJoin(parts, eq(sales.partId, parts.id))
+        .leftJoin(customers, eq(sales.customerId, customers.id))
+        .leftJoin(user, eq(sales.createdBy, user.id))
+        .orderBy(sales.id);
+    } else {
+      // Fallback: treat id as customer ID and fetch latest sales
+      const customerId = parseInt(id);
+      if (isNaN(customerId)) return bad("شناسه مشتری معتبر نیست");
+
+      // Get all sales for this customer ordered by date (latest first)
+      salesData = await db
+        .select({ sale: sales, part: parts, customer: customers, user: user })
+        .from(sales)
+        .where(eq(sales.customerId, customerId))
+        .leftJoin(parts, eq(sales.partId, parts.id))
+        .leftJoin(customers, eq(sales.customerId, customers.id))
+        .leftJoin(user, eq(sales.createdBy, user.id))
+        .orderBy(desc(sales.saleDate));
+    }
 
     if (salesData.length === 0) return bad("فروش یافت نشد");
 
-    const sale = salesData[0].sale;
     const customer = salesData[0].customer;
     const userInfo = salesData[0].user;
 
@@ -46,39 +71,38 @@ export async function GET(
       address: customer.address ?? undefined,
     };
 
-    const invoiceSales: SaleItem[] = [
-      {
-        sale: {
-          quantity: sale.quantity,
-          totalAmount: sale.totalAmount,
-        },
-        part: salesData[0].part
-          ? {
-              id: salesData[0].part.id,
-              partNumber: salesData[0].part.partNumber,
-              name: salesData[0].part.name,
-              section: salesData[0].part.section ?? "E",
-              minStock: salesData[0].part.minStock ?? 0,
-              currentStock: salesData[0].part.currentStock ?? 0,
-              costPrice: salesData[0].part.costPrice,
-              salePrice: salesData[0].part.salePrice,
-              active: salesData[0].part.active ?? true,
-              createdAt: salesData[0].part.createdAt ?? new Date(),
-            }
-          : null,
-        user: userInfo
-          ? {
-              name: userInfo.name ?? "نامشخص",
-            }
-          : null,
+    // Map all sales items for this customer into the invoice
+    const invoiceSales: SaleItem[] = salesData.map((data) => ({
+      sale: {
+        quantity: data.sale.quantity,
+        totalAmount: data.sale.totalAmount,
       },
-    ];
+      part: data.part
+        ? {
+            id: data.part.id,
+            partNumber: data.part.partNumber,
+            name: data.part.name,
+            section: data.part.section ?? "E",
+            minStock: data.part.minStock ?? 0,
+            currentStock: data.part.currentStock ?? 0,
+            costPrice: data.part.costPrice,
+            salePrice: data.part.salePrice,
+            active: data.part.active ?? true,
+            createdAt: data.part.createdAt ?? new Date(),
+          }
+        : null,
+      user: userInfo
+        ? {
+            name: userInfo.name ?? "نامشخص",
+          }
+        : null,
+    }));
 
     const pdfBuffer = await generateInvoicePDF({
       customer: invoiceCustomer,
       sales: invoiceSales,
-      issueId: salesId,
-      createdAt: sale.saleDate ?? new Date(),
+      issueId: customer.id,
+      createdAt: salesData[0].sale.saleDate ?? new Date(),
       createdBy: userInfo?.name ?? "نامشخص",
     });
 
@@ -86,7 +110,7 @@ export async function GET(
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="invoice-${salesId}.pdf"`,
+        "Content-Disposition": `attachment; filename="invoice-${customer.id}.pdf"`,
       },
     });
   } catch (err) {
