@@ -5,6 +5,7 @@ import {
   fetchLowStockItems,
   fetchSalesTrend,
   fetchPaymentStatus,
+  fetchExpenseReports,
 } from "@/lib/api/dashboard";
 
 export default async function AdminDashboard() {
@@ -16,14 +17,14 @@ export default async function AdminDashboard() {
 
   try {
     // Fetch all data in parallel on the server
-    const [stats, lowStockItems, salesTrend, paymentStatus] = await Promise.all(
-      [
+    const [stats, lowStockItems, salesTrend, paymentStatus, expenseReports] =
+      await Promise.all([
         fetchDashboardStats(initialDateRange),
         fetchLowStockItems(),
         fetchSalesTrend(initialDateRange),
         fetchPaymentStatus(initialDateRange),
-      ]
-    );
+        fetchExpenseReports(initialDateRange),
+      ]);
 
     return (
       <DashboardClient
@@ -31,6 +32,7 @@ export default async function AdminDashboard() {
         initialLowStockItems={lowStockItems}
         initialSalesTrend={salesTrend}
         initialPaymentStatus={paymentStatus}
+        initialExpenseReports={expenseReports}
         initialDateRange={initialDateRange}
       />
     );

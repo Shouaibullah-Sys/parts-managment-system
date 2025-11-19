@@ -62,6 +62,7 @@ interface DashboardClientProps {
   initialLowStockItems: LowStockItem[];
   initialSalesTrend: SalesTrend[];
   initialPaymentStatus: PaymentStatus;
+  initialExpenseReports?: any;
   initialDateRange: DateRange;
 }
 
@@ -70,6 +71,7 @@ export function DashboardClient({
   initialLowStockItems,
   initialSalesTrend,
   initialPaymentStatus,
+  initialExpenseReports,
   initialDateRange,
 }: DashboardClientProps) {
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
@@ -129,6 +131,7 @@ export function DashboardClient({
   } = useQuery({
     queryKey: ["expense-reports", dateRange],
     queryFn: () => fetchExpenseReports(dateRange),
+    initialData: initialExpenseReports,
     refetchInterval: 30000,
   });
 
@@ -913,7 +916,7 @@ export function DashboardClient({
                   <div className="space-y-3">
                     {expenseReports.expenseByVendor
                       .slice(0, 5)
-                      .map((vendor, index) => (
+                      .map((vendor: any, index: number) => (
                         <div
                           key={index}
                           className="flex items-center justify-between"
