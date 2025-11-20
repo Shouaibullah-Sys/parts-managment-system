@@ -39,36 +39,77 @@ const LIGHT_GRAY: [number, number, number] = [240, 240, 240];
 const TEXT_COLOR: [number, number, number] = [50, 50, 50];
 
 // ----------------------
-// Load Persian font
+// Cache for static assets
 // ----------------------
-const loadFontBase64 = async (): Promise<string> => {
+let cachedFont: string | null = null;
+let cachedLogo: string | null = null;
+let cachedWatermark: string | null = null;
+let cacheInitialized = false;
+
+// ----------------------
+// Initialize cache (load all assets once)
+// ----------------------
+const initializeCache = async (): Promise<void> => {
+  if (cacheInitialized) return;
+
   try {
-    const fontPath = path.join(
-      process.cwd(),
-      "public",
-      "fonts",
-      "Vazirmatn-Regular.ttf"
-    );
-    const fontBuffer = await fs.readFile(fontPath);
-    return fontBuffer.toString("base64");
-  } catch {
-    console.warn("⚠️ Persian font not found, fallback to default.");
-    return "";
+    // Load font
+    try {
+      const fontPath = path.join(
+        process.cwd(),
+        "public",
+        "fonts",
+        "Vazirmatn-Regular.ttf"
+      );
+      const fontBuffer = await fs.readFile(fontPath);
+      cachedFont = fontBuffer.toString("base64");
+    } catch {
+      console.warn("⚠️ Persian font not found, fallback to default.");
+      cachedFont = "";
+    }
+
+    // Load logo
+    try {
+      const logoPath = path.join(process.cwd(), "public", "logo.png");
+      const logoBuffer = await fs.readFile(logoPath);
+      cachedLogo = `data:image/png;base64,${logoBuffer.toString("base64")}`;
+    } catch {
+      console.warn("⚠️ logo.png missing");
+      cachedLogo = "";
+    }
+
+    // Load watermark
+    try {
+      const watermarkPath = path.join(process.cwd(), "public", "watermark.png");
+      const watermarkBuffer = await fs.readFile(watermarkPath);
+      cachedWatermark = `data:image/png;base64,${watermarkBuffer.toString("base64")}`;
+    } catch {
+      console.warn("⚠️ watermark.png missing");
+      cachedWatermark = "";
+    }
+
+    cacheInitialized = true;
+    console.log("✅ PDF assets cached successfully");
+  } catch (error) {
+    console.error("Error initializing PDF cache:", error);
+    // Set empty values to prevent repeated failures
+    cachedFont = "";
+    cachedLogo = "";
+    cachedWatermark = "";
+    cacheInitialized = true;
   }
 };
 
 // ----------------------
-// Load logo and watermark
+// Get cached assets
 // ----------------------
-const loadImageBase64 = async (filename: string): Promise<string> => {
-  try {
-    const filePath = path.join(process.cwd(), "public", filename);
-    const buffer = await fs.readFile(filePath);
-    return `data:image/png;base64,${buffer.toString("base64")}`;
-  } catch {
-    console.warn(`⚠️ ${filename} missing`);
-    return "";
-  }
+const getCachedAssets = async () => {
+  await initializeCache();
+  return {
+    font: cachedFont || "",
+    logo: cachedLogo || "",
+    watermark: cachedWatermark || "",
+  };
 };
 
 // ----------------------
@@ -97,8 +138,14 @@ export async function generateInvoicePDF(
 
     let y = 120;
 
+    // Get cached assets
+    const {
+      font: fontBase64,
+      logo: logoBase64,
+      watermark: watermarkBase64,
+    } = await getCachedAssets();
+
     // Load font
-    const fontBase64 = await loadFontBase64();
     let fontLoaded = false;
     if (fontBase64) {
       try {
@@ -111,10 +158,6 @@ export async function generateInvoicePDF(
     } else {
       console.warn("No font data available, using default font");
     }
-
-    // Load images
-    const logoBase64 = await loadImageBase64("logo.png");
-    const watermarkBase64 = await loadImageBase64("watermark.png");
 
     // ----------------------
     // WATERMARK background
