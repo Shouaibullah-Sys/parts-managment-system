@@ -1,4 +1,4 @@
-//app/dashoard/admin/page.tsx
+// app/dashboard/admin/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -378,7 +378,7 @@ const DateRangePicker = ({
         <Button
           variant="outline"
           className={cn(
-            "w-full sm:w-[260px] justify-start text-left font-normal",
+            "w-full sm:w-[280px] lg:w-[320px] justify-start text-left font-normal",
             !dateRange && "text-muted-foreground"
           )}
         >
@@ -397,19 +397,7 @@ const DateRangePicker = ({
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent
-        className="w-auto p-0 z-50"
-        align="start"
-        sideOffset={5}
-        style={{
-          position: "fixed",
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-          maxHeight: "90vh",
-          overflow: "auto",
-        }}
-      >
+      <PopoverContent className="w-auto p-0 z-50" align="start" sideOffset={5}>
         <div className="flex flex-col p-4">
           <div className="grid grid-cols-2 gap-2 mb-4">
             {quickFilters.map((filter) => (
@@ -970,6 +958,13 @@ export default function AdminDashboard() {
   // Calculate low stock count from the actual data
   const actualLowStockCount = lowStockItems?.length || 0;
 
+  // Calculate filtered sales based on selected date range
+  const calculateFilteredSales = () => {
+    if (!salesTrend || salesTrend.length === 0) return 0;
+
+    return salesTrend.reduce((total, item) => total + (item.sales || 0), 0);
+  };
+
   if (statsLoading) {
     return (
       <div className="container mx-auto py-6 px-4 sm:px-6">
@@ -1057,7 +1052,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Key Metrics */}
-      <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5">
         <Card className="bg-mechanical border-mechanical shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xs sm:text-sm font-medium">
@@ -1335,7 +1330,7 @@ export default function AdminDashboard() {
           </div>
 
           {/* Quick Stats */}
-          <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-xs sm:text-sm font-medium">
@@ -1344,7 +1339,7 @@ export default function AdminDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="text-lg sm:text-2xl font-bold">
-                  {stats?.totalSales?.toLocaleString("fa-IR") || 0} افغانی
+                  {calculateFilteredSales().toLocaleString("fa-IR") || 0} افغانی
                 </div>
                 <div className="flex items-center text-xs text-muted-foreground mt-1">
                   <CalendarIcon className="h-3 w-3 ml-1" />
@@ -1366,10 +1361,7 @@ export default function AdminDashboard() {
                 </div>
                 <div className="flex items-center text-xs text-muted-foreground mt-1">
                   <Receipt className="h-3 w-3 ml-1" />
-                  میانگین:{" "}
-                  {expenseData?.averageExpense?.toLocaleString("fa-IR") ||
-                    0}{" "}
-                  افغانی
+                  {salesCardInfo.dateText}
                 </div>
               </CardContent>
             </Card>
@@ -1391,6 +1383,26 @@ export default function AdminDashboard() {
                   <TrendingUp className="h-3 w-3 ml-1" />
                   حاشیه سود:{" "}
                   {expenseData?.profitAnalysis?.profitMargin?.toFixed(1) || 0}%
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs sm:text-sm font-medium">
+                  سود خالص
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-lg sm:text-2xl font-bold text-green-600">
+                  {expenseData?.profitAnalysis?.netProfit?.toLocaleString(
+                    "fa-IR"
+                  ) || 0}{" "}
+                  افغانی
+                </div>
+                <div className="flex items-center text-xs text-muted-foreground mt-1">
+                  <Calculator className="h-3 w-3 ml-1" />
+                  پس از کسر تمام مصارف
                 </div>
               </CardContent>
             </Card>
