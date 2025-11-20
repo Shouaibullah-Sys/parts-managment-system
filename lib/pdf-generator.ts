@@ -170,7 +170,7 @@ export async function generateInvoicePDF(
   // ----------------------
   // TABLE HEADER
   // ----------------------
-  const colWidth = (pageWidth - 80) / 6;
+  const colWidth = (pageWidth - 80) / 5;
   doc.setFillColor(...DARK_RED);
   doc.rect(40, y, pageWidth - 80, 25, "F");
 
@@ -178,11 +178,10 @@ export async function generateInvoicePDF(
   doc.setFontSize(10);
   doc.setTextColor(255, 255, 255);
   doc.text("#", 45, y + 17);
-  doc.text("Part No.", 45 + colWidth, y + 17);
-  doc.text("Name", 45 + colWidth * 2, y + 17);
-  doc.text("Qty", 45 + colWidth * 3, y + 17);
-  doc.text("Unit Price", 45 + colWidth * 4, y + 17);
-  doc.text("Total", 45 + colWidth * 5, y + 17);
+  doc.text("Name", 45 + colWidth, y + 17);
+  doc.text("Qty", 45 + colWidth * 2, y + 17);
+  doc.text("Unit Price", 45 + colWidth * 3, y + 17);
+  doc.text("Total", 45 + colWidth * 4, y + 17);
 
   y += 30;
 
@@ -237,11 +236,10 @@ export async function generateInvoicePDF(
     doc.rect(40, y, pageWidth - 80, 20, "F");
 
     doc.text(String(idx + 1), 45, y + 14);
-    doc.text(s.part?.partNumber || "N/A", 45 + colWidth, y + 14);
-    doc.text(s.part?.name || "N/A", 45 + colWidth * 2, y + 14);
-    doc.text(String(qty), 45 + colWidth * 3, y + 14);
-    doc.text(unitPrice.toFixed(2), 45 + colWidth * 4, y + 14);
-    doc.text(totalValue.toFixed(2), 45 + colWidth * 5, y + 14);
+    doc.text(s.part?.name || "N/A", 45 + colWidth, y + 14);
+    doc.text(String(qty), 45 + colWidth * 2, y + 14);
+    doc.text(unitPrice.toFixed(2), 45 + colWidth * 3, y + 14);
+    doc.text(totalValue.toFixed(2), 45 + colWidth * 4, y + 14);
 
     y += 20;
   });
