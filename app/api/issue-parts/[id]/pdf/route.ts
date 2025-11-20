@@ -43,27 +43,35 @@ export async function GET(
         .leftJoin(user, eq(sales.createdBy, user.id))
         .orderBy(sales.id);
     } else {
-      // Fallback: treat id as customer ID and fetch latest sales
-      const customerId = parseInt(id);
-      if (isNaN(customerId)) return bad("شناسه مشتری معتبر نیست");
+      // Fallback: treat id as a single sale ID and fetch that specific sale
+      const saleId = parseInt(id);
+      if (isNaN(saleId)) {
+        console.error("Invalid sale ID:", id);
+        return bad("شناسه فروش معتبر نیست");
+      }
 
-      // Get all sales for this customer ordered by date (latest first)
+      // Get the specific sale with related data
       salesData = await db
         .select({ sale: sales, part: parts, customer: customers, user: user })
         .from(sales)
-        .where(eq(sales.customerId, customerId))
+        .where(eq(sales.id, saleId))
         .leftJoin(parts, eq(sales.partId, parts.id))
         .leftJoin(customers, eq(sales.customerId, customers.id))
-        .leftJoin(user, eq(sales.createdBy, user.id))
-        .orderBy(desc(sales.saleDate));
+        .leftJoin(user, eq(sales.createdBy, user.id));
     }
 
-    if (salesData.length === 0) return bad("فروش یافت نشد");
+    if (salesData.length === 0) {
+      console.error("No sales data found for ID:", id);
+      return bad("فروش یافت نشد");
+    }
 
     const customer = salesData[0].customer;
     const userInfo = salesData[0].user;
 
-    if (!customer) return bad("مشتری یافت نشد");
+    if (!customer) {
+      console.error("Customer not found for sale data");
+      return bad("مشتری یافت نشد");
+    }
 
     const invoiceCustomer = {
       name: customer.name,
@@ -115,6 +123,17 @@ export async function GET(
     });
   } catch (err) {
     console.error("Error generating PDF:", err);
-    return serverError(err);
+
+    // Return more specific error messages
+    if (err instanceof Error) {
+      if (err.message.includes("Invalid invoice data")) {
+        return bad("داده‌های فاکتور نامعتبر است");
+      }
+      if (err.message.includes("Customer name is required")) {
+        return bad("نام مشتری مورد نیاز است");
+      }
+    }
+
+    return serverError(`خطا در تولید فاکتور: ${err}`);
   }
 }
