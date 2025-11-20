@@ -1,6 +1,7 @@
 // app/api/issue-parts/[id]/pdf/route.ts
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 30; // Increase timeout to 30 seconds for Vercel
 
 import type { NextRequest } from "next/server";
 import { requireAuth } from "@/lib/auth-session";
@@ -34,8 +35,37 @@ export async function GET(
         return bad("شناسه‌های فروش معتبر نیستند");
       }
 
+      // Optimized query: select only needed fields
       salesData = await db
-        .select({ sale: sales, part: parts, customer: customers, user: user })
+        .select({
+          sale: {
+            id: sales.id,
+            quantity: sales.quantity,
+            totalAmount: sales.totalAmount,
+            saleDate: sales.saleDate,
+          },
+          part: {
+            id: parts.id,
+            partNumber: parts.partNumber,
+            name: parts.name,
+            section: parts.section,
+            minStock: parts.minStock,
+            currentStock: parts.currentStock,
+            costPrice: parts.costPrice,
+            salePrice: parts.salePrice,
+            active: parts.active,
+            createdAt: parts.createdAt,
+          },
+          customer: {
+            id: customers.id,
+            name: customers.name,
+            phone: customers.phone,
+            address: customers.address,
+          },
+          user: {
+            name: user.name,
+          },
+        })
         .from(sales)
         .where(inArray(sales.id, saleIds))
         .leftJoin(parts, eq(sales.partId, parts.id))
@@ -50,9 +80,37 @@ export async function GET(
         return bad("شناسه فروش معتبر نیست");
       }
 
-      // Get the specific sale with related data
+      // Optimized query: select only needed fields
       salesData = await db
-        .select({ sale: sales, part: parts, customer: customers, user: user })
+        .select({
+          sale: {
+            id: sales.id,
+            quantity: sales.quantity,
+            totalAmount: sales.totalAmount,
+            saleDate: sales.saleDate,
+          },
+          part: {
+            id: parts.id,
+            partNumber: parts.partNumber,
+            name: parts.name,
+            section: parts.section,
+            minStock: parts.minStock,
+            currentStock: parts.currentStock,
+            costPrice: parts.costPrice,
+            salePrice: parts.salePrice,
+            active: parts.active,
+            createdAt: parts.createdAt,
+          },
+          customer: {
+            id: customers.id,
+            name: customers.name,
+            phone: customers.phone,
+            address: customers.address,
+          },
+          user: {
+            name: user.name,
+          },
+        })
         .from(sales)
         .where(eq(sales.id, saleId))
         .leftJoin(parts, eq(sales.partId, parts.id))
