@@ -1,6 +1,7 @@
 // app/api/parts/records/route.ts
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 30; // Increase timeout to 30 seconds for Vercel
 
 import type { NextRequest } from "next/server";
 import { requireAuth } from "@/lib/auth-session";
