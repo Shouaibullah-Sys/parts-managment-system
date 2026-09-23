@@ -11,7 +11,7 @@ export async function listParts(opts: {
   active?: string | null;
 }) {
   const page = opts.page && opts.page > 0 ? opts.page : 1;
-  const limit = opts.limit && opts.limit > 0 ? opts.limit : 10;
+  const limit = opts.limit && opts.limit > 0 ? opts.limit : 25;
   const offset = (page - 1) * limit;
 
   const whereConditions: any[] = [];
@@ -20,7 +20,7 @@ export async function listParts(opts: {
     const q = opts.search.trim();
     if (q.length) {
       whereConditions.push(
-        or(like(parts.partNumber, `%${q}%`), like(parts.name, `%${q}%`))
+        sql`LOWER(p.part_number) LIKE LOWER(${`%${q}%`}) OR LOWER(p.name) LIKE LOWER(${`%${q}%`})`
       );
     }
   }

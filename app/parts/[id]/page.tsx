@@ -1,6 +1,5 @@
 import { PartDetails } from "@/components/parts/part-details";
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
+import { getSessionFromCookies } from "@/lib/auth";
 import { notFound, redirect } from "next/navigation";
 
 interface PartDetailPageProps {
@@ -10,17 +9,11 @@ interface PartDetailPageProps {
 }
 
 export default async function PartDetailPage({ params }: PartDetailPageProps) {
-  // Unwrap params (NEW Next.js 15+ requirement)
   const { id } = await params;
 
-  // Fix: Do NOT use headers() inside auth — slow + streaming boundary
-  const reqHeaders = await headers();
+  const sessionData = await getSessionFromCookies();
 
-  const session = await auth.api.getSession({
-    headers: reqHeaders,
-  });
-
-  if (!session?.user) {
+  if (!sessionData?.user) {
     redirect("/login");
   }
 

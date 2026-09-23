@@ -60,7 +60,7 @@ interface LowStockPart {
 
 // API function
 const fetchLowStockParts = async (): Promise<LowStockPart[]> => {
-  const response = await fetch("/api/parts?limit=1000");
+  const response = await fetch("/api/parts?limit=1000", { credentials: "include" });
   if (!response.ok) throw new Error("Failed to fetch parts data");
 
   const result = await response.json();
@@ -99,6 +99,7 @@ const bulkUpdateParts = async (data: LowStockPart[]) => {
     headers: {
       "Content-Type": "application/json",
     },
+    credentials: "include",
     body: JSON.stringify(data),
   });
 
@@ -136,41 +137,54 @@ export default function PriorityActionsPage() {
 
   // Authentication and role check
   useEffect(() => {
+    let cancelled = false;
+
     const checkAdminAccess = async () => {
       try {
         const session = await authClient.getSession();
+        if (cancelled) return;
 
-        if (!session?.data?.user) {
-          router.push("/login");
+        if (!session.data?.user) {
+          if (!session.failed) {
+            router.push("/login");
+          } else {
+            setAuthError("خطا در بررسی احراز هویت. لطفاً دوباره تلاش کنید.");
+            setAuthLoading(false);
+          }
           return;
         }
 
-        // Check if user is approved
-        const approvalResponse = await fetch("/api/user/approval-status");
-        if (approvalResponse.ok) {
-          const { approved, role } = await approvalResponse.json();
+        const u = session.data.user;
 
-          if (!approved) {
-            await authClient.signOut();
-            router.push("/login");
-            return;
-          }
-
-          // Check admin role
-          if (role !== "admin") {
-            setAuthError("دسترسی ممنوع. امتیازات مدیریت مورد نیاز است.");
-            return;
-          }
+        if (!u.approved) {
+          await authClient.signOut();
+          if (!cancelled) router.push("/login");
+          return;
         }
 
-        setAuthLoading(false);
+        if (u.role !== "admin") {
+          if (!cancelled) {
+            setAuthError("دسترسی ممنوع. امتیازات مدیریت مورد نیاز است.");
+            setAuthLoading(false);
+          }
+          return;
+        }
+
+        if (!cancelled) setAuthLoading(false);
       } catch (error) {
         console.error("Error checking admin access:", error);
-        router.push("/login");
+        if (!cancelled) {
+          setAuthError("خطا در بررسی دسترسی. لطفاً دوباره تلاش کنید.");
+          setAuthLoading(false);
+        }
       }
     };
 
     checkAdminAccess();
+
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   const {

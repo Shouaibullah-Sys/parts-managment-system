@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Header } from "@/components/header";
 import { authClient } from "@/lib/auth-client";
 import Loader from "@/components/loader";
+import { Button } from "@/components/ui/button";
 
 interface User {
   id: string;
@@ -14,78 +15,75 @@ interface User {
   approved: boolean;
 }
 
-export default function DashboardLayout({
+export default function PartsLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [checkIndex, setCheckIndex] = useState(0);
   const router = useRouter();
-  const pathname = usePathname();
 
   useEffect(() => {
-    const checkUserAndRole = async () => {
+    let cancelled = false;
+
+    const checkUser = async () => {
+      setLoadError(null);
       try {
         const session = await authClient.getSession();
+        if (cancelled) return;
 
-        if (!session?.data?.user) {
-          router.push("/login");
+        if (!session.data?.user) {
+          if (!session.failed) {
+            router.push("/login");
+          } else {
+            setLoadError("خطا در بررسی احراز هویت. لطفاً دوباره تلاش کنید.");
+            setLoading(false);
+          }
           return;
         }
 
-        // Check if user is approved
-        const approvalResponse = await fetch("/api/user/approval-status");
-        if (approvalResponse.ok) {
-          const { approved, role } = await approvalResponse.json();
+        const u = session.data.user;
 
-          if (!approved) {
-            await authClient.signOut();
-            router.push("/login");
-            return;
-          }
-
-          const userData = {
-            id: session.data.user.id,
-            name: session.data.user.name,
-            email: session.data.user.email,
-            role,
-            approved,
-          };
-
-          setUser(userData);
-
-          // Role-based routing
-          if (pathname === "/dashboard" || pathname === "/dashboard/") {
-            // Redirect to appropriate dashboard based on role
-            if (role === "admin") {
-              router.push("/dashboard/admin");
-            } else {
-              router.push("/dashboard/staff");
-            }
-          }
-
-          // Check access to admin routes
-          if (pathname.startsWith("/dashboard/admin") && role !== "admin") {
-            router.push("/dashboard/staff");
-          }
+        if (!u.approved) {
+          await authClient.signOut();
+          if (!cancelled) router.push("/login");
+          return;
         }
+
+        if (cancelled) return;
+
+        setUser({
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          role: u.role as "staff" | "admin",
+          approved: u.approved,
+        });
+        setLoading(false);
       } catch (error) {
         console.error("Error checking user:", error);
-        router.push("/login");
-      } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoadError("خطا در بررسی احراز هویت. لطفاً دوباره تلاش کنید.");
+          setLoading(false);
+        }
       }
     };
 
-    checkUserAndRole();
-  }, [pathname, router]);
+    checkUser();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router, checkIndex]);
 
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-96">
         <Loader
-          title="در حال بارگذاری دشبورد..."
+          title="در حال بارگذاری..."
           subtitle="لطفاً منتظر بمانید"
           size="md"
         />
@@ -93,16 +91,28 @@ export default function DashboardLayout({
     );
   }
 
+  if (loadError) {
+    return (
+      <div className="flex justify-center items-center min-h-96">
+        <div className="text-center">
+          <p className="text-muted-foreground mb-4">{loadError}</p>
+          <Button
+            onClick={() => {
+              setLoadError(null);
+              setLoading(true);
+              setCheckIndex((i) => i + 1);
+            }}
+          >
+            تلاش مجدد
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   if (!user) {
     return null;
   }
-
-  const isActiveRoute = (href: string) => {
-    if (href === "/dashboard") {
-      return pathname === "/dashboard" || pathname === "/dashboard/";
-    }
-    return pathname.startsWith(href);
-  };
 
   return (
     <div className="min-h-screen bg-background">

@@ -48,7 +48,9 @@ import {
   TrendingDown,
   Calculator,
   Plus,
+  Printer,
 } from "lucide-react";
+import { printDashboardReport } from "@/lib/dashboard-print";
 import Link from "next/link";
 import {
   format,
@@ -153,7 +155,7 @@ const fetchDashboardStats = async (
   }
 
   try {
-    const response = await fetch(`/api/dashboard/stats?${params.toString()}`);
+    const response = await fetch(`/api/dashboard/stats?${params.toString()}`, { credentials: "include" });
     if (!response.ok) throw new Error("Failed to fetch dashboard stats");
     return await response.json();
   } catch (error) {
@@ -173,7 +175,7 @@ const fetchDashboardStats = async (
   }
 };
 const fetchLowStockItems = async (): Promise<LowStockItem[]> => {
-  const response = await fetch("/api/parts?limit=1000");
+  const response = await fetch("/api/parts?limit=1000", { credentials: "include" });
   if (!response.ok) throw new Error("Failed to fetch parts data");
 
   const result = await response.json();
@@ -226,7 +228,8 @@ const fetchSalesTrend = async (
     });
 
     const response = await fetch(
-      `/api/dashboard/sales-trend?${params.toString()}`
+      `/api/dashboard/sales-trend?${params.toString()}`,
+      { credentials: "include" }
     );
 
     console.log("📡 Frontend: API Response status:", response.status);
@@ -268,7 +271,8 @@ const fetchPaymentStatus = async (
   }
 
   const response = await fetch(
-    `/api/dashboard/payment-status?${params.toString()}`
+    `/api/dashboard/payment-status?${params.toString()}`,
+    { credentials: "include" }
   );
   if (!response.ok) throw new Error("Failed to fetch payment status");
   return response.json();
@@ -287,7 +291,8 @@ const fetchExpenseData = async (
 
   try {
     const response = await fetch(
-      `/api/dashboard/expense-reports?${params.toString()}`
+      `/api/dashboard/expense-reports?${params.toString()}`,
+      { credentials: "include" }
     );
     if (!response.ok) throw new Error("Failed to fetch expense data");
     return await response.json();
@@ -723,6 +728,7 @@ const PaymentStatusChart = ({ data }: { data: PaymentStatus }) => {
 
 // Import the ExpenseCategoryChart component
 import { ExpenseCategoryChart } from "./components/ExpenseCategoryChart";
+import SalesTab from "./components/SalesTab";
 
 const ExpenseChart = ({ data }: { data: ExpenseData }) => {
   if (!data || data.expenseTrend.length === 0) {
@@ -1020,6 +1026,24 @@ export default function AdminDashboard() {
           <Button
             variant="outline"
             size="sm"
+            onClick={() =>
+              printDashboardReport({
+                dateRange,
+                stats: stats || null,
+                salesTrend: salesTrend || [],
+                paymentStatus: paymentStatus || null,
+                expenseData: expenseData || null,
+                lowStockItems: lowStockItems || [],
+              })
+            }
+            className="flex items-center gap-2 shrink-0"
+          >
+            <Printer className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">چاپ گزارش</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             onClick={refreshAll}
             disabled={isRefreshing}
             className="flex items-center gap-2 shrink-0"
@@ -1141,13 +1165,20 @@ export default function AdminDashboard() {
 
       {/* Charts and Detailed Data */}
       <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger
             value="overview"
             className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm"
           >
             <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4" />
             نمای کلی
+          </TabsTrigger>
+          <TabsTrigger
+            value="sales"
+            className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm"
+          >
+            <DollarSign className="h-3 w-3 sm:h-4 sm:w-4" />
+            فروش
           </TabsTrigger>
           <TabsTrigger
             value="expenses"
@@ -1424,6 +1455,10 @@ export default function AdminDashboard() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        <TabsContent value="sales" className="space-y-4">
+          <SalesTab />
         </TabsContent>
 
         <TabsContent value="expenses" className="space-y-4">

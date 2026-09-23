@@ -20,8 +20,8 @@ export async function GET(request: NextRequest) {
     if (search) {
       whereConditions.push(
         or(
-          like(parts.partNumber, `%${search}%`),
-          like(parts.name, `%${search}%`)
+          sql`LOWER(p.part_number) LIKE LOWER(${`%${search}%`})`,
+          sql`LOWER(p.name) LIKE LOWER(${`%${search}%`})`
         )
       );
     }
@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
         p.current_stock AS "currentStock"
       FROM parts p
       WHERE p.active = true
-      ${search ? sql`AND (${or(like(parts.partNumber, `%${search}%`), like(parts.name, `%${search}%`))})` : sql``}
+      ${search ? sql`AND (LOWER(p.part_number) LIKE LOWER(${`%${search}%`}) OR LOWER(p.name) LIKE LOWER(${`%${search}%`}))` : sql``}
       ORDER BY p.part_number
       LIMIT ${limit} OFFSET ${offset}
     `);

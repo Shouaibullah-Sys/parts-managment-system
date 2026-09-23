@@ -15,36 +15,36 @@ export default function LoginPage() {
   const [isChecking, setIsChecking] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
+
     const checkSession = async () => {
       try {
         const session = await authClient.getSession();
+        if (cancelled) return;
 
-        if (session?.data?.user) {
-          const approvalResponse = await fetch("/api/user/approval-status");
-
-          if (approvalResponse.ok) {
-            const { role, approved } = await approvalResponse.json();
-
-            if (approved) {
-              if (role === "admin") {
-                router.push("/dashboard/admin");
-              } else if (role === "staff") {
-                router.push("/dashboard/staff");
-              } else {
-                router.push("/dashboard");
-              }
-              return;
-            }
-          }
+        const u = session.data?.user;
+        if (u?.approved) {
+          router.replace(
+            u.role === "admin"
+              ? "/dashboard/admin"
+              : u.role === "staff"
+                ? "/dashboard/staff"
+                : "/dashboard"
+          );
+          return;
         }
       } catch (error) {
         console.error("Error checking session:", error);
       } finally {
-        setIsChecking(false);
+        if (!cancelled) setIsChecking(false);
       }
     };
 
     checkSession();
+
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   if (isChecking) {

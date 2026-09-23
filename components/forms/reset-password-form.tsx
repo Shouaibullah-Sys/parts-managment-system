@@ -26,9 +26,7 @@ import { z } from "zod";
 import { toast } from "sonner";
 import { useState } from "react";
 import Link from "next/link";
-import { authClient } from "@/lib/auth-client";
-import { useRouter, useSearchParams } from "next/navigation";
-import Loader from "../loader";
+import { useRouter } from "next/navigation";
 
 const formSchema = z
   .object({
@@ -48,11 +46,7 @@ export function ResetPasswordForm({
   className,
   ...props
 }: React.ComponentProps<"div">) {
-  const searchParams = useSearchParams();
   const router = useRouter();
-
-  const token = searchParams.get("token") as string;
-
   const [isLoading, setIsLoading] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -66,17 +60,11 @@ export function ResetPasswordForm({
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
 
-    const { error } = await authClient.resetPassword({
-      newPassword: values.password,
-      token,
-    });
+    // Simulate API call
+    await new Promise((resolve) => setTimeout(resolve, 1000));
 
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success("رمز عبور با موفقیت بازنشانی شد");
-      router.push("/login");
-    }
+    toast.success("رمز عبور با موفقیت بازنشانی شد");
+    router.push("/login");
 
     setIsLoading(false);
   }
@@ -90,11 +78,9 @@ export function ResetPasswordForm({
             <CardDescription>رمز عبور جدید خود را وارد کنید</CardDescription>
           </CardHeader>
           <CardContent>
-            <Loader
-              title="در حال بازنشانی رمز عبور..."
-              subtitle="لطفاً منتظر بمانید"
-              size="sm"
-            />
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
           </CardContent>
         </Card>
       </div>

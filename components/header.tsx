@@ -193,28 +193,24 @@ export function Header() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
     const fetchUserRole = async () => {
       try {
         const session = await authClient.getSession();
-        if (!session?.data?.user) {
-          setUserRole("staff");
-          return;
-        }
-
-        const response = await fetch("/api/user/role");
-        if (response.ok) {
-          const data = await response.json();
-          setUserRole(data.role || "staff");
-        } else {
-          setUserRole("staff");
-        }
+        if (cancelled) return;
+        setUserRole(session.data?.user?.role || "staff");
       } catch (error) {
         console.error("Error fetching user role:", error);
-        setUserRole("staff");
+        if (!cancelled) setUserRole("staff");
       }
     };
 
     fetchUserRole();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Get separate configs for desktop and mobile

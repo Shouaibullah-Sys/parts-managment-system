@@ -43,6 +43,7 @@ export async function GET(req: Request) {
     const fromDate = searchParams.get("fromDate") || "";
     const toDate = searchParams.get("toDate") || "";
     const period = searchParams.get("period") || "today";
+    const section = searchParams.get("section") || "";
 
     // Fetch sales data with the filters
     const salesData = await fetchSalesData({
@@ -52,12 +53,14 @@ export async function GET(req: Request) {
       fromDate,
       toDate,
       period,
+      section,
     });
 
     return NextResponse.json({
       success: true,
       data: salesData.data,
       pagination: salesData.pagination,
+      summary: salesData.summary,
     });
   } catch (err: any) {
     console.error("Error fetching sales data:", err);
@@ -76,8 +79,9 @@ async function fetchSalesData(params: {
   fromDate: string;
   toDate: string;
   period: string;
+  section?: string;
 }) {
-  const { page, limit, search, fromDate, toDate, period } = params;
+  const { page, limit, search, fromDate, toDate, period, section } = params;
 
   // Calculate date range based on period
   let dateFilter = {};
@@ -137,6 +141,14 @@ async function fetchSalesData(params: {
     whereConditions.push(searchCondition);
   }
 
+  // Section filter - filter sales by part section
+  if (section) {
+    whereConditions.push(eq(parts.section, section));
+  }
+
+  const whereClause =
+    whereConditions.length > 0 ? and(...whereConditions) : undefined;
+
   // Calculate offset for pagination
   const offset = (page - 1) * limit;
 
@@ -155,6 +167,7 @@ async function fetchSalesData(params: {
       issuedBy: user.name, // Get user name instead of ID
       partNumber: parts.partNumber,
       partName: parts.name,
+      section: parts.section,
       // Calculate actual paid amount from payments table
       actualPaidAmount: sql<string>`COALESCE(
           (SELECT SUM(${payments.amount})
@@ -168,7 +181,7 @@ async function fetchSalesData(params: {
     .leftJoin(parts, eq(sales.partId, parts.id))
     .leftJoin(payments, eq(payments.saleId, sales.id))
     .leftJoin(user, eq(sales.createdBy, user.id)) // Join with user table
-    .where(whereConditions.length > 0 ? and(...whereConditions) : undefined)
+    .where(whereClause)
     .groupBy(
       sales.id,
       customers.name,
@@ -181,7 +194,8 @@ async function fetchSalesData(params: {
       sales.quantity,
       user.name, // Group by user name instead of ID
       parts.partNumber,
-      parts.name
+      parts.name,
+      parts.section
     )
     .limit(limit)
     .offset(offset)
@@ -195,13 +209,27 @@ async function fetchSalesData(params: {
     .leftJoin(parts, eq(sales.partId, parts.id))
     .leftJoin(payments, eq(payments.saleId, sales.id))
     .leftJoin(user, eq(sales.createdBy, user.id)) // Include user join for consistency
-    .where(whereConditions.length > 0 ? and(...whereConditions) : undefined)
+    .where(whereClause)
     .groupBy(sales.id);
 
-  // Execute both queries
-  const [salesData, totalCountResult] = await Promise.all([
+  // Summary aggregates under the same filters (ignores pagination)
+  const summaryQuery = db
+    .select({
+      totalSales: sql<string>`COALESCE(SUM(${sales.totalAmount}), 0)`,
+      totalPaid: sql<string>`COALESCE(SUM(${sales.paidAmount}), 0)`,
+      totalOutstanding: sql<string>`COALESCE(SUM(${sales.outstanding}), 0)`,
+      count: count(),
+    })
+    .from(sales)
+    .leftJoin(customers, eq(sales.customerId, customers.id))
+    .leftJoin(parts, eq(sales.partId, parts.id))
+    .where(whereClause);
+
+  // Execute all queries
+  const [salesData, totalCountResult, summaryResult] = await Promise.all([
     baseQuery,
     totalCountQuery,
+    summaryQuery,
   ]);
 
   const total = totalCountResult.length;
@@ -214,6 +242,12 @@ async function fetchSalesData(params: {
       limit,
       total,
       totalPages,
+    },
+    summary: {
+      totalSales: Number(summaryResult[0]?.totalSales || 0),
+      totalPaid: Number(summaryResult[0]?.totalPaid || 0),
+      totalOutstanding: Number(summaryResult[0]?.totalOutstanding || 0),
+      count: summaryResult[0]?.count || 0,
     },
   };
 }

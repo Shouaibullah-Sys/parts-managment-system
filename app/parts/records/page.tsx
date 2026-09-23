@@ -15,7 +15,7 @@ export default function PartsRecordsPage() {
 
   useEffect(() => {
     if (session?.user) {
-      fetch("/api/user/role")
+      fetch("/api/user/role", { credentials: "include" })
         .then((res) => res.json())
         .then((data) => setUserRole(data.role))
         .catch((error) => console.error("Error fetching user role:", error));

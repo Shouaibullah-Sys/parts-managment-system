@@ -58,7 +58,7 @@ export function PartsList({ initialParts, initialPagination }: PartsListProps) {
     try {
       const params = new URLSearchParams({
         page: page.toString(),
-        limit: "10",
+        limit: "25",
         ...newFilters,
       });
 

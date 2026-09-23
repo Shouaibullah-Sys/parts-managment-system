@@ -20,6 +20,8 @@ export function useParts(
 ) {
   return useQuery({
     queryKey: ["parts", params],
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
     queryFn: async (): Promise<PartsResponse> => {
       console.log("Fetching parts with params:", params);
       const searchParams = new URLSearchParams();

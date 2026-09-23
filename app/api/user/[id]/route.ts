@@ -1,6 +1,6 @@
 import { db } from "@/db/drizzle";
 import { user } from "@/db/schema";
-import { auth } from "@/lib/auth";
+import { getSessionFromRequest } from "@/lib/auth";
 import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -11,23 +11,19 @@ export async function GET(
   try {
     const { id } = await params;
 
-    // Check if user is authenticated
-    const session = await auth.api.getSession({
-      headers: request.headers,
-    });
+    const sessionData = await getSessionFromRequest(request);
 
-    if (!session) {
+    if (!sessionData) {
       return NextResponse.json(
         { success: false, error: "Unauthorized" },
         { status: 401 }
       );
     }
 
-    // Only allow users to fetch their own data or admins to fetch any user data
     const [currentUser] = await db
       .select({ role: user.role })
       .from(user)
-      .where(eq(user.id, session.user.id))
+      .where(eq(user.id, sessionData.user.id))
       .limit(1);
 
     if (!currentUser) {
@@ -37,15 +33,13 @@ export async function GET(
       );
     }
 
-    // Allow admins to fetch any user, others can only fetch themselves
-    if (currentUser.role !== "admin" && session.user.id !== id) {
+    if (currentUser.role !== "admin" && sessionData.user.id !== id) {
       return NextResponse.json(
         { success: false, error: "Forbidden" },
         { status: 403 }
       );
     }
 
-    // Fetch the requested user
     const [requestedUser] = await db
       .select()
       .from(user)
@@ -59,8 +53,7 @@ export async function GET(
       );
     }
 
-    // Return user data (exclude sensitive information like password)
-    const { ...userData } = requestedUser;
+    const { password: _, ...userData } = requestedUser;
 
     return NextResponse.json({
       success: true,

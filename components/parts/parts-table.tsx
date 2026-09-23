@@ -77,7 +77,7 @@ export function PartsTable() {
 
   useEffect(() => {
     if (session?.user) {
-      fetch("/api/user/role")
+      fetch("/api/user/role", { credentials: "include" })
         .then((res) => res.json())
         .then((data) => setUserRole(data.role))
         .catch((error) => console.error("Error fetching user role:", error));
@@ -94,7 +94,7 @@ export function PartsTable() {
   // State for pagination and filters
   const [pagination, setPagination] = useState({
     pageIndex: 0,
-    pageSize: isMobile ? 5 : 10,
+    pageSize: isMobile ? 10 : 25,
   });
   const [sectionFilter, setSectionFilter] = useState<string>("");
   const [activeFilter, setActiveFilter] = useState<string>("");
@@ -730,8 +730,24 @@ export function PartsTable() {
 
       {/* Pagination */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="text-sm text-muted-foreground">
-          نمایش {table.getRowModel().rows.length} از {paginationData.total} قطعه
+        <div className="flex items-center gap-4">
+          <div className="text-sm text-muted-foreground">
+            نمایش {table.getRowModel().rows.length} از {paginationData.total} قطعه
+          </div>
+          <select
+            value={pagination.pageSize}
+            onChange={(e) => {
+              const newSize = Number(e.target.value);
+              setPagination({ pageIndex: 0, pageSize: newSize });
+            }}
+            className="border border-border rounded-md px-2 py-1 text-sm bg-background text-foreground"
+          >
+            {[10, 25, 50, 100].map((size) => (
+              <option key={size} value={size}>
+                {size} در صفحه
+              </option>
+            ))}
+          </select>
         </div>
         <div className="flex items-center space-x-2">
           <Button

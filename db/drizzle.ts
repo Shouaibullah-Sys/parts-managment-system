@@ -9,8 +9,13 @@ if (typeof window === "undefined") {
   config({ path: ".env" }); // or .env.local
 }
 
-// Create a more robust connection with error handling
-const sql = neon(process.env.DATABASE_URL!);
+// Create a more robust connection with error handling and retry logic
+const sql = neon(process.env.DATABASE_URL!, {
+  fetchOptions: {
+    retries: 3,
+    retryDelay: 1000,
+  },
+});
 
 const db = drizzle(sql, { schema });
 

@@ -1,25 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db/drizzle";
 import { schema } from "@/db/schema";
-import { auth } from "@/lib/auth";
+import { getSessionFromRequest } from "@/lib/auth";
 import { eq } from "drizzle-orm";
-import { headers } from "next/headers";
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth.api.getSession({
-      headers: await headers(),
-    });
+    const sessionData = await getSessionFromRequest(request);
 
-    if (!session?.user) {
+    if (!sessionData?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Check if user is admin
     const [currentUser] = await db
       .select()
       .from(schema.user)
-      .where(eq(schema.user.id, session.user.id))
+      .where(eq(schema.user.id, sessionData.user.id))
       .limit(1);
 
     if (!currentUser || currentUser.role !== "admin") {
@@ -35,7 +31,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Update user's approved status
     const updatedUser = await db
       .update(schema.user)
       .set({
@@ -49,7 +44,6 @@ export async function POST(request: NextRequest) {
         email: schema.user.email,
         role: schema.user.role,
         approved: schema.user.approved,
-        emailVerified: schema.user.emailVerified,
         createdAt: schema.user.createdAt,
         updatedAt: schema.user.updatedAt,
       });

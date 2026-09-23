@@ -1,25 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db/drizzle";
 import { user } from "@/db/schema";
-import { auth } from "@/lib/auth";
+import { getSessionFromRequest } from "@/lib/auth";
 import { eq } from "drizzle-orm";
-import { headers } from "next/headers";
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth.api.getSession({
-      headers: await headers(),
-    });
+    const sessionData = await getSessionFromRequest(request);
 
-    if (!session?.user) {
+    if (!sessionData?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Check if user is admin
     const [currentUser] = await db
       .select({ role: user.role })
       .from(user)
-      .where(eq(user.id, session.user.id))
+      .where(eq(user.id, sessionData.user.id))
       .limit(1);
 
     if (!currentUser || currentUser.role !== "admin") {
@@ -35,20 +31,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate role
     if (!["staff", "admin"].includes(role)) {
       return NextResponse.json({ error: "Invalid role" }, { status: 400 });
     }
 
-    // Prevent admin from changing their own role
-    if (userId === session.user.id) {
+    if (userId === sessionData.user.id) {
       return NextResponse.json(
         { error: "You cannot change your own role" },
         { status: 400 }
       );
     }
 
-    // Update user's role
     const updatedUser = await db
       .update(user)
       .set({
@@ -62,7 +55,6 @@ export async function POST(request: NextRequest) {
         email: user.email,
         role: user.role,
         approved: user.approved,
-        emailVerified: user.emailVerified,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
       });

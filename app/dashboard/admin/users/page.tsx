@@ -31,7 +31,6 @@ interface User {
   email: string;
   role: "staff" | "admin";
   approved: boolean;
-  emailVerified: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -46,7 +45,7 @@ export default function AdminDashboard() {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const response = await fetch("/api/admin/users");
+      const response = await fetch("/api/admin/users", { credentials: "include" });
 
       if (!response.ok) {
         if (response.status === 401) {
@@ -72,35 +71,51 @@ export default function AdminDashboard() {
   };
 
   useEffect(() => {
+    let cancelled = false;
+
     const checkAdminAccess = async () => {
       try {
         const session = await authClient.getSession();
-        if (!session?.data?.user) {
-          router.push("/login");
+        if (cancelled) return;
+
+        if (!session.data?.user) {
+          if (!session.failed) {
+            router.push("/login");
+          } else {
+            setError("خطا در بررسی احراز هویت. لطفاً دوباره تلاش کنید.");
+            setLoading(false);
+          }
           return;
         }
 
-        // Check user role
-        const approvalResponse = await fetch("/api/user/approval-status");
-        if (approvalResponse.ok) {
-          const { role } = await approvalResponse.json();
+        const u = session.data.user;
 
-          if (role !== "admin") {
+        if (u.role !== "admin") {
+          if (!cancelled) {
             setError("Access denied. Admin privileges required.");
             setLoading(false);
-            return;
           }
-
-          setUserRole(role);
-          fetchUsers();
+          return;
         }
+
+        if (cancelled) return;
+        setUserRole(u.role);
+        fetchUsers();
       } catch (err) {
         console.error("Error checking admin access:", err);
-        router.push("/login");
+        if (!cancelled) {
+          setError("خطا در بررسی دسترسی. لطفاً دوباره تلاش کنید.");
+          setLoading(false);
+        }
       }
     };
 
     checkAdminAccess();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleApproveUser = async (userId: string) => {
@@ -110,6 +125,7 @@ export default function AdminDashboard() {
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include",
         body: JSON.stringify({ userId }),
       });
 
@@ -135,6 +151,7 @@ export default function AdminDashboard() {
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include",
         body: JSON.stringify({ userId, role: newRole }),
       });
 
@@ -165,6 +182,7 @@ export default function AdminDashboard() {
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include",
         body: JSON.stringify({ userId }),
       });
 
@@ -192,27 +210,6 @@ export default function AdminDashboard() {
       );
     }
     return <Badge variant="secondary">Staff</Badge>;
-  };
-
-  const getVerificationBadge = (user: User) => {
-    if (user.emailVerified) {
-      return (
-        <Badge
-          variant="outline"
-          className="text-green-600 border-green-600 dark:text-green-400 dark:border-green-400"
-        >
-          Verified
-        </Badge>
-      );
-    }
-    return (
-      <Badge
-        variant="outline"
-        className="text-amber-600 border-amber-600 dark:text-amber-400 dark:border-amber-400"
-      >
-        Unverified
-      </Badge>
-    );
   };
 
   const formatDate = (dateString: string) => {
@@ -381,7 +378,6 @@ export default function AdminDashboard() {
                         </h4>
                         <div className="flex flex-wrap gap-2">
                           {getStatusBadge(user)}
-                          {getVerificationBadge(user)}
                         </div>
                       </div>
                       <div className="space-y-1">
@@ -451,8 +447,7 @@ export default function AdminDashboard() {
       <div className="mt-8 text-center">
         <p className="text-sm text-muted-foreground">
           Managing {users.length} users •{" "}
-          {users.filter((u) => u.approved).length} approved •{" "}
-          {users.filter((u) => u.emailVerified).length} verified
+          {users.filter((u) => u.approved).length} approved
         </p>
       </div>
     </div>

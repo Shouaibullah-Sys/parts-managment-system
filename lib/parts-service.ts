@@ -17,17 +17,14 @@ export const partsQueries = {
       active?: boolean;
     } = {}
   ) {
-    const { page = 1, limit = 10, search, section, active } = options;
+    const { page = 1, limit = 25, search, section, active } = options;
     const offset = (page - 1) * limit;
 
     let whereConditions = [];
 
     if (search) {
       whereConditions.push(
-        or(
-          like(parts.partNumber, `%${search}%`),
-          like(parts.name, `%${search}%`)
-        )
+        sql`LOWER(p.part_number) LIKE LOWER(${`%${search}%`}) OR LOWER(p.name) LIKE LOWER(${`%${search}%`})`
       );
     }
 

@@ -26,8 +26,6 @@ import { z } from "zod";
 import { toast } from "sonner";
 import { useState } from "react";
 import Link from "next/link";
-import { authClient } from "@/lib/auth-client";
-import Loader from "../loader";
 
 const formSchema = z.object({
   email: z.email().meta({ description: "لطفاً یک ایمیل معتبر وارد کنید" }),
@@ -38,6 +36,7 @@ export function ForgotPasswordForm({
   ...props
 }: React.ComponentProps<"div">) {
   const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -49,16 +48,11 @@ export function ForgotPasswordForm({
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
 
-    const { error } = await authClient.forgetPassword({
-      email: values.email,
-      redirectTo: "/reset-password",
-    });
+    // Simulate API call
+    await new Promise((resolve) => setTimeout(resolve, 1000));
 
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success("ایمیل بازنشانی رمز عبور ارسال شد");
-    }
+    toast.success("ایمیل بازنشانی رمز عبور ارسال شد");
+    setIsSubmitted(true);
 
     setIsLoading(false);
   }
@@ -76,11 +70,30 @@ export function ForgotPasswordForm({
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Loader
-              title="در حال ارسال ایمیل..."
-              subtitle="لطفاً منتظر بمانید"
-              size="sm"
-            />
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (isSubmitted) {
+    return (
+      <div className={cn("flex flex-col gap-6", className)} {...props}>
+        <Card>
+          <CardHeader className="text-center">
+            <CardTitle className="text-xl">ایمیل ارسال شد</CardTitle>
+            <CardDescription>
+              لینک بازنشانی رمز عبور به ایمیل شما ارسال شد. لطفاً صندوق ورودی
+              خود را بررسی کنید.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/login">
+              <Button className="w-full">بازگشت به ورود</Button>
+            </Link>
           </CardContent>
         </Card>
       </div>

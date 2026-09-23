@@ -1,25 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db/drizzle";
 import { schema } from "@/db/schema";
-import { auth } from "@/lib/auth";
+import { getSessionFromRequest } from "@/lib/auth";
 import { eq } from "drizzle-orm";
-import { headers } from "next/headers";
 
 export async function DELETE(request: NextRequest) {
   try {
-    const session = await auth.api.getSession({
-      headers: await headers(),
-    });
+    const sessionData = await getSessionFromRequest(request);
 
-    if (!session?.user) {
+    if (!sessionData?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Check if user is admin
     const [currentUser] = await db
       .select()
       .from(schema.user)
-      .where(eq(schema.user.id, session.user.id))
+      .where(eq(schema.user.id, sessionData.user.id))
       .limit(1);
 
     if (!currentUser || currentUser.role !== "admin") {
@@ -35,15 +31,13 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Prevent admin from deleting themselves
-    if (userId === session.user.id) {
+    if (userId === sessionData.user.id) {
       return NextResponse.json(
         { error: "You cannot delete your own account" },
         { status: 400 }
       );
     }
 
-    // Delete the user
     const deletedUser = await db
       .delete(schema.user)
       .where(eq(schema.user.id, userId))
