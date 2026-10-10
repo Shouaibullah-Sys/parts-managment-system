@@ -59,6 +59,7 @@ import {
   Filter,
 } from "lucide-react";
 import Loader from "@/components/loader";
+import HijriDatePicker from "@/components/hijri-date-picker";
 
 interface SaleRecord {
   id: number;
@@ -91,7 +92,7 @@ interface SalesResponse {
 }
 
 // Date period types
-type DatePeriod = "today" | "week" | "month" | "lifetime";
+type DatePeriod = "today" | "week" | "month" | "lifetime" | "custom";
 
 // Fetch sales data with React Query
 const fetchSalesData = async ({
@@ -160,7 +161,9 @@ export default function AdminSalesPage() {
         search: searchTerm,
         fromDate: dateRange.from,
         toDate: dateRange.to,
-        period: datePeriod,
+        // "custom" means user picked an explicit range — API applies
+        // only fromDate/toDate when period is "lifetime"
+        period: datePeriod === "custom" ? "lifetime" : datePeriod,
       }),
   });
 
@@ -230,6 +233,20 @@ export default function AdminSalesPage() {
 
     setDateRange({ from, to });
     setDatePeriod(period);
+  };
+
+  // Manual date pick switches to an explicit custom range so the API
+  // filters only by fromDate/toDate (period "today/week/month" would be ANDed)
+  const handleCustomDateChange = (field: "from" | "to", value: string) => {
+    setDateRange((prev) => {
+      const next = { ...prev, [field]: value };
+      // keep the range valid: swap if from > to
+      if (next.from && next.to && next.from > next.to) {
+        return { from: next.to, to: next.from };
+      }
+      return next;
+    });
+    setDatePeriod("custom");
   };
 
   // Define columns for TanStack Table
@@ -870,28 +887,20 @@ export default function AdminSalesPage() {
               </Button>
             </div>
 
-            {/* Custom Date Range */}
+            {/* Custom Date Range (Hijri / Solar Hijri picker) */}
             <div className="flex flex-wrap gap-2 items-center">
               <div className="flex items-center gap-2">
                 <label className="text-sm text-muted-foreground">از:</label>
-                <Input
-                  type="date"
+                <HijriDatePicker
                   value={dateRange.from}
-                  onChange={(e) =>
-                    setDateRange((prev) => ({ ...prev, from: e.target.value }))
-                  }
-                  className="w-32"
+                  onChange={(v) => handleCustomDateChange("from", v)}
                 />
               </div>
               <div className="flex items-center gap-2">
                 <label className="text-sm text-muted-foreground">تا:</label>
-                <Input
-                  type="date"
+                <HijriDatePicker
                   value={dateRange.to}
-                  onChange={(e) =>
-                    setDateRange((prev) => ({ ...prev, to: e.target.value }))
-                  }
-                  className="w-32"
+                  onChange={(v) => handleCustomDateChange("to", v)}
                 />
               </div>
             </div>
