@@ -293,8 +293,7 @@ export async function generateInvoicePDF(
 
     const headers = ["#", "نام", "مقدار", "قیمت واحد", "مجموع"];
     headers.forEach((h, i) => {
-      const label = fontLoaded ? h : h;
-      doc.text(label, 45 + colWidth * i, y + 17);
+      doc.text(h, 45 + colWidth * i, y + 17);
     });
 
     y += 30;
@@ -352,10 +351,9 @@ export async function generateInvoicePDF(
       doc.text(toPersianNumber(idx + 1), 45, y + 14);
 
       // Part name — right-aligned Persian; shrink font so it fits on ONE line.
-      // Never pass maxWidth here: jsPDF would wrap the already-visual-reordered
-      // string and re-process each line, scrambling the RTL order.
-      const rawName = s.part?.name || "نامشخص";
-      const nameText = rawName;
+      // Never pass maxWidth here: jsPDF would wrap the string and re-process
+      // each line, scrambling the RTL order.
+      const nameText = s.part?.name || "نامشخص";
       const nameColW = colWidth - 8;
       let nameSize = 10;
       doc.setFontSize(nameSize);
