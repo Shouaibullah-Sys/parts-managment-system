@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Portable self-contained build for the Docker kit (MacBook offline mode).
+  // Harmless on Vercel — it uses its own bundling regardless.
+  output: "standalone",
   // Pin the workspace root to this project so Next.js doesn't infer
   // /home/<user> (stray package-lock.json outside the repo) as the root
   turbopack: {
