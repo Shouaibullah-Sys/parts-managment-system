@@ -42,3 +42,9 @@ next-env.d.ts
 
 # Local DB backups
 /backups
+
+# AI agent brief (contains credentials — never commit)
+AI_AGENT_BRIEF.md
+
+# Deploy artifacts (large binaries + seed data with real user hashes)
+/deploy/

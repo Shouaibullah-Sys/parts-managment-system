@@ -1,29 +1,34 @@
 // lib/pdf-generator.ts
 import { jsPDF } from "jspdf";
-import { format } from "date-fns";
 import fs from "fs/promises";
 import path from "path";
-import { render as renderBidi } from "bidi-shaper";
 
 import { Part } from "@/lib/types";
 
 // ----------------------
-// Persian text shaping for jsPDF
-// jsPDF draws glyphs left-to-right and does NOT shape Arabic script or apply
-// the Unicode bidi algorithm. bidi-shaper runs both passes (contextual shaping
-// + UAX #9 reordering + bracket mirroring) and returns a plain string in final
-// visual order, which jsPDF then draws correctly glyph-by-glyph.
+// Persian text for jsPDF
+// jsPDF ships a built-in Arabic module (doc.processArabic) that already does
+// contextual shaping (isolated/initial/medial/final) AND right-to-left
+// reordering. Pass raw logical Persian text straight to doc.text().
+//
+// Do NOT pre-shape/reorder with bidi-shaper or any reshaper here: the text
+// would get reversed a second time by jsPDF, which mirrors it so it reads
+// left-to-right, and the pre-substituted presentation forms get spaced with
+// the wrong advance widths so the letters no longer join. (jsPDF #3867)
 // ----------------------
-const ARABIC_RANGE = /[؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]/;
 
-function fa(text: string): string {
-  if (!text || !ARABIC_RANGE.test(text)) return text;
-  try {
-    return renderBidi(text, { direction: "rtl" });
-  } catch {
-    return text;
-  }
-}
+// ----------------------
+// Persian numbers & currency
+// ----------------------
+const PERSIAN_DIGITS = ["۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"];
+
+const toPersianNumber = (num: number | string): string =>
+  String(num).replace(/\d/g, (d) => PERSIAN_DIGITS[+d]);
+
+const toPersianCurrency = (amount: number): string =>
+  `${amount.toLocaleString("fa-IR")} افغانی`;
+
+const toPersianDate = (date: Date): string => date.toLocaleDateString("fa-IR");
 
 // ----------------------
 // Types
@@ -36,18 +41,6 @@ export type SaleItem = {
   part: Part | null;
   user: { name: string } | null;
 };
-
-export interface InvoiceData {
-  customer: {
-    name: string;
-    phone?: string | null;
-    address?: string | null;
-  };
-  sales: SaleItem[];
-  issueId: number;
-  createdAt: Date;
-  createdBy: string;
-}
 
 export interface InvoiceData {
   customer: {
@@ -230,57 +223,81 @@ export async function generateInvoicePDF(
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(11);
-    doc.text("Kabul - Afghanistan | Main Road | Shop #12", pageWidth / 2, 60, {
+    doc.text("Between Parwan Road, Kabul", pageWidth / 2, 60, {
       align: "center",
     });
+    doc.text("Phone: +93 744 441 079", pageWidth / 2, 75, { align: "center" });
 
     if (fontLoaded) {
       doc.setFont("vazirmatn", "normal");
       doc.setFontSize(14);
-      doc.text(fa("بل پرزه جات وسایط"), pageWidth / 2, 80, { align: "center" });
+      doc.text("بل پرزه جات وسایط", pageWidth / 2, 92, { align: "center" });
 
-      doc.setFontSize(12);
+      doc.setFontSize(11);
       doc.text(
-        fa("کابل - افغانستان | سرک عمومی | دکان شماره ۱۲"),
+        "کابل — بین چهار راهی پروان دوم و سوم، مقابل قصر زرین",
         pageWidth / 2,
-        100,
+        110,
         { align: "center" },
       );
     }
 
-    doc.setFont("helvetica", "normal");
+    // ----------------------
+    // INVOICE ID & DATE (Persian)
+    // ----------------------
+    y = 150;
     doc.setFontSize(10);
-    doc.text(
-      `Invoice ID: INV-${String(data.issueId).padStart(4, "0")}`,
-      40,
-      90,
-    );
-    doc.text(`Date: ${format(data.createdAt, "PPP")}`, pageWidth - 40, 90, {
-      align: "right",
-    });
+    doc.setTextColor(...TEXT_COLOR);
 
-    y += 60;
+    if (fontLoaded) {
+      doc.setFont("vazirmatn", "normal");
+      doc.text(
+        `آیدی فاکتور: INV-${toPersianNumber(String(data.issueId).padStart(4, "0"))}`,
+        40,
+        y,
+      );
+      doc.text(
+        `تاریخ: ${toPersianDate(data.createdAt)}`,
+        pageWidth - 40,
+        y,
+        { align: "right" },
+      );
+    } else {
+      doc.setFont("helvetica", "normal");
+      doc.text(`Invoice ID: INV-${String(data.issueId).padStart(4, "0")}`, 40, y);
+      doc.text(
+        `Date: ${data.createdAt.toLocaleDateString("en-GB")}`,
+        pageWidth - 40,
+        y,
+        { align: "right" },
+      );
+    }
+
+    y += 30;
 
     // ----------------------
-    // TABLE HEADER
+    // TABLE HEADER (Persian)
     // ----------------------
     const colWidth = (pageWidth - 80) / 5;
     doc.setFillColor(...DARK_RED);
     doc.rect(40, y, pageWidth - 80, 25, "F");
 
-    doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
     doc.setTextColor(255, 255, 255);
-    doc.text("#", 45, y + 17);
-    doc.text("Name", 45 + colWidth, y + 17);
-    doc.text("Qty", 45 + colWidth * 2, y + 17);
-    doc.text("Unit Price", 45 + colWidth * 3, y + 17);
-    doc.text("Total", 45 + colWidth * 4, y + 17);
+
+    if (fontLoaded) {
+      doc.setFont("vazirmatn", "normal");
+    } else {
+      doc.setFont("helvetica", "bold");
+    }
+
+    const headers = ["#", "نام", "مقدار", "قیمت واحد", "مجموع"];
+    headers.forEach((h, i) => {
+      const label = fontLoaded ? h : h;
+      doc.text(label, 45 + colWidth * i, y + 17);
+    });
 
     y += 30;
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
     doc.setTextColor(...TEXT_COLOR);
 
     // ----------------------
@@ -322,6 +339,7 @@ export async function generateInvoicePDF(
       const unitPrice = qty ? totalValue / qty : 0;
       totalAmount += totalValue;
 
+      // Alternating row colors
       if (idx % 2 === 0) {
         doc.setFillColor(...LIGHT_GRAY);
       } else {
@@ -329,15 +347,15 @@ export async function generateInvoicePDF(
       }
       doc.rect(40, y, pageWidth - 80, 20, "F");
 
-      doc.text(String(idx + 1), 45, y + 14);
-      if (fontLoaded) {
-        doc.setFont("vazirmatn", "normal");
-      }
-      // Right-align Persian name; shrink font so it fits on ONE line.
+      // Row number (Persian)
+      doc.setFont("vazirmatn", "normal");
+      doc.text(toPersianNumber(idx + 1), 45, y + 14);
+
+      // Part name — right-aligned Persian; shrink font so it fits on ONE line.
       // Never pass maxWidth here: jsPDF would wrap the already-visual-reordered
       // string and re-process each line, scrambling the RTL order.
-      const rawName = s.part?.name || "N/A";
-      const nameText = fontLoaded ? fa(rawName) : rawName;
+      const rawName = s.part?.name || "نامشخص";
+      const nameText = rawName;
       const nameColW = colWidth - 8;
       let nameSize = 10;
       doc.setFontSize(nameSize);
@@ -347,68 +365,47 @@ export async function generateInvoicePDF(
       }
       doc.text(nameText, 45 + colWidth * 2 - 4, y + 14, { align: "right" });
       doc.setFontSize(10);
-      if (fontLoaded) {
-        doc.setFont("helvetica", "normal");
-      }
-      doc.text(String(qty), 45 + colWidth * 2, y + 14);
-      doc.text(unitPrice.toFixed(2), 45 + colWidth * 3, y + 14);
-      doc.text(totalValue.toFixed(2), 45 + colWidth * 4, y + 14);
+
+      // Qty, unit price, total (Persian numerals)
+      doc.text(toPersianNumber(qty), 45 + colWidth * 2, y + 14);
+      doc.text(toPersianNumber(unitPrice.toFixed(2)), 45 + colWidth * 3, y + 14);
+      doc.text(toPersianNumber(totalValue.toFixed(2)), 45 + colWidth * 4, y + 14);
 
       y += 20;
     });
 
     // ----------------------
-    // TOTAL BOX
+    // TOTAL BOX (Persian)
     // ----------------------
     y += 30;
     doc.setFillColor(...LIGHT_GRAY);
     doc.rect(pageWidth - 200, y, 160, 40, "F");
-    doc.setFont("helvetica", "bold");
     doc.setTextColor(...DARK_RED);
-    doc.text("Total:", pageWidth - 180, y + 15);
+    doc.text("مجموع کل:", pageWidth - 180, y + 15);
 
-    doc.setFont("helvetica", "normal");
     doc.setTextColor(...TEXT_COLOR);
-    doc.text(`${totalAmount.toFixed(2)} AFN`, pageWidth - 180, y + 35);
+    doc.text(toPersianCurrency(totalAmount), pageWidth - 180, y + 35);
 
     // ----------------------
-    // SIGNATURE AREA
+    // SIGNATURE AREA (Persian)
     // ----------------------
     y += 100;
-    doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
     doc.setTextColor(...TEXT_COLOR);
-    doc.text("Authorized Signature", 40, y);
-    doc.text("Company Stamp", pageWidth - 200, y);
-
-    if (fontLoaded) {
-      doc.setFont("vazirmatn", "normal");
-      doc.text(fa("امضاء مسئول"), 40, y + 20);
-      doc.text(fa("مهر شرکت"), pageWidth - 200, y + 20);
-    }
+    doc.text("امضاء مسئول", 40, y);
+    doc.text("مهر شرکت", pageWidth - 200, y);
 
     // ----------------------
-    // FOOTER
+    // FOOTER (Persian)
     // ----------------------
-    doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(120, 120, 120);
     doc.text(
-      "This invoice is system-generated and requires no signature.",
+      "جنس فروخته شده بعد از ۲۴ ساعت قابل واپس گرفتن نیست.",
       pageWidth / 2,
-      pageHeight - 30,
+      pageHeight - 20,
       { align: "center" },
     );
-
-    if (fontLoaded) {
-      doc.setFont("vazirmatn", "normal");
-      doc.text(
-        fa("این فاکتور توسط سیستم تولید شده و نیاز به امضاء ندارد."),
-        pageWidth / 2,
-        pageHeight - 15,
-        { align: "center" },
-      );
-    }
 
     // ----------------------
     // OUTPUT
