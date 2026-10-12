@@ -3,8 +3,27 @@ import { jsPDF } from "jspdf";
 import { format } from "date-fns";
 import fs from "fs/promises";
 import path from "path";
+import { render as renderBidi } from "bidi-shaper";
 
 import { Part } from "@/lib/types";
+
+// ----------------------
+// Persian text shaping for jsPDF
+// jsPDF draws glyphs left-to-right and does NOT shape Arabic script or apply
+// the Unicode bidi algorithm. bidi-shaper runs both passes (contextual shaping
+// + UAX #9 reordering + bracket mirroring) and returns a plain string in final
+// visual order, which jsPDF then draws correctly glyph-by-glyph.
+// ----------------------
+const ARABIC_RANGE = /[؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]/;
+
+function fa(text: string): string {
+  if (!text || !ARABIC_RANGE.test(text)) return text;
+  try {
+    return renderBidi(text, { direction: "rtl" });
+  } catch {
+    return text;
+  }
+}
 
 // ----------------------
 // Types
@@ -17,6 +36,18 @@ export type SaleItem = {
   part: Part | null;
   user: { name: string } | null;
 };
+
+export interface InvoiceData {
+  customer: {
+    name: string;
+    phone?: string | null;
+    address?: string | null;
+  };
+  sales: SaleItem[];
+  issueId: number;
+  createdAt: Date;
+  createdBy: string;
+}
 
 export interface InvoiceData {
   customer: {
@@ -59,7 +90,7 @@ const initializeCache = async (): Promise<void> => {
         process.cwd(),
         "public",
         "fonts",
-        "Vazirmatn-Regular.ttf"
+        "Vazirmatn-Regular.ttf",
       );
       const fontBuffer = await fs.readFile(fontPath);
       cachedFont = fontBuffer.toString("base64");
@@ -116,7 +147,7 @@ const getCachedAssets = async () => {
 // Generate Invoice PDF
 // ----------------------
 export async function generateInvoicePDF(
-  data: InvoiceData
+  data: InvoiceData,
 ): Promise<Uint8Array> {
   try {
     // Validate input data
@@ -175,7 +206,7 @@ export async function generateInvoicePDF(
         wmSize,
         wmSize,
         "",
-        "FAST"
+        "FAST",
       );
 
       const gsReset = doc.GState({ opacity: 1 });
@@ -206,14 +237,14 @@ export async function generateInvoicePDF(
     if (fontLoaded) {
       doc.setFont("vazirmatn", "normal");
       doc.setFontSize(14);
-      doc.text("بل پرزه جات وسایط", pageWidth / 2, 80, { align: "center" });
+      doc.text(fa("بل پرزه جات وسایط"), pageWidth / 2, 80, { align: "center" });
 
       doc.setFontSize(12);
       doc.text(
-        "کابل - افغانستان | سرک عمومی | دکان شماره ۱۲",
+        fa("کابل - افغانستان | سرک عمومی | دکان شماره ۱۲"),
         pageWidth / 2,
         100,
-        { align: "center" }
+        { align: "center" },
       );
     }
 
@@ -222,7 +253,7 @@ export async function generateInvoicePDF(
     doc.text(
       `Invoice ID: INV-${String(data.issueId).padStart(4, "0")}`,
       40,
-      90
+      90,
     );
     doc.text(`Date: ${format(data.createdAt, "PPP")}`, pageWidth - 40, 90, {
       align: "right",
@@ -275,7 +306,7 @@ export async function generateInvoicePDF(
             wmSize2,
             wmSize2,
             "",
-            "FAST"
+            "FAST",
           );
 
           const gsReset = doc.GState({ opacity: 1 });
@@ -299,7 +330,26 @@ export async function generateInvoicePDF(
       doc.rect(40, y, pageWidth - 80, 20, "F");
 
       doc.text(String(idx + 1), 45, y + 14);
-      doc.text(s.part?.name || "N/A", 45 + colWidth, y + 14);
+      if (fontLoaded) {
+        doc.setFont("vazirmatn", "normal");
+      }
+      // Right-align Persian name; shrink font so it fits on ONE line.
+      // Never pass maxWidth here: jsPDF would wrap the already-visual-reordered
+      // string and re-process each line, scrambling the RTL order.
+      const rawName = s.part?.name || "N/A";
+      const nameText = fontLoaded ? fa(rawName) : rawName;
+      const nameColW = colWidth - 8;
+      let nameSize = 10;
+      doc.setFontSize(nameSize);
+      while (doc.getTextWidth(nameText) > nameColW && nameSize > 6) {
+        nameSize -= 0.5;
+        doc.setFontSize(nameSize);
+      }
+      doc.text(nameText, 45 + colWidth * 2 - 4, y + 14, { align: "right" });
+      doc.setFontSize(10);
+      if (fontLoaded) {
+        doc.setFont("helvetica", "normal");
+      }
       doc.text(String(qty), 45 + colWidth * 2, y + 14);
       doc.text(unitPrice.toFixed(2), 45 + colWidth * 3, y + 14);
       doc.text(totalValue.toFixed(2), 45 + colWidth * 4, y + 14);
@@ -333,8 +383,8 @@ export async function generateInvoicePDF(
 
     if (fontLoaded) {
       doc.setFont("vazirmatn", "normal");
-      doc.text("امضاء مسئول", 40, y + 20);
-      doc.text("مهر شرکت", pageWidth - 200, y + 20);
+      doc.text(fa("امضاء مسئول"), 40, y + 20);
+      doc.text(fa("مهر شرکت"), pageWidth - 200, y + 20);
     }
 
     // ----------------------
@@ -347,16 +397,16 @@ export async function generateInvoicePDF(
       "This invoice is system-generated and requires no signature.",
       pageWidth / 2,
       pageHeight - 30,
-      { align: "center" }
+      { align: "center" },
     );
 
     if (fontLoaded) {
       doc.setFont("vazirmatn", "normal");
       doc.text(
-        "این فاکتور توسط سیستم تولید شده و نیاز به امضاء ندارد.",
+        fa("این فاکتور توسط سیستم تولید شده و نیاز به امضاء ندارد."),
         pageWidth / 2,
         pageHeight - 15,
-        { align: "center" }
+        { align: "center" },
       );
     }
 
@@ -381,14 +431,14 @@ export async function generateInvoiceBlob(data: InvoiceData): Promise<Blob> {
 }
 
 export async function generateInvoiceBase64(
-  data: InvoiceData
+  data: InvoiceData,
 ): Promise<string> {
   const uint8 = await generateInvoicePDF(data);
   return Buffer.from(uint8).toString("base64");
 }
 
 export async function generateInvoiceDataURL(
-  data: InvoiceData
+  data: InvoiceData,
 ): Promise<string> {
   const base64 = await generateInvoiceBase64(data);
   return `data:application/pdf;base64,${base64}`;

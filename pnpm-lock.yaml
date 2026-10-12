@@ -68,6 +68,9 @@ importers:
       bcryptjs:
         specifier: ^3.0.3
         version: 3.0.3
+      bidi-shaper:
+        specifier: ^0.1.2
+        version: 0.1.2
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -2059,6 +2062,10 @@ packages:
   bcryptjs@3.0.3:
     resolution: {integrity: sha512-GlF5wPWnSa/X5LKM1o0wz0suXIINz1iHRLvTS+sLyi7XPbe5ycmYI3DlZqVGZZtDgl4DmasFg7gOB3JYbphV5g==}
     hasBin: true
+
+  bidi-shaper@0.1.2:
+    resolution: {integrity: sha512-JBRKDJ5lIu0DEUJdNVLmXCVLe01k3Y5AO3KoW6vB1MPj9yc0u570uJY4LrM1JusP10Zbr70ClIdVQ2JD+g6R1g==}
+    engines: {node: '>=18'}
 
   bn.js@4.12.2:
     resolution: {integrity: sha512-n4DSx829VRTRByMRGdjQ9iqsN0Bh4OolPsFnaZBLcbi8iXcB+kJ9s7EnRt4wILZNV3kPLHkRVfOc/HvhC3ovDw==}
@@ -5626,6 +5633,8 @@ snapshots:
   baseline-browser-mapping@2.11.25: {}
 
   bcryptjs@3.0.3: {}
+
+  bidi-shaper@0.1.2: {}
 
   bn.js@4.12.2: {}
 
