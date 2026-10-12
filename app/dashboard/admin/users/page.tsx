@@ -177,6 +177,7 @@ export default function AdminDashboard() {
     }
 
     try {
+      console.log("Attempting to delete user:", userId);
       const response = await fetch("/api/admin/users/delete", {
         method: "DELETE",
         headers: {
@@ -186,15 +187,19 @@ export default function AdminDashboard() {
         body: JSON.stringify({ userId }),
       });
 
+      console.log("Delete response status:", response.status);
+      const responseData = await response.json();
+      console.log("Delete response data:", responseData);
+
       if (!response.ok) {
-        throw new Error("Failed to delete user");
+        throw new Error(responseData.error || "Failed to delete user");
       }
 
       toast.success("User deleted successfully");
       fetchUsers();
     } catch (err) {
-      toast.error("Failed to delete user");
       console.error("Error deleting user:", err);
+      toast.error(err instanceof Error ? err.message : "Failed to delete user");
     }
   };
 

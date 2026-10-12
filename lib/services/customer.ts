@@ -2,7 +2,7 @@
 import { db } from "@/db/drizzle";
 import { customers, sales, payments } from "@/db/schema";
 import { normalizeName } from "../utils/normalize";
-import { eq, sum } from "drizzle-orm";
+import { eq, sum, isNull, and } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
 export async function findOrCreateCustomer(
@@ -31,13 +31,13 @@ export async function getCustomerById(id: number) {
 
 // Efficient balance calculation using Drizzle ORM
 export async function getCustomerBalance(id: number) {
-  // Get total sales for this customer
+  // Get total sales for this customer (فروش‌های مرتجع خارج‌اند)
   const salesResult = await db
     .select({
       totalSales: sql<string>`COALESCE(SUM(${sales.totalAmount}), 0)`,
     })
     .from(sales)
-    .where(eq(sales.customerId, id));
+    .where(and(eq(sales.customerId, id), isNull(sales.returnedAt)));
 
   const totalSales = Number(salesResult[0]?.totalSales ?? 0);
 
@@ -48,7 +48,7 @@ export async function getCustomerBalance(id: number) {
     })
     .from(payments)
     .innerJoin(sales, eq(payments.saleId, sales.id))
-    .where(eq(sales.customerId, id));
+    .where(and(eq(sales.customerId, id), isNull(sales.returnedAt)));
 
   const totalPaid = Number(paymentsResult[0]?.totalPaid ?? 0);
 

@@ -22,37 +22,48 @@ export async function GET(request: Request) {
       console.log("To:", to);
     }
 
-    // Build the query with proper date filtering
-    let query = sql`
-      SELECT 
-        DATE(s.sale_date) as date,
-        COALESCE(SUM(s.total_amount), 0) as sales,
-        COALESCE(SUM(p.amount), 0) as payments
-      FROM sales s
-      LEFT JOIN payments p ON p.sale_id = s.id AND DATE(p.payment_date) = DATE(s.sale_date)
-    `;
+    // Aggregate sales and payments SEPARATELY per day, then join.
+    // A payment row must never duplicate a sale row — otherwise a same-day
+    // second payment would inflate income in this chart.
+    let salesFilter = sql`WHERE s.sale_date >= CURRENT_DATE - INTERVAL '7 days' AND s.returned_at IS NULL`;
+    let paymentsFilter = sql`WHERE p.payment_date >= CURRENT_DATE - INTERVAL '7 days'`;
 
     // Add WHERE clause based on date parameters
+    // فروش‌های مرتجع از درآمد روزانه خارج‌اند (پرداخت‌ها/بازپرداخت‌ها جریان نقد را می‌سازند)
     if (from && to) {
-      query = query.append(
-        sql` WHERE s.sale_date >= ${from} AND s.sale_date <= ${to}`
-      );
+      salesFilter = sql`WHERE s.sale_date >= ${from} AND s.sale_date <= ${to} AND s.returned_at IS NULL`;
+      paymentsFilter = sql`WHERE p.payment_date >= ${from} AND p.payment_date <= ${to}`;
     } else if (from) {
-      query = query.append(sql` WHERE s.sale_date >= ${from}`);
+      salesFilter = sql`WHERE s.sale_date >= ${from} AND s.returned_at IS NULL`;
+      paymentsFilter = sql`WHERE p.payment_date >= ${from}`;
     } else if (to) {
-      query = query.append(sql` WHERE s.sale_date <= ${to}`);
+      salesFilter = sql`WHERE s.sale_date <= ${to} AND s.returned_at IS NULL`;
+      paymentsFilter = sql`WHERE p.payment_date <= ${to}`;
     } else {
-      // Default to last 7 days if no date range provided
-      query = query.append(
-        sql` WHERE s.sale_date >= CURRENT_DATE - INTERVAL '7 days'`
-      );
+      salesFilter = sql`WHERE s.returned_at IS NULL`;
     }
 
-    // Complete the query
-    query = query.append(sql`
-      GROUP BY DATE(s.sale_date)
+    const query = sql`
+      SELECT
+        COALESCE(sa.day, pa.day) as date,
+        COALESCE(sa.sales, 0) as sales,
+        COALESCE(pa.payments, 0) as payments
+      FROM (
+        SELECT DATE(s.sale_date) as day,
+               COALESCE(SUM(s.total_amount), 0) as sales
+        FROM sales s
+        ${salesFilter}
+        GROUP BY 1
+      ) sa
+      FULL OUTER JOIN (
+        SELECT DATE(p.payment_date) as day,
+               COALESCE(SUM(p.amount), 0) as payments
+        FROM payments p
+        ${paymentsFilter}
+        GROUP BY 1
+      ) pa ON sa.day = pa.day
       ORDER BY date ASC
-    `);
+    `;
 
     // Execute the query
     const trendData = await db.execute(query);

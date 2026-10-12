@@ -4,7 +4,7 @@ import { createSale } from "@/lib/services/sale";
 import { createSaleSchema } from "@/lib/validation/schemas";
 import { db } from "@/db/drizzle";
 import { sales, customers, parts, payments, user } from "@/db/schema";
-import { eq, and, gte, lte, sql, count } from "drizzle-orm";
+import { eq, and, gte, lte, sql, count, isNull, isNotNull } from "drizzle-orm";
 import {
   startOfToday,
   startOfWeek,
@@ -44,6 +44,10 @@ export async function GET(req: Request) {
     const toDate = searchParams.get("toDate") || "";
     const period = searchParams.get("period") || "today";
     const section = searchParams.get("section") || "";
+    const normalizedName = searchParams.get("normalizedName") || "";
+    const paymentStatus = searchParams.get("paymentStatus") || ""; // "paid" | "outstanding" | ""
+    const excludeReturned = searchParams.get("excludeReturned") === "true";
+    const returnedOnly = searchParams.get("returnedOnly") === "true";
 
     // Fetch sales data with the filters
     const salesData = await fetchSalesData({
@@ -54,6 +58,10 @@ export async function GET(req: Request) {
       toDate,
       period,
       section,
+      normalizedName,
+      paymentStatus,
+      excludeReturned,
+      returnedOnly,
     });
 
     return NextResponse.json({
@@ -80,8 +88,24 @@ async function fetchSalesData(params: {
   toDate: string;
   period: string;
   section?: string;
+  normalizedName?: string;
+  paymentStatus?: string;
+  excludeReturned?: boolean;
+  returnedOnly?: boolean;
 }) {
-  const { page, limit, search, fromDate, toDate, period, section } = params;
+  const {
+    page,
+    limit,
+    search,
+    fromDate,
+    toDate,
+    period,
+    section,
+    normalizedName,
+    paymentStatus,
+    excludeReturned,
+    returnedOnly,
+  } = params;
 
   // Calculate date range based on period
   let dateFilter = {};
@@ -121,14 +145,14 @@ async function fetchSalesData(params: {
   }
 
   // Build query conditions
-  const whereConditions = [];
+  const baseConditions = [];
 
   if (Object.keys(dateFilter).length > 0) {
-    whereConditions.push(dateFilter as any);
+    baseConditions.push(dateFilter as any);
   }
 
   if (dateConditions.length > 0) {
-    whereConditions.push(and(...dateConditions));
+    baseConditions.push(and(...dateConditions));
   }
 
   // Search filter - search in customer name, part name, or part number
@@ -138,12 +162,34 @@ async function fetchSalesData(params: {
         ${parts.name} ILIKE ${`%${search}%`} OR 
         ${parts.partNumber} ILIKE ${`%${search}%`})
       `;
-    whereConditions.push(searchCondition);
+    baseConditions.push(searchCondition);
   }
 
   // Section filter - filter sales by part section
   if (section) {
-    whereConditions.push(eq(parts.section, section));
+    baseConditions.push(eq(parts.section, section));
+  }
+
+  // Exact customer filter (normalized name — matches the customer summary grouping)
+  if (normalizedName) {
+    baseConditions.push(eq(customers.normalizedName, normalizedName));
+  }
+
+  // فروش‌های مرتجع (مرجوعی): حذف از لیست/گزارش یا نمایش فقط مرتجع‌ها
+  const whereConditions = [...baseConditions];
+
+  // وضعیت پرداخت: پرداخت‌شده / باقیمانده (فیلتر گزارش‌ها و کارت‌ها)
+  if (paymentStatus === "paid") {
+    whereConditions.push(eq(sales.isFullyPaid, true));
+  } else if (paymentStatus === "outstanding") {
+    whereConditions.push(sql`${sales.outstanding} > 0`);
+  }
+
+  if (excludeReturned) {
+    whereConditions.push(isNull(sales.returnedAt));
+  }
+  if (returnedOnly) {
+    whereConditions.push(isNotNull(sales.returnedAt));
   }
 
   const whereClause =
@@ -162,6 +208,9 @@ async function fetchSalesData(params: {
       paidAmount: sales.paidAmount,
       outstanding: sales.outstanding,
       isFullyPaid: sales.isFullyPaid,
+      discount: sales.discount,
+      returnedAt: sales.returnedAt,
+      returnNote: sales.returnNote,
       issueDate: sales.saleDate,
       quantity: sales.quantity,
       issuedBy: user.name, // Get user name instead of ID
@@ -190,6 +239,8 @@ async function fetchSalesData(params: {
       sales.paidAmount,
       sales.outstanding,
       sales.isFullyPaid,
+      sales.returnedAt,
+      sales.returnNote,
       sales.saleDate,
       sales.quantity,
       user.name, // Group by user name instead of ID
@@ -213,6 +264,7 @@ async function fetchSalesData(params: {
     .groupBy(sales.id);
 
   // Summary aggregates under the same filters (ignores pagination)
+  // فروش‌های مرتجع هرگز جمع‌های گزارش/کارت‌ها را شامل نمی‌شوند
   const summaryQuery = db
     .select({
       totalSales: sql<string>`COALESCE(SUM(${sales.totalAmount}), 0)`,
@@ -223,14 +275,35 @@ async function fetchSalesData(params: {
     .from(sales)
     .leftJoin(customers, eq(sales.customerId, customers.id))
     .leftJoin(parts, eq(sales.partId, parts.id))
-    .where(whereClause);
+    .where(and(...whereConditions, isNull(sales.returnedAt)));
+
+  // مجموع بازپرداخت/مرجوعی: پرداخت‌های منفی (refunds) در همان بازه فیلتر
+  // (بدون اعمال فیلتر excludeReturned — چون بازپرداخت فقط برای فروش مرتجع رخ می‌دهد)
+  const refundsQuery = db
+    .select({
+      totalRefunds: sql<string>`COALESCE(-SUM(${payments.amount}), 0)`,
+      refundCount: count(),
+    })
+    .from(payments)
+    .innerJoin(sales, eq(payments.saleId, sales.id))
+    .leftJoin(customers, eq(sales.customerId, customers.id))
+    .leftJoin(parts, eq(sales.partId, parts.id))
+    .where(
+      and(
+        ...baseConditions,
+        sql`${payments.amount} < 0`,
+        isNotNull(sales.returnedAt)
+      )
+    );
 
   // Execute all queries
-  const [salesData, totalCountResult, summaryResult] = await Promise.all([
-    baseQuery,
-    totalCountQuery,
-    summaryQuery,
-  ]);
+  const [salesData, totalCountResult, summaryResult, refundsResult] =
+    await Promise.all([
+      baseQuery,
+      totalCountQuery,
+      summaryQuery,
+      refundsQuery,
+    ]);
 
   const total = totalCountResult.length;
   const totalPages = Math.ceil(total / limit);
@@ -248,6 +321,8 @@ async function fetchSalesData(params: {
       totalPaid: Number(summaryResult[0]?.totalPaid || 0),
       totalOutstanding: Number(summaryResult[0]?.totalOutstanding || 0),
       count: summaryResult[0]?.count || 0,
+      totalRefunds: Number(refundsResult[0]?.totalRefunds || 0),
+      refundCount: refundsResult[0]?.refundCount || 0,
     },
   };
 }

@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import Loader from "@/components/loader";
+import HijriDatePicker from "@/components/hijri-date-picker";
 import {
   DollarSign,
   Users,
@@ -144,7 +145,7 @@ interface DateRange {
 // API functions - Updated to include date range
 // Updated API functions with better error handling
 const fetchDashboardStats = async (
-  dateRange?: DateRange
+  dateRange?: DateRange,
 ): Promise<DashboardStats> => {
   const params = new URLSearchParams();
   if (dateRange?.from) {
@@ -155,7 +156,9 @@ const fetchDashboardStats = async (
   }
 
   try {
-    const response = await fetch(`/api/dashboard/stats?${params.toString()}`, { credentials: "include" });
+    const response = await fetch(`/api/dashboard/stats?${params.toString()}`, {
+      credentials: "include",
+    });
     if (!response.ok) throw new Error("Failed to fetch dashboard stats");
     return await response.json();
   } catch (error) {
@@ -175,7 +178,9 @@ const fetchDashboardStats = async (
   }
 };
 const fetchLowStockItems = async (): Promise<LowStockItem[]> => {
-  const response = await fetch("/api/parts?limit=1000", { credentials: "include" });
+  const response = await fetch("/api/parts?limit=1000", {
+    credentials: "include",
+  });
   if (!response.ok) throw new Error("Failed to fetch parts data");
 
   const result = await response.json();
@@ -200,7 +205,7 @@ const fetchLowStockItems = async (): Promise<LowStockItem[]> => {
 };
 
 const fetchSalesTrend = async (
-  dateRange?: DateRange
+  dateRange?: DateRange,
 ): Promise<SalesTrend[]> => {
   const params = new URLSearchParams();
 
@@ -229,20 +234,20 @@ const fetchSalesTrend = async (
 
     const response = await fetch(
       `/api/dashboard/sales-trend?${params.toString()}`,
-      { credentials: "include" }
+      { credentials: "include" },
     );
 
     console.log("📡 Frontend: API Response status:", response.status);
     console.log(
       "📡 Frontend: API Response headers:",
-      Object.fromEntries(response.headers.entries())
+      Object.fromEntries(response.headers.entries()),
     );
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error("❌ Frontend: API Error:", errorText);
       throw new Error(
-        `Failed to fetch sales trend: ${response.status} - ${errorText}`
+        `Failed to fetch sales trend: ${response.status} - ${errorText}`,
       );
     }
 
@@ -260,7 +265,7 @@ const fetchSalesTrend = async (
 };
 
 const fetchPaymentStatus = async (
-  dateRange?: DateRange
+  dateRange?: DateRange,
 ): Promise<PaymentStatus> => {
   const params = new URLSearchParams();
   if (dateRange?.from) {
@@ -272,14 +277,14 @@ const fetchPaymentStatus = async (
 
   const response = await fetch(
     `/api/dashboard/payment-status?${params.toString()}`,
-    { credentials: "include" }
+    { credentials: "include" },
   );
   if (!response.ok) throw new Error("Failed to fetch payment status");
   return response.json();
 };
 
 const fetchExpenseData = async (
-  dateRange?: DateRange
+  dateRange?: DateRange,
 ): Promise<ExpenseData> => {
   const params = new URLSearchParams();
   if (dateRange?.from) {
@@ -292,7 +297,7 @@ const fetchExpenseData = async (
   try {
     const response = await fetch(
       `/api/dashboard/expense-reports?${params.toString()}`,
-      { credentials: "include" }
+      { credentials: "include" },
     );
     if (!response.ok) throw new Error("Failed to fetch expense data");
     return await response.json();
@@ -327,7 +332,7 @@ const fetchExpenseData = async (
   }
 };
 
-// Date Range Picker Component - Fixed for mobile
+// Date Range Picker Component using HijriDatePicker
 const DateRangePicker = ({
   dateRange,
   onDateRangeChange,
@@ -335,126 +340,39 @@ const DateRangePicker = ({
   dateRange: DateRange;
   onDateRangeChange: (range: DateRange) => void;
 }) => {
-  const [isOpen, setIsOpen] = useState(false);
-
-  const quickFilters = [
-    {
-      label: "امروز",
-      value: "today",
-      getRange: () => ({
-        from: startOfToday(),
-        to: startOfToday(),
-      }),
-    },
-    {
-      label: "این هفته",
-      value: "thisWeek",
-      getRange: () => ({
-        from: startOfWeek(new Date(), { locale: faIR }),
-        to: new Date(),
-      }),
-    },
-    {
-      label: "این ماه",
-      value: "thisMonth",
-      getRange: () => ({
-        from: startOfMonth(new Date()),
-        to: new Date(),
-      }),
-    },
-    {
-      label: "همه زمانها",
-      value: "lifetime",
-      getRange: () => ({
-        from: new Date(2020, 0, 1),
-        to: new Date(),
-      }),
-    },
-  ];
-
-  const handleQuickFilter = (filter: (typeof quickFilters)[0]) => {
-    onDateRangeChange(filter.getRange());
-    setIsOpen(false);
+  const handleDateChange = (type: "from" | "to", value: string) => {
+    if (value) {
+      const date = new Date(value);
+      onDateRangeChange({
+        ...dateRange,
+        [type]: date,
+      } as DateRange);
+    }
   };
 
   return (
-    <Popover open={isOpen} onOpenChange={setIsOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          className={cn(
-            "w-full sm:w-[280px] lg:w-[320px] justify-start text-left font-normal",
-            !dateRange && "text-muted-foreground"
-          )}
-        >
-          <CalendarIcon className="ml-2 h-4 w-4" />
-          {dateRange.from ? (
-            dateRange.to ? (
-              <>
-                {format(dateRange.from, "yyyy/MM/dd", { locale: faIR })} -{" "}
-                {format(dateRange.to, "yyyy/MM/dd", { locale: faIR })}
-              </>
-            ) : (
-              format(dateRange.from, "yyyy/MM/dd", { locale: faIR })
-            )
-          ) : (
-            <span>انتخاب تاریخ</span>
-          )}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-auto p-0 z-50" align="start" sideOffset={5}>
-        <div className="flex flex-col p-4">
-          <div className="grid grid-cols-2 gap-2 mb-4">
-            {quickFilters.map((filter) => (
-              <Button
-                key={filter.value}
-                variant="outline"
-                size="sm"
-                onClick={() => handleQuickFilter(filter)}
-                className="text-xs"
-              >
-                {filter.label}
-              </Button>
-            ))}
-          </div>
-          <div className="overflow-auto">
-            <Calendar
-              mode="range"
-              selected={{
-                from: dateRange.from,
-                to: dateRange.to,
-              }}
-              onSelect={(range) => {
-                if (range?.from && range?.to) {
-                  onDateRangeChange({ from: range.from, to: range.to });
-                  setIsOpen(false);
-                }
-              }}
-              numberOfMonths={1}
-              locale={faIR}
-              className="rounded-md border"
-            />
-          </div>
-          <div className="flex justify-between mt-4 pt-4 border-t">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsOpen(false)}
-              className="text-xs"
-            >
-              لغو
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => setIsOpen(false)}
-              className="text-xs"
-            >
-              تأیید
-            </Button>
-          </div>
-        </div>
-      </PopoverContent>
-    </Popover>
+    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+      <div className="flex items-center gap-2">
+        <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+        <HijriDatePicker
+          value={
+            dateRange.from ? dateRange.from.toISOString().split("T")[0] : ""
+          }
+          onChange={(value) => handleDateChange("from", value)}
+          placeholder="از تاریخ"
+          className="w-auto"
+        />
+      </div>
+      <div className="flex items-center gap-2">
+        <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+        <HijriDatePicker
+          value={dateRange.to ? dateRange.to.toISOString().split("T")[0] : ""}
+          onChange={(value) => handleDateChange("to", value)}
+          placeholder="تا تاریخ"
+          className="w-auto"
+        />
+      </div>
+    </div>
   );
 };
 
@@ -743,7 +661,7 @@ const ExpenseChart = ({ data }: { data: ExpenseData }) => {
 
   const maxExpense = Math.max(
     ...data.expenseTrend.map((item) => item.amount),
-    1
+    1,
   );
 
   return (
@@ -1406,7 +1324,7 @@ export default function AdminDashboard() {
               <CardContent>
                 <div className="text-lg sm:text-2xl font-bold text-green-600">
                   {expenseData?.profitAnalysis?.grossProfit?.toLocaleString(
-                    "fa-IR"
+                    "fa-IR",
                   ) || 0}{" "}
                   افغانی
                 </div>
@@ -1427,7 +1345,7 @@ export default function AdminDashboard() {
               <CardContent>
                 <div className="text-lg sm:text-2xl font-bold text-green-600">
                   {expenseData?.profitAnalysis?.netProfit?.toLocaleString(
-                    "fa-IR"
+                    "fa-IR",
                   ) || 0}{" "}
                   افغانی
                 </div>
@@ -1535,7 +1453,7 @@ export default function AdminDashboard() {
                     }`}
                   >
                     {expenseData?.weeklyComparison?.percentageChange?.toFixed(
-                      1
+                      1,
                     ) || 0}
                     %
                   </span>
@@ -1553,7 +1471,7 @@ export default function AdminDashboard() {
                     }`}
                   >
                     {expenseData?.monthlyComparison?.percentageChange?.toFixed(
-                      1
+                      1,
                     ) || 0}
                     %
                   </span>
@@ -1564,7 +1482,7 @@ export default function AdminDashboard() {
                   </span>
                   <span className="font-medium text-sm sm:text-base">
                     {expenseData?.weeklyComparison?.currentWeek?.toLocaleString(
-                      "fa-IR"
+                      "fa-IR",
                     ) || 0}{" "}
                     افغانی
                   </span>
@@ -1575,7 +1493,7 @@ export default function AdminDashboard() {
                   </span>
                   <span className="font-medium text-sm sm:text-base">
                     {expenseData?.monthlyComparison?.currentMonth?.toLocaleString(
-                      "fa-IR"
+                      "fa-IR",
                     ) || 0}{" "}
                     افغانی
                   </span>
@@ -1601,7 +1519,7 @@ export default function AdminDashboard() {
                   <div className="text-center p-4 border rounded-lg">
                     <div className="text-lg font-bold text-blue-600">
                       {expenseData.profitAnalysis.totalRevenue?.toLocaleString(
-                        "fa-IR"
+                        "fa-IR",
                       ) || 0}
                     </div>
                     <div className="text-xs text-muted-foreground">
@@ -1611,7 +1529,7 @@ export default function AdminDashboard() {
                   <div className="text-center p-4 border rounded-lg">
                     <div className="text-lg font-bold text-red-600">
                       {expenseData.profitAnalysis.totalExpenses?.toLocaleString(
-                        "fa-IR"
+                        "fa-IR",
                       ) || 0}
                     </div>
                     <div className="text-xs text-muted-foreground">
@@ -1627,7 +1545,7 @@ export default function AdminDashboard() {
                       }`}
                     >
                       {expenseData.profitAnalysis.grossProfit?.toLocaleString(
-                        "fa-IR"
+                        "fa-IR",
                       ) || 0}
                     </div>
                     <div className="text-xs text-muted-foreground">

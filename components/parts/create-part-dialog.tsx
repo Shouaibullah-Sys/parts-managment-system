@@ -79,7 +79,7 @@ export function CreatePartDialog({
       onOpenChange(false);
     } catch (error) {
       setServerError(
-        error instanceof Error ? error.message : "Something went wrong"
+        error instanceof Error ? error.message : "Something went wrong",
       );
     }
   };

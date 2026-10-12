@@ -2,6 +2,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import HijriDatePicker, {
+  formatHijri,
+} from "@/components/hijri-date-picker";
 import {
   useReactTable,
   getCoreRowModel,
@@ -40,11 +43,9 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import {
-  MoreHorizontal,
   ArrowUpDown,
   Search,
   Edit,
-  Trash2,
   DollarSign,
   Calendar,
   Building,
@@ -105,7 +106,6 @@ const expenseCategories = [
 
 export function ExpensesTable() {
   const { data: session } = authClient.useSession();
-  const [userRole, setUserRole] = useState<string | null>(null);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [isEditFormOpen, setIsEditFormOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -116,17 +116,6 @@ export function ExpensesTable() {
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
-
-  useEffect(() => {
-    if (session?.user) {
-      fetch("/api/user/role", { credentials: "include" })
-        .then((res) => res.json())
-        .then((data) => setUserRole(data.role))
-        .catch((error) => console.error("Error fetching user role:", error));
-    }
-  }, [session?.user]);
-
-  const isAdmin = userRole === "admin";
 
   // State for table
   const [sorting, setSorting] = useState<SortingState>([
@@ -208,38 +197,6 @@ export function ExpensesTable() {
     endDateFilter,
   ]);
 
-  // Delete expense
-  const handleDelete = async (expense: Expense) => {
-    if (!isAdmin) {
-      toast.error("شما اجازه حذف مصارف را ندارید");
-      return;
-    }
-
-    if (
-      confirm(
-        `آیا مطمئن هستید که می‌خواهید مصرف "${expense.title}" را حذف کنید؟`
-      )
-    ) {
-      try {
-        const response = await fetch(`/api/expenses/${expense.id}`, {
-          method: "DELETE",
-        });
-
-        const result = await response.json();
-
-        if (result.success) {
-          toast.success("مصرف با موفقیت حذف شد");
-          fetchExpenses();
-        } else {
-          toast.error(result.error || "حذف مصرف ناموفق بود");
-        }
-      } catch (error) {
-        console.error("Error deleting expense:", error);
-        toast.error("حذف مصرف ناموفق بود");
-      }
-    }
-  };
-
   // Edit expense
   const handleEdit = (expense: Expense) => {
     setEditingExpense(expense);
@@ -252,11 +209,6 @@ export function ExpensesTable() {
       style: "currency",
       currency: "AFN",
     }).format(amount);
-  };
-
-  // Format date
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString();
   };
 
   // Define columns for mobile and desktop
@@ -280,7 +232,7 @@ export function ExpensesTable() {
                 {expense.category}
               </Badge>
               <span className="text-xs text-muted-foreground">
-                {formatDate(expense.expenseDate)}
+                {formatHijri(expense.expenseDate)}
               </span>
             </div>
             <div className="text-sm font-semibold text-green-600">
@@ -298,9 +250,7 @@ export function ExpensesTable() {
         return (
           <ActionMenu
             expense={expense}
-            isAdmin={isAdmin}
             onEdit={() => handleEdit(expense)}
-            onDelete={() => handleDelete(expense)}
             isMobile={true}
           />
         );
@@ -367,12 +317,18 @@ export function ExpensesTable() {
           </Button>
         );
       },
-      cell: ({ row }) => (
-        <div className="flex items-center gap-2">
-          <Calendar className="h-4 w-4 text-muted-foreground" />
-          {formatDate(row.getValue("expenseDate"))}
-        </div>
-      ),
+      cell: ({ row }) => {
+        const expenseDate = row.getValue("expenseDate") as string;
+        const isoDate = expenseDate
+          ? expenseDate.split("T")[0]
+          : "";
+        return (
+          <div className="flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+            {formatHijri(isoDate)}
+          </div>
+        );
+      },
     },
     {
       accessorKey: "vendor",
@@ -411,9 +367,7 @@ export function ExpensesTable() {
         return (
           <ActionMenu
             expense={expense}
-            isAdmin={isAdmin}
             onEdit={() => handleEdit(expense)}
-            onDelete={() => handleDelete(expense)}
             isMobile={false}
           />
         );
@@ -539,18 +493,16 @@ export function ExpensesTable() {
             </SelectContent>
           </Select>
 
-          <Input
-            type="date"
-            placeholder="تاریخ شروع"
+          <HijriDatePicker
             value={startDateFilter}
-            onChange={(event) => setStartDateFilter(event.target.value)}
+            onChange={setStartDateFilter}
+            placeholder="تاریخ شروع"
           />
 
-          <Input
-            type="date"
-            placeholder="تاریخ پایان"
+          <HijriDatePicker
             value={endDateFilter}
-            onChange={(event) => setEndDateFilter(event.target.value)}
+            onChange={setEndDateFilter}
+            placeholder="تاریخ پایان"
           />
         </div>
       </div>
@@ -567,7 +519,7 @@ export function ExpensesTable() {
                       ? null
                       : flexRender(
                           header.column.columnDef.header,
-                          header.getContext()
+                          header.getContext(),
                         )}
                   </TableHead>
                 ))}
@@ -599,7 +551,7 @@ export function ExpensesTable() {
                     <TableCell key={cell.id}>
                       {flexRender(
                         cell.column.columnDef.cell,
-                        cell.getContext()
+                        cell.getContext(),
                       )}
                     </TableCell>
                   ))}
@@ -698,15 +650,11 @@ export function ExpensesTable() {
 // Action Menu Component
 function ActionMenu({
   expense,
-  isAdmin,
   onEdit,
-  onDelete,
   isMobile,
 }: {
   expense: Expense;
-  isAdmin: boolean;
   onEdit: () => void;
-  onDelete: () => void;
   isMobile: boolean;
 }) {
   return (
@@ -720,19 +668,6 @@ function ActionMenu({
         <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
         {isMobile && <span className="ml-1">ویرایش</span>}
       </Button>
-
-      {isAdmin && (
-        <Button
-          variant="ghost"
-          size={isMobile ? "sm" : "icon"}
-          onClick={onDelete}
-          title="حذف مصرف"
-          className="text-red-600 hover:text-red-700"
-        >
-          <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
-          {isMobile && <span className="ml-1">حذف</span>}
-        </Button>
-      )}
     </div>
   );
 }

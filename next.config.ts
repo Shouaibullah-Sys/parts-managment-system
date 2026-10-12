@@ -2,7 +2,11 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /* config options here */
-  turbopack: {}, // Empty turbopack config to fix worker errors
+  // Pin the workspace root to this project so Next.js doesn't infer
+  // /home/<user> (stray package-lock.json outside the repo) as the root
+  turbopack: {
+    root: __dirname,
+  },
 
   webpack: (config, { isServer }) => {
     if (!isServer) {

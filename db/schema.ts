@@ -106,7 +106,11 @@ export const sales = pgTable("sales", {
   outstanding: numeric("outstanding", { precision: 12, scale: 2 }).default("0"),
   isFullyPaid: boolean("is_fully_paid").default(false),
   saleDate: timestamp("sale_date").defaultNow(),
-  createdBy: text("created_by").references(() => user.id),
+  createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+  discount: numeric("discount", { precision: 12, scale: 2 }).default("0"),
+  // مرجوعی فروش (برگشت کالا + بازپرداخت) — خالده = فروش فعال
+  returnedAt: timestamp("returned_at"),
+  returnNote: text("return_note"),
 });
 
 // --- جدول پرداخت‌های بعدی مشتری ---
@@ -116,7 +120,17 @@ export const payments = pgTable("payments", {
   amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
   paymentDate: timestamp("payment_date").defaultNow(),
   note: text("note"),
-  receivedBy: text("received_by").references(() => user.id),
+  receivedBy: text("received_by").references(() => user.id, { onDelete: "set null" }),
+});
+
+// --- جدول تخفیف / بخشش بدهی فروش ---
+export const saleDiscounts = pgTable("sale_discounts", {
+  id: serial("id").primaryKey(),
+  saleId: integer("sale_id").references(() => sales.id),
+  amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+  note: text("note"),
+  createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // --- جدول واردات (خرید از خارج) ---
@@ -155,7 +169,7 @@ export const inventory = pgTable("inventory_transactions", {
   reason: varchar("reason", { length: 50 }), // 'sale', 'import', 'adjustment'
   referenceId: integer("reference_id"), // id از sale یا import
   createdAt: timestamp("created_at").defaultNow(),
-  createdBy: text("created_by").references(() => user.id),
+  createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
 });
 
 // --- جدول شاخص جستجو برای عملکرد بهتر ---
@@ -184,7 +198,7 @@ export const expenses = pgTable("expenses", {
   expenseDate: timestamp("expense_date").defaultNow(),
   receiptNumber: varchar("receipt_number", { length: 100 }),
   vendor: varchar("vendor", { length: 255 }),
-  createdBy: text("created_by").references(() => user.id),
+  createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

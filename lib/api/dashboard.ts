@@ -8,7 +8,7 @@ import {
 import { subDays } from "date-fns";
 import { db } from "@/db/drizzle";
 import { sales, customers, parts, expenses } from "@/db/schema";
-import { sql, and, gte, lte } from "drizzle-orm";
+import { sql, and, gte, lte, isNull } from "drizzle-orm";
 import { startOfToday, startOfMonth } from "date-fns";
 
 // Type definitions for expense analytics
@@ -112,7 +112,8 @@ export const fetchDashboardStats = async (
           COALESCE(SUM(CASE WHEN ${sales.saleDate} >= ${monthStart} THEN ${sales.totalAmount} ELSE 0 END), 0)
         `,
       })
-      .from(sales);
+      .from(sales)
+      .where(sql`${sales.returnedAt} IS NULL`);
 
     // Get total customers
     const customersData = await db
@@ -281,41 +282,45 @@ export const fetchSalesTrend = async (
       };
     }
 
-    // Build the query with proper date filtering
-    let query = sql`
-      SELECT 
-        DATE(s.sale_date) as date,
-        COALESCE(SUM(s.total_amount), 0) as sales,
-        COALESCE(SUM(p.amount), 0) as payments
-      FROM sales s
-      LEFT JOIN payments p ON p.sale_id = s.id AND DATE(p.payment_date) = DATE(s.sale_date)
-    `;
+    // Aggregate sales and payments SEPARATELY per day, then join.
+    // A payment row must never duplicate a sale row — otherwise a same-day
+    // second payment would inflate income in this chart.
+    let salesFilter = sql`WHERE s.sale_date >= CURRENT_DATE - INTERVAL '7 days'`;
+    let paymentsFilter = sql`WHERE p.payment_date >= CURRENT_DATE - INTERVAL '7 days'`;
 
     // Add WHERE clause based on date parameters
     if (dateRange.from && dateRange.to) {
-      query = query.append(
-        sql` WHERE s.sale_date >= ${dateRange.from.toISOString()} AND s.sale_date <= ${dateRange.to.toISOString()}`
-      );
+      salesFilter = sql`WHERE s.sale_date >= ${dateRange.from.toISOString()} AND s.sale_date <= ${dateRange.to.toISOString()}`;
+      paymentsFilter = sql`WHERE p.payment_date >= ${dateRange.from.toISOString()} AND p.payment_date <= ${dateRange.to.toISOString()}`;
     } else if (dateRange.from) {
-      query = query.append(
-        sql` WHERE s.sale_date >= ${dateRange.from.toISOString()}`
-      );
+      salesFilter = sql`WHERE s.sale_date >= ${dateRange.from.toISOString()}`;
+      paymentsFilter = sql`WHERE p.payment_date >= ${dateRange.from.toISOString()}`;
     } else if (dateRange.to) {
-      query = query.append(
-        sql` WHERE s.sale_date <= ${dateRange.to.toISOString()}`
-      );
-    } else {
-      // Default to last 7 days if no date range provided
-      query = query.append(
-        sql` WHERE s.sale_date >= CURRENT_DATE - INTERVAL '7 days'`
-      );
+      salesFilter = sql`WHERE s.sale_date <= ${dateRange.to.toISOString()}`;
+      paymentsFilter = sql`WHERE p.payment_date <= ${dateRange.to.toISOString()}`;
     }
 
-    // Complete the query
-    query = query.append(sql`
-      GROUP BY DATE(s.sale_date)
+    const query = sql`
+      SELECT
+        COALESCE(sa.day, pa.day) as date,
+        COALESCE(sa.sales, 0) as sales,
+        COALESCE(pa.payments, 0) as payments
+      FROM (
+        SELECT DATE(s.sale_date) as day,
+               COALESCE(SUM(s.total_amount), 0) as sales
+        FROM sales s
+        ${salesFilter}
+        GROUP BY 1
+      ) sa
+      FULL OUTER JOIN (
+        SELECT DATE(p.payment_date) as day,
+               COALESCE(SUM(p.amount), 0) as payments
+        FROM payments p
+        ${paymentsFilter}
+        GROUP BY 1
+      ) pa ON sa.day = pa.day
       ORDER BY date ASC
-    `);
+    `;
 
     // Execute the query
     const trendData = await db.execute(query);
@@ -629,7 +634,7 @@ export const fetchExpenseReports = async (
           )
         ),
 
-      // Profit analysis - get revenue from sales
+      // Profit analysis - get revenue from sales (فروش‌های مرتجع خارج‌اند)
       db
         .select({
           totalRevenue: sql<number>`coalesce(sum(${sales.totalAmount}), 0)`,
@@ -639,7 +644,8 @@ export const fetchExpenseReports = async (
         .where(
           and(
             gte(sales.saleDate, dateRange.from),
-            lte(sales.saleDate, dateRange.to)
+            lte(sales.saleDate, dateRange.to),
+            isNull(sales.returnedAt)
           )
         ),
     ]);

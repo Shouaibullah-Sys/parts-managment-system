@@ -10,6 +10,8 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search");
+    const section = searchParams.get("section");
+    const active = searchParams.get("active");
     const limit = parseInt(searchParams.get("limit") || "100");
     const page = parseInt(searchParams.get("page") || "1");
 
@@ -20,12 +22,31 @@ export async function GET(request: NextRequest) {
     if (search) {
       whereConditions.push(
         or(
-          sql`LOWER(p.part_number) LIKE LOWER(${`%${search}%`})`,
-          sql`LOWER(p.name) LIKE LOWER(${`%${search}%`})`
+          sql`LOWER(${parts.partNumber}) LIKE LOWER(${`%${search}%`})`,
+          sql`LOWER(${parts.name}) LIKE LOWER(${`%${search}%`})`
         )
       );
     }
-    whereConditions.push(eq(parts.active, true));
+    if (section) {
+      whereConditions.push(eq(parts.section, section));
+    }
+    if (active !== null && active !== undefined) {
+      whereConditions.push(eq(parts.active, active === "true"));
+    } else {
+      whereConditions.push(eq(parts.active, true));
+    }
+
+    // Build SQL WHERE clause
+    let whereClause = "WHERE p.active = true";
+    if (search) {
+      whereClause += ` AND (LOWER(p.part_number) LIKE LOWER('%${search}%') OR LOWER(p.name) LIKE LOWER('%${search}%'))`;
+    }
+    if (section) {
+      whereClause += ` AND p.section = '${section}'`;
+    }
+    if (active !== null && active !== undefined) {
+      whereClause += ` AND p.active = ${active === "true"}`;
+    }
 
     // Parts query using currentStock column directly
     const partsData = await db.execute(sql`
@@ -41,8 +62,7 @@ export async function GET(request: NextRequest) {
         p.created_at AS "createdAt",
         p.current_stock AS "currentStock"
       FROM parts p
-      WHERE p.active = true
-      ${search ? sql`AND (LOWER(p.part_number) LIKE LOWER(${`%${search}%`}) OR LOWER(p.name) LIKE LOWER(${`%${search}%`}))` : sql``}
+      ${sql`${sql.raw(whereClause)}`}
       ORDER BY p.part_number
       LIMIT ${limit} OFFSET ${offset}
     `);

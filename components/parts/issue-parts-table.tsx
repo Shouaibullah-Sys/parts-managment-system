@@ -31,6 +31,7 @@ import {
 import { SmartSearchEngine } from "./smart-search-engine";
 import { CustomerSelector } from "./customer-selector";
 import Loader from "@/components/loader";
+import HijriDatePicker from "@/components/hijri-date-picker";
 
 // Define interfaces
 interface Customer {
@@ -63,13 +64,13 @@ export function IssuePartsTable() {
   const router = useRouter();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
-    null
+    null,
   );
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(
-    new Date().toISOString().split("T")[0]
+    new Date().toISOString().split("T")[0],
   );
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [notes, setNotes] = useState("");
@@ -128,7 +129,7 @@ export function IssuePartsTable() {
         // Generate PDF after successful save with the sale IDs
         await generateAndDownloadPDF(
           result.data.customerId,
-          result.data.salesIds
+          result.data.salesIds,
         );
 
         // Reset form
@@ -157,7 +158,7 @@ export function IssuePartsTable() {
 
   const generateAndDownloadPDF = async (
     customerId: number,
-    salesIds?: number[]
+    salesIds?: number[],
   ) => {
     try {
       // Build URL with sale IDs if provided
@@ -202,7 +203,7 @@ export function IssuePartsTable() {
         return prev.map((item) =>
           item.part.id === part.id
             ? { ...item, quantity: item.quantity + 1 }
-            : item
+            : item,
         );
       }
       const newCart = [
@@ -221,8 +222,8 @@ export function IssuePartsTable() {
   const updateCustomPrice = (partId: number, newPrice: number) => {
     setCart((prev) =>
       prev.map((item) =>
-        item.part.id === partId ? { ...item, customPrice: newPrice } : item
-      )
+        item.part.id === partId ? { ...item, customPrice: newPrice } : item,
+      ),
     );
   };
 
@@ -241,8 +242,8 @@ export function IssuePartsTable() {
 
     setCart((prev) =>
       prev.map((item) =>
-        item.part.id === partId ? { ...item, quantity: newQuantity } : item
-      )
+        item.part.id === partId ? { ...item, quantity: newQuantity } : item,
+      ),
     );
   };
 
@@ -300,7 +301,7 @@ export function IssuePartsTable() {
         // Generate PDF after successful save with the sale IDs
         await generateAndDownloadPDF(
           result.data.customerId,
-          result.data.salesIds
+          result.data.salesIds,
         );
 
         // Reset form
@@ -501,14 +502,10 @@ export function IssuePartsTable() {
               className={`gap-4 ${isMobile ? "space-y-3" : "grid grid-cols-1 md:grid-cols-2"}`}
             >
               <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="date"
-                  placeholder="تاریخ صدور"
+                <HijriDatePicker
                   value={invoiceDate}
-                  onChange={(e) => setInvoiceDate(e.target.value)}
-                  disabled={isLoading}
-                  className="border-border focus:border-primary focus:ring-primary/20"
+                  onChange={setInvoiceDate}
+                  placeholder="تاریخ صدور"
                 />
               </div>
             </div>
@@ -602,7 +599,7 @@ export function IssuePartsTable() {
                               onChange={(e) =>
                                 updateCustomPrice(
                                   item.part.id,
-                                  parseFloat(e.target.value) || 0
+                                  parseFloat(e.target.value) || 0,
                                 )
                               }
                               className="w-20 h-7 text-xs border-border focus:border-primary focus:ring-primary/20"
@@ -758,7 +755,7 @@ export function IssueRecordsTable() {
   };
 
   const filteredRecords = records.filter((record) =>
-    record.customerName.toLowerCase().includes(searchTerm.toLowerCase())
+    record.customerName.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   const getStatusVariant = (status: string) => {
@@ -887,7 +884,7 @@ export function IssueRecordsTable() {
                         <div className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
                           {new Date(record.issueDate).toLocaleDateString(
-                            "fa-IR"
+                            "fa-IR",
                           )}
                         </div>
                         {record.partName && <span>{record.partName}</span>}

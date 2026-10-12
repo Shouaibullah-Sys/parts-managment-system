@@ -40,6 +40,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   DollarSign,
   User,
   Calendar,
@@ -57,9 +64,16 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Filter,
+  Printer,
+  Coins,
+  RotateCcw,
 } from "lucide-react";
 import Loader from "@/components/loader";
 import HijriDatePicker from "@/components/hijri-date-picker";
+import { Checkbox } from "@/components/ui/checkbox";
+import { printSalesReport, SalesPrintSummary } from "@/lib/sales-print";
+import { printCustomerReport } from "@/lib/customer-print";
+import { printReturnsReport } from "@/lib/returns-print";
 
 interface SaleRecord {
   id: number;
@@ -68,14 +82,18 @@ interface SaleRecord {
   totalAmount: string;
   paidAmount: string;
   outstanding: string;
+  discount: string;
   isFullyPaid: boolean;
   issueDate: string;
   quantity: number;
   issuedBy: string;
   partNumber: string;
   partName: string;
+  section: string | null;
   itemCount: number;
   status: "completed" | "pending" | "approved";
+  returnedAt: string | null;
+  returnNote: string | null;
 }
 
 interface PaginationInfo {
@@ -89,6 +107,7 @@ interface SalesResponse {
   success: boolean;
   data: SaleRecord[];
   pagination: PaginationInfo;
+  summary?: SalesPrintSummary;
 }
 
 // Date period types
@@ -102,6 +121,8 @@ const fetchSalesData = async ({
   fromDate = "",
   toDate = "",
   period = "today",
+  section = "",
+  paymentStatus = "",
 }: {
   page: number;
   limit: number;
@@ -109,6 +130,8 @@ const fetchSalesData = async ({
   fromDate: string;
   toDate: string;
   period: DatePeriod;
+  section?: string;
+  paymentStatus?: string;
 }): Promise<SalesResponse> => {
   const params = new URLSearchParams({
     page: page.toString(),
@@ -116,6 +139,8 @@ const fetchSalesData = async ({
     ...(search && { search }),
     ...(fromDate && { fromDate }),
     ...(toDate && { toDate }),
+    ...(section && { section }),
+    ...(paymentStatus && paymentStatus !== "all" && { paymentStatus }),
     period,
   });
 
@@ -137,6 +162,22 @@ export default function AdminSalesPage() {
   });
   const [datePeriod, setDatePeriod] = useState<DatePeriod>("today");
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  // بخش (section) filter — options come from /api/parts/sections
+  const [sectionFilter, setSectionFilter] = useState<string>("all");
+  // وضعیت پرداخت toggle — "all" | "paid" | "outstanding"
+  const [paymentFilter, setPaymentFilter] = useState<string>("all");
+
+  // Distinct بخش options for the dropdown
+  const { data: sectionsData } = useQuery({
+    queryKey: ["part-sections"],
+    queryFn: async () => {
+      const res = await fetch("/api/parts/sections");
+      if (!res.ok) throw new Error("Failed to fetch sections");
+      return res.json() as Promise<{ success: boolean; data: { section: string }[] }>;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+  const sectionOptions = sectionsData?.data?.map((s) => s.section) ?? [];
 
   // React Query for sales data
   const {
@@ -152,6 +193,8 @@ export default function AdminSalesPage() {
         fromDate: dateRange.from,
         toDate: dateRange.to,
         period: datePeriod,
+        section: sectionFilter,
+        paymentStatus: paymentFilter,
       },
     ],
     queryFn: () =>
@@ -164,6 +207,8 @@ export default function AdminSalesPage() {
         // "custom" means user picked an explicit range — API applies
         // only fromDate/toDate when period is "lifetime"
         period: datePeriod === "custom" ? "lifetime" : datePeriod,
+        section: sectionFilter === "all" ? "" : sectionFilter,
+        paymentStatus: paymentFilter,
       }),
   });
 
@@ -174,13 +219,60 @@ export default function AdminSalesPage() {
     customerName: string;
     partName: string;
     outstandingAmount: string;
+    totalAmount: string;
+    paidAmount: string;
+    discount: string;
   }>({
     isOpen: false,
     saleId: null,
     customerName: "",
     partName: "",
     outstandingAmount: "0",
+    totalAmount: "0",
+    paidAmount: "0",
+    discount: "0",
   });
+
+  // Payment + discount history inside the payment dialog
+  const [paymentHistory, setPaymentHistory] = useState<{
+    isLoading: boolean;
+    initialPaid: number;
+    rows: {
+      id: number;
+      amount: string;
+      paymentDate: string | null;
+      note: string | null;
+      receivedBy: string | null;
+    }[];
+    discounts: {
+      id: number;
+      amount: string;
+      createdAt: string | null;
+      note: string | null;
+      createdBy: string | null;
+    }[];
+  }>({ isLoading: false, initialPaid: 0, rows: [], discounts: [] });
+
+  const [discountAmount, setDiscountAmount] = useState("");
+  const [discountNote, setDiscountNote] = useState("");
+
+  // Refund Dialog State
+  const [refundDialog, setRefundDialog] = useState<{
+    isOpen: boolean;
+    saleId: number | null;
+    customerName: string;
+    partName: string;
+    paidAmount: string;
+  }>({
+    isOpen: false,
+    saleId: null,
+    customerName: "",
+    partName: "",
+    paidAmount: "0",
+  });
+  const [returnRestoreStock, setReturnRestoreStock] = useState(true);
+  const [refundNote, setRefundNote] = useState("");
+  const [isProcessingRefund, setIsProcessingRefund] = useState(false);
 
   // Bulk Payment Dialog State
   const [bulkPaymentDialog, setBulkPaymentDialog] = useState<{
@@ -201,6 +293,18 @@ export default function AdminSalesPage() {
   const [paymentNote, setPaymentNote] = useState("");
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [isProcessingBulkPayment, setIsProcessingBulkPayment] = useState(false);
+
+  // Print report dialog
+  const [printDialogOpen, setPrintDialogOpen] = useState(false);
+  const [printRange, setPrintRange] = useState({
+    from: format(startOfToday(), "yyyy-MM-dd"),
+    to: format(new Date(), "yyyy-MM-dd"),
+  });
+  // Per-report filters inside the print dialog (prefilled from the page's
+  // active بخش / وضعیت پرداخت filters, but adjustable for this report only)
+  const [printSection, setPrintSection] = useState<string>("all");
+  const [printPayment, setPrintPayment] = useState<string>("all");
+  const [isPrinting, setIsPrinting] = useState(false);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -249,6 +353,137 @@ export default function AdminSalesPage() {
     setDatePeriod("custom");
   };
 
+  // --- Print report ---
+  const openPrintDialog = () => {
+    // prefill from the active filter; fall back to current month
+    setPrintRange({
+      from: dateRange.from || format(startOfMonth(new Date()), "yyyy-MM-dd"),
+      to: dateRange.to || format(new Date(), "yyyy-MM-dd"),
+    });
+    // prefill بخش / وضعیت پرداخت from the page's active filters
+    setPrintSection(sectionFilter);
+    setPrintPayment(paymentFilter);
+    setPrintDialogOpen(true);
+  };
+
+  const handlePrintRangeChange = (field: "from" | "to", value: string) => {
+    setPrintRange((prev) => {
+      const next = { ...prev, [field]: value };
+      if (next.from && next.to && next.from > next.to) {
+        return { from: next.to, to: next.from };
+      }
+      return next;
+    });
+  };
+
+  const handlePrintReport = async () => {
+    if (!printRange.from || !printRange.to) {
+      alert("لطفاً تاریخ شروع و ختم را انتخاب کنید");
+      return;
+    }
+    // Open the window synchronously inside the click (async fetch afterwards
+    // would be blocked as a popup), show a loading page, fill it later.
+    const printWindow = window.open("", "_blank", "width=1000,height=800");
+    if (!printWindow) {
+      alert("لطفاً پاپ‌آپ بلاکر را غیرفعال کنید");
+      return;
+    }
+    printWindow.document.write(
+      '<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8"><title>در حال تهیه گزارش...</title></head>' +
+        '<body style="font-family:Tahoma,Arial,sans-serif;direction:rtl;text-align:center;padding:60px;color:#64748b">' +
+        "در حال تهیه راپور فروش، لطفاً صبر کنید...</body></html>",
+    );
+    printWindow.document.close();
+
+    setIsPrinting(true);
+    try {
+      const params = new URLSearchParams({
+        page: "1",
+        limit: "1000",
+        // "lifetime" ignores period and applies fromDate/toDate only
+        period: "lifetime",
+        fromDate: printRange.from,
+        toDate: printRange.to,
+        // فروش‌های مرتجع در راپور فروش چاپ نمی‌شوند
+        excludeReturned: "true",
+        // فیلترهای انتخابی داخل دیالوگ (بخش + وضعیت پرداخت) + جستجوی فعال صفحه
+        ...(printSection !== "all" && { section: printSection }),
+        ...(printPayment !== "all" && { paymentStatus: printPayment }),
+        ...(searchTerm && { search: searchTerm }),
+      });
+      const res = await fetch(`/api/sales?${params}`);
+      if (!res.ok) throw new Error("Failed to fetch sales for print");
+      const json: SalesResponse = await res.json();
+      if (!json.success || !json.data) throw new Error("Invalid response");
+
+      printSalesReport(printWindow, {
+        rows: json.data,
+        summary: json.summary ?? null,
+        total: json.pagination?.total ?? json.data.length,
+        from: printRange.from,
+        to: printRange.to,
+        filters: {
+          section: printSection !== "all" ? printSection : "",
+          paymentStatus: printPayment,
+          search: searchTerm,
+        },
+      });
+      setPrintDialogOpen(false);
+    } catch {
+      printWindow.close();
+      alert("تهیه راپور ناموفق بود — لطفاً دوباره تلاش کنید");
+    } finally {
+      setIsPrinting(false);
+    }
+  };
+
+  // چاپ راپور مرجوعیات در همان بازه تاریخ
+  const handlePrintReturns = async () => {
+    if (!printRange.from || !printRange.to) {
+      alert("لطفاً تاریخ شروع و ختم را انتخاب کنید");
+      return;
+    }
+    const printWindow = window.open("", "_blank", "width=1000,height=800");
+    if (!printWindow) {
+      alert("لطفاً پاپ‌آپ بلاکر را غیرفعال کنید");
+      return;
+    }
+    printWindow.document.write(
+      '<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8"><title>در حال تهیه گزارش...</title></head>' +
+        '<body style="font-family:Tahoma,Arial,sans-serif;direction:rtl;text-align:center;padding:60px;color:#64748b">' +
+        "در حال تهیه راپور مرجوعیات، لطفاً صبر کنید...</body></html>",
+    );
+    printWindow.document.close();
+
+    setIsPrinting(true);
+    try {
+      const params = new URLSearchParams({
+        page: "1",
+        limit: "1000",
+        period: "lifetime",
+        fromDate: printRange.from,
+        toDate: printRange.to,
+        returnedOnly: "true",
+      });
+      const res = await fetch(`/api/sales?${params}`);
+      if (!res.ok) throw new Error("Failed to fetch returns for print");
+      const json: SalesResponse = await res.json();
+      if (!json.success || !json.data) throw new Error("Invalid response");
+
+      printReturnsReport(printWindow, {
+        rows: json.data,
+        from: printRange.from,
+        to: printRange.to,
+      });
+      setPrintDialogOpen(false);
+    } catch {
+      printWindow.close();
+      alert("تهیه راپور مرجوعیات ناموفق بود — لطفاً دوباره تلاش کنید");
+    } finally {
+      setIsPrinting(false);
+    }
+  };
+
   // Define columns for TanStack Table
   const salesColumns: ColumnDef<SaleRecord>[] = [
     {
@@ -275,6 +510,15 @@ export default function AdminSalesPage() {
             </span>
           )}
         </div>
+      ),
+    },
+    {
+      accessorKey: "section",
+      header: "بخش",
+      cell: ({ row }) => (
+        <span className="font-mono text-xs bg-secondary px-2 py-1 rounded">
+          {row.original.section || "—"}
+        </span>
       ),
     },
     {
@@ -325,7 +569,12 @@ export default function AdminSalesPage() {
       accessorKey: "isFullyPaid",
       header: "وضعیت",
       cell: ({ row }) =>
-        row.original.isFullyPaid ? (
+        row.original.returnedAt ? (
+          <Badge className="bg-rose-600">
+            <RotateCcw className="h-3 w-3 ml-1" />
+            مرجوع‌شده
+          </Badge>
+        ) : row.original.isFullyPaid ? (
           <Badge className="bg-green-600">
             <CheckCircle className="h-3 w-3 ml-1" />
             پرداخت کامل
@@ -352,7 +601,8 @@ export default function AdminSalesPage() {
       header: "عملیات",
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
-          {!row.original.isFullyPaid &&
+          {!row.original.returnedAt &&
+            !row.original.isFullyPaid &&
             parseFloat(row.original.outstanding) > 0 && (
               <Button
                 variant="outline"
@@ -364,6 +614,17 @@ export default function AdminSalesPage() {
                 پرداخت
               </Button>
             )}
+          {!row.original.returnedAt && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => openRefundDialog(row.original)}
+              className="border-rose-400 text-rose-600 hover:bg-rose-50"
+            >
+              <RotateCcw className="ml-2 h-3 w-3" />
+              مرجوعی
+            </Button>
+          )}
         </div>
       ),
     },
@@ -387,6 +648,36 @@ export default function AdminSalesPage() {
     },
   });
 
+  const fetchPaymentHistory = async (saleId: number) => {
+    setPaymentHistory((prev) => ({ ...prev, isLoading: true }));
+    try {
+      const res = await fetch(`/api/payments?saleId=${saleId}`);
+      if (res.ok) {
+        const json = await res.json();
+        setPaymentHistory({
+          isLoading: false,
+          initialPaid: json.initialPaid || 0,
+          rows: json.data || [],
+          discounts: json.discounts || [],
+        });
+      } else {
+        setPaymentHistory({
+          isLoading: false,
+          initialPaid: 0,
+          rows: [],
+          discounts: [],
+        });
+      }
+    } catch {
+      setPaymentHistory({
+        isLoading: false,
+        initialPaid: 0,
+        rows: [],
+        discounts: [],
+      });
+    }
+  };
+
   const openPaymentDialog = (record: SaleRecord) => {
     setPaymentDialog({
       isOpen: true,
@@ -394,9 +685,46 @@ export default function AdminSalesPage() {
       customerName: record.customerName,
       partName: record.partName,
       outstandingAmount: record.outstanding,
+      totalAmount: record.totalAmount,
+      paidAmount: record.paidAmount,
+      discount: record.discount || "0",
     });
     setPaymentAmount(record.outstanding);
+    setPaymentNote("");
+    setDiscountAmount("");
+    setDiscountNote("");
+    fetchPaymentHistory(record.id);
   };
+
+  // رویدادهای ترکیبی سوابق (پرداخت + تخفیف) — جدیدترین اول
+  const paymentHistoryEvents = [
+    ...paymentHistory.rows.map((row) => ({
+      key: `p${row.id}`,
+      type: "payment" as const,
+      amount: row.amount,
+      date: row.paymentDate,
+      note: row.note,
+      who: row.receivedBy,
+    })),
+    ...paymentHistory.discounts.map((row) => ({
+      key: `d${row.id}`,
+      type: "discount" as const,
+      amount: row.amount,
+      date: row.createdAt,
+      note: row.note,
+      who: row.createdBy,
+    })),
+  ].sort(
+    (a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime(),
+  );
+
+  // مقادیر لحظه‌ای دیالوگ پرداخت
+  const dialogOutstanding = parseFloat(paymentDialog.outstandingAmount) || 0;
+  const dialogDiscountInput = parseFloat(discountAmount) || 0;
+  const maxPaymentAfterDiscount = Math.max(
+    0,
+    dialogOutstanding - dialogDiscountInput,
+  );
 
   const openBulkPaymentDialog = (customer: any) => {
     if (customer.totalOutstanding <= 0) {
@@ -413,28 +741,121 @@ export default function AdminSalesPage() {
     setBulkPaymentAmount(customer.totalOutstanding.toString());
   };
 
+  // چاپ راپور انفرادی هر مشتری (خلاصه مشتریان)
+  const openCustomerPrint = async (customer: {
+    customerName: string;
+    normalizedName: string;
+  }) => {
+    const win = window.open("", "_blank", "width=900,height=700");
+    if (!win) {
+      alert("پنجره چاپ مسدود شد — لطفاً اجازه pop-up را بدهید");
+      return;
+    }
+    const safeName = customer.customerName.replace(/[<>&"]/g, "");
+    win.document.open();
+    win.document.write(`<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head><meta charset="UTF-8"><title>در حال تهیه راپور...</title>
+<style>
+  body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; display:flex; align-items:center; justify-content:center; height:100vh; margin:0; direction:rtl; color:#334155; background:#f8fafc; }
+  .box { text-align:center; }
+  .spinner { width:36px; height:36px; border:4px solid #e2e8f0; border-top-color:#2563eb; border-radius:50%; margin:0 auto 14px; animation:spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .t { font-size:14px; font-weight:600; }
+  .s { font-size:11px; color:#64748b; margin-top:6px; }
+</style>
+</head>
+<body>
+  <div class="box">
+    <div class="spinner"></div>
+    <div class="t">در حال تهیه راپور مشتری</div>
+    <div class="s">${safeName}</div>
+  </div>
+</body>
+</html>`);
+    win.document.close();
+
+    try {
+      // Use the same active filters as the on-screen summary so the report
+      // matches what the user sees (period / custom dates / section / payment).
+      const params = new URLSearchParams({
+        page: "1",
+        limit: "1000",
+        period: datePeriod === "custom" ? "lifetime" : datePeriod,
+        excludeReturned: "true",
+        normalizedName: customer.normalizedName,
+      });
+      if (datePeriod === "custom") {
+        if (dateRange.from) params.set("fromDate", dateRange.from);
+        if (dateRange.to) params.set("toDate", dateRange.to);
+      }
+      if (sectionFilter !== "all") params.set("section", sectionFilter);
+      if (paymentFilter) params.set("paymentStatus", paymentFilter);
+      if (searchTerm) params.set("search", searchTerm);
+
+      const res = await fetch(`/api/sales?${params.toString()}`);
+      if (!res.ok) throw new Error("fetch failed");
+      const json = await res.json();
+      printCustomerReport(win, {
+        customerName: customer.customerName,
+        rows: json.data || [],
+        summary: json.summary ?? null,
+        total: json.pagination?.total ?? (json.data || []).length,
+      });
+    } catch (error) {
+      console.error("Error printing customer report:", error);
+      alert("خطا در تهیه راپور مشتری");
+      win.close();
+    }
+  };
+
   const handleAddPayment = async () => {
-    if (!paymentDialog.saleId || !paymentAmount) return;
+    if (!paymentDialog.saleId) return;
+
+    const pay = parseFloat(paymentAmount) || 0;
+    const disc = parseFloat(discountAmount) || 0;
+
+    if (pay <= 0 && disc <= 0) {
+      alert("مبلغ پرداخت یا مبلغ تخفیف را وارد کنید");
+      return;
+    }
+
+    const outstanding = parseFloat(paymentDialog.outstandingAmount);
+    if (disc > outstanding + 1e-9) {
+      alert(
+        `مبلغ تخفیف نمی‌تواند بیشتر از باقیمانده (${outstanding.toLocaleString()} افغانی) باشد`,
+      );
+      return;
+    }
+    if (pay > outstanding - disc + 1e-9) {
+      alert(
+        `مبلغ پرداخت نمی‌تواند بیشتر از باقیمانده پس از تخفیف (${(outstanding - disc).toLocaleString()} افغانی) باشد`,
+      );
+      return;
+    }
 
     setIsProcessingPayment(true);
     try {
-      const paymentData = {
-        saleId: paymentDialog.saleId,
-        amount: parseFloat(paymentAmount),
-        note: paymentNote || undefined,
-        receivedBy: null,
-      };
-
-      const response = await fetch("/api/payments", {
+      const response = await fetch("/api/sales/settle", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(paymentData),
+        body: JSON.stringify({
+          saleId: paymentDialog.saleId,
+          paymentAmount: pay > 0 ? pay : undefined,
+          discountAmount: disc > 0 ? disc : undefined,
+          paymentNote: paymentNote || undefined,
+          discountNote: discountNote || undefined,
+        }),
       });
 
       if (!response.ok) {
-        throw new Error("Payment failed");
+        const body = await response.json().catch(() => null);
+        const message =
+          typeof body?.error === "string" ? body.error : "Payment failed";
+        throw new Error(message);
       }
 
+      const result = await response.json();
       await queryClient.invalidateQueries({ queryKey: ["sales"] });
       setPaymentDialog({
         isOpen: false,
@@ -442,15 +863,103 @@ export default function AdminSalesPage() {
         customerName: "",
         partName: "",
         outstandingAmount: "0",
+        totalAmount: "0",
+        paidAmount: "0",
+        discount: "0",
       });
       setPaymentAmount("");
       setPaymentNote("");
-      alert("پرداخت با موفقیت ثبت شد");
+      setDiscountAmount("");
+      setDiscountNote("");
+      alert(
+        result.discountApplied > 0
+          ? "پرداخت و تخفیف با موفقیت اعمال شد"
+          : "پرداخت با موفقیت ثبت شد",
+      );
     } catch (error) {
       console.error("Error processing payment:", error);
-      alert("خطا در ثبت پرداخت");
+      const message =
+        error instanceof Error && error.message !== "Payment failed"
+          ? error.message
+          : "خطا در ثبت پرداخت";
+      alert(message);
     } finally {
       setIsProcessingPayment(false);
+    }
+  };
+
+  const closeRefundDialog = () => {
+    setRefundDialog({
+      isOpen: false,
+      saleId: null,
+      customerName: "",
+      partName: "",
+      paidAmount: "0",
+    });
+    setReturnRestoreStock(true);
+    setRefundNote("");
+  };
+
+  const openRefundDialog = (record: SaleRecord) => {
+    if (record.returnedAt) {
+      alert("این فروش قبلاً مرجوع شده است");
+      return;
+    }
+    setRefundDialog({
+      isOpen: true,
+      saleId: record.id,
+      customerName: record.customerName,
+      partName: record.partName,
+      paidAmount: record.paidAmount,
+    });
+    setReturnRestoreStock(true);
+    setRefundNote("");
+  };
+
+  const handleRefund = async () => {
+    if (!refundDialog.saleId) return;
+
+    const paid = parseFloat(refundDialog.paidAmount) || 0;
+
+    setIsProcessingRefund(true);
+    try {
+      const response = await fetch("/api/sales/return", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          saleId: refundDialog.saleId,
+          restoreStock: returnRestoreStock,
+          note: refundNote || undefined,
+        }),
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        const message =
+          typeof body?.error === "string" ? body.error : "Return failed";
+        throw new Error(message);
+      }
+
+      const result = await response.json();
+      await queryClient.invalidateQueries({ queryKey: ["sales"] });
+      closeRefundDialog();
+      const partsMsg: string[] = [];
+      if (result.stockRestored) partsMsg.push("کالا به انبار برگشت");
+      if (paid > 0) partsMsg.push(`بازپرداخت ${paid.toLocaleString()} افغانی`);
+      alert(
+        partsMsg.length > 0
+          ? `مرجوعی ثبت شد — ${partsMsg.join("، ")}`
+          : "مرجوعی فروش ثبت شد",
+      );
+    } catch (error) {
+      console.error("Error processing return:", error);
+      const message =
+        error instanceof Error && error.message !== "Return failed"
+          ? error.message
+          : "خطا در ثبت مرجوعی";
+      alert(message);
+    } finally {
+      setIsProcessingRefund(false);
     }
   };
 
@@ -546,9 +1055,10 @@ export default function AdminSalesPage() {
       return matchesSearch && matchesCustomer;
     }) || [];
 
-  // Customer summary calculation
+  // Customer summary calculation (فروش‌های مرتجع در خلاصه مشتریان حساب نمی‌شوند)
   const customerSummary = filteredRecords.reduce(
     (acc, record) => {
+      if (record.returnedAt) return acc;
       const key = record.normalizedName;
       if (!acc[key]) {
         acc[key] = {
@@ -566,7 +1076,7 @@ export default function AdminSalesPage() {
       acc[key].salesCount += 1;
       return acc;
     },
-    {} as Record<string, any>
+    {} as Record<string, any>,
   );
 
   const customerSummaryArray = Object.values(customerSummary);
@@ -597,10 +1107,18 @@ export default function AdminSalesPage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {!record.isFullyPaid && parseFloat(record.outstanding) > 0 && (
-                <DropdownMenuItem onClick={() => openPaymentDialog(record)}>
-                  <CreditCard className="ml-2 h-4 w-4" />
-                  ثبت پرداخت
+              {!record.returnedAt &&
+                !record.isFullyPaid &&
+                parseFloat(record.outstanding) > 0 && (
+                  <DropdownMenuItem onClick={() => openPaymentDialog(record)}>
+                    <CreditCard className="ml-2 h-4 w-4" />
+                    ثبت پرداخت
+                  </DropdownMenuItem>
+                )}
+              {!record.returnedAt && (
+                <DropdownMenuItem onClick={() => openRefundDialog(record)}>
+                  <RotateCcw className="ml-2 h-4 w-4" />
+                  مرجوعی
                 </DropdownMenuItem>
               )}
             </DropdownMenuContent>
@@ -644,7 +1162,12 @@ export default function AdminSalesPage() {
 
         <div className="flex justify-between items-center pt-2 border-t border-border">
           <div>
-            {record.isFullyPaid ? (
+            {record.returnedAt ? (
+              <Badge className="bg-rose-600">
+                <RotateCcw className="h-3 w-3 ml-1" />
+                مرجوع‌شده
+              </Badge>
+            ) : record.isFullyPaid ? (
               <Badge className="bg-green-600">
                 <CheckCircle className="h-3 w-3 ml-1" />
                 پرداخت کامل
@@ -744,20 +1267,34 @@ export default function AdminSalesPage() {
               </Badge>
             )}
           </div>
-          {customer.totalOutstanding > 0 && (
+          <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="sm"
               onClick={(e) => {
                 e.stopPropagation();
-                openBulkPaymentDialog(customer);
+                openCustomerPrint(customer);
               }}
-              className="border-green-500 text-green-600 hover:bg-green-50"
+              className="border-border text-foreground hover:bg-accent"
             >
-              <CreditCard className="ml-2 h-3 w-3" />
-              پرداخت همه
+              <Printer className="ml-2 h-3 w-3" />
+              چاپ راپور
             </Button>
-          )}
+            {customer.totalOutstanding > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openBulkPaymentDialog(customer);
+                }}
+                className="border-green-500 text-green-600 hover:bg-green-50"
+              >
+                <CreditCard className="ml-2 h-3 w-3" />
+                پرداخت همه
+              </Button>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -799,6 +1336,15 @@ export default function AdminSalesPage() {
           >
             <Package className="mr-2 h-4 w-4" />
             بارگذاری مجدد
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={openPrintDialog}
+            className="border-emerald-500 text-emerald-600 hover:bg-emerald-50"
+          >
+            <Printer className="mr-2 h-4 w-4" />
+            چاپ راپور
           </Button>
         </div>
       </div>
@@ -905,11 +1451,96 @@ export default function AdminSalesPage() {
               </div>
             </div>
           </div>
+
+          {/* Section + Payment Status filters */}
+          <div className="flex flex-col sm:flex-row gap-4 mt-4 pt-4 border-t border-border">
+            {/* بخش (section) dropdown */}
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-muted-foreground whitespace-nowrap">
+                بخش:
+              </label>
+              <Select value={sectionFilter} onValueChange={setSectionFilter}>
+                <SelectTrigger className="w-40 bg-background border-border">
+                  <SelectValue placeholder="همه بخش‌ها" />
+                </SelectTrigger>
+                <SelectContent className="border-border bg-popover">
+                  <SelectItem value="all">همه بخش‌ها</SelectItem>
+                  {sectionOptions.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {s}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Payment status toggle */}
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-muted-foreground whitespace-nowrap">
+                وضعیت پرداخت:
+              </label>
+              <div className="flex rounded-lg border border-border overflow-hidden">
+                <Button
+                  variant={paymentFilter === "all" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setPaymentFilter("all")}
+                  className={
+                    paymentFilter === "all"
+                      ? "bg-primary text-primary-foreground rounded-none"
+                      : "rounded-none"
+                  }
+                >
+                  همه
+                </Button>
+                <Button
+                  variant={paymentFilter === "paid" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setPaymentFilter("paid")}
+                  className={
+                    paymentFilter === "paid"
+                      ? "bg-green-600 text-white rounded-none"
+                      : "rounded-none"
+                  }
+                >
+                  <CheckCircle className="ml-1 h-3 w-3" />
+                  پرداخت شده
+                </Button>
+                <Button
+                  variant={paymentFilter === "outstanding" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setPaymentFilter("outstanding")}
+                  className={
+                    paymentFilter === "outstanding"
+                      ? "bg-amber-600 text-white rounded-none"
+                      : "rounded-none"
+                  }
+                >
+                  <AlertCircle className="ml-1 h-3 w-3" />
+                  باقیمانده
+                </Button>
+              </div>
+            </div>
+
+            {/* Clear section/payment filters */}
+            {(sectionFilter !== "all" || paymentFilter !== "all") && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSectionFilter("all");
+                  setPaymentFilter("all");
+                }}
+                className="text-sm text-primary hover:text-primary/80 self-start"
+              >
+                پاک کردن فیلترها
+              </Button>
+            )}
+          </div>
         </CardContent>
       </Card>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card className="bg-mechanical border-mechanical shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-foreground">
@@ -919,9 +1550,12 @@ export default function AdminSalesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-foreground">
-              {filteredRecords
-                .reduce((sum, r) => sum + parseFloat(r.totalAmount), 0)
-                .toLocaleString()}{" "}
+              {(salesData?.summary?.totalSales ??
+                filteredRecords.reduce(
+                  (sum, r) => sum + parseFloat(r.totalAmount),
+                  0
+                )
+              ).toLocaleString()}{" "}
               افغانی
             </div>
           </CardContent>
@@ -936,9 +1570,12 @@ export default function AdminSalesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              {filteredRecords
-                .reduce((sum, r) => sum + parseFloat(r.paidAmount), 0)
-                .toLocaleString()}{" "}
+              {(salesData?.summary?.totalPaid ??
+                filteredRecords.reduce(
+                  (sum, r) => sum + parseFloat(r.paidAmount),
+                  0
+                )
+              ).toLocaleString()}{" "}
               افغانی
             </div>
           </CardContent>
@@ -953,11 +1590,35 @@ export default function AdminSalesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-amber-600">
-              {filteredRecords
-                .reduce((sum, r) => sum + parseFloat(r.outstanding), 0)
-                .toLocaleString()}{" "}
+              {(salesData?.summary?.totalOutstanding ??
+                filteredRecords.reduce(
+                  (sum, r) => sum + parseFloat(r.outstanding),
+                  0
+                )
+              ).toLocaleString()}{" "}
               افغانی
             </div>
+          </CardContent>
+        </Card>
+
+        {/* کارت مجموع بازپرداخت/مرجوعی */}
+        <Card className="bg-mechanical border-mechanical shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-foreground">
+              مجموع بازپرداخت (مرجوعی)
+            </CardTitle>
+            <RotateCcw className="h-4 w-4 text-rose-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-rose-600">
+              {(salesData?.summary?.totalRefunds ?? 0).toLocaleString()}{" "}
+              افغانی
+            </div>
+            {salesData?.summary?.refundCount ? (
+              <p className="text-xs text-muted-foreground mt-1">
+                {salesData.summary.refundCount.toLocaleString("fa-IR")} مرجوعی
+              </p>
+            ) : null}
           </CardContent>
         </Card>
       </div>
@@ -1064,6 +1725,19 @@ export default function AdminSalesPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openCustomerPrint(customer);
+                            }}
+                            className="border-border text-foreground hover:bg-accent"
+                            title="چاپ راپور انفرادی این مشتری"
+                          >
+                            <Printer className="ml-2 h-3 w-3" />
+                            چاپ راپور
+                          </Button>
                           {customer.totalOutstanding > 0 && (
                             <Button
                               variant="outline"
@@ -1141,7 +1815,7 @@ export default function AdminSalesPage() {
                           <TableHead key={header.id}>
                             {flexRender(
                               header.column.columnDef.header,
-                              header.getContext()
+                              header.getContext(),
                             )}
                           </TableHead>
                         ))}
@@ -1160,7 +1834,7 @@ export default function AdminSalesPage() {
                             <TableCell key={cell.id}>
                               {flexRender(
                                 cell.column.columnDef.cell,
-                                cell.getContext()
+                                cell.getContext(),
                               )}
                             </TableCell>
                           ))}
@@ -1270,12 +1944,35 @@ export default function AdminSalesPage() {
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">
-                        مبلغ قابل پرداخت:
+                      <span className="text-muted-foreground">مجموع فروش:</span>
+                      <span className="font-medium text-foreground">
+                        {parseFloat(paymentDialog.totalAmount).toLocaleString()}{" "}
+                        افغانی
                       </span>
+                    </div>
+                    {parseFloat(paymentDialog.discount || "0") > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">
+                          تخفیف داده‌شده:
+                        </span>
+                        <span className="font-medium text-rose-600">
+                          {parseFloat(paymentDialog.discount).toLocaleString()}{" "}
+                          افغانی
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">پرداخت‌شده:</span>
+                      <span className="font-medium text-green-600">
+                        {parseFloat(paymentDialog.paidAmount).toLocaleString()}{" "}
+                        افغانی
+                      </span>
+                    </div>
+                    <div className="flex justify-between border-t border-border pt-1">
+                      <span className="text-muted-foreground">باقیمانده:</span>
                       <span className="font-bold text-amber-600">
                         {parseFloat(
-                          paymentDialog.outstandingAmount
+                          paymentDialog.outstandingAmount,
                         ).toLocaleString()}{" "}
                         افغانی
                       </span>
@@ -1294,9 +1991,175 @@ export default function AdminSalesPage() {
                     placeholder="مبلغ را وارد کنید"
                     step="0.01"
                     min="0"
-                    max={paymentDialog.outstandingAmount}
+                    max={maxPaymentAfterDiscount}
                     className="text-right border-border focus:border-primary focus:ring-primary/20"
                   />
+                  {dialogOutstanding > 0 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setPaymentAmount(String(maxPaymentAfterDiscount))
+                      }
+                      className="w-full border-green-500 text-green-600 hover:bg-green-50"
+                    >
+                      <Coins className="ml-2 h-3.5 w-3.5" />
+                      پرداخت باقیمانده (
+                      {maxPaymentAfterDiscount.toLocaleString()} افغانی)
+                    </Button>
+                  )}
+                  {(dialogDiscountInput > 0 ||
+                    (parseFloat(paymentAmount) || 0) > 0) && (
+                    <div className="flex items-center justify-between gap-2 text-xs bg-accent/40 rounded px-2 py-1.5 border border-dashed border-border">
+                      <span className="text-muted-foreground">
+                        پس از این پرداخت، باقیمانده:
+                      </span>
+                      <span
+                        className={`font-semibold ${
+                          Math.max(
+                            0,
+                            dialogOutstanding -
+                              dialogDiscountInput -
+                              (parseFloat(paymentAmount) || 0),
+                          ) > 0
+                            ? "text-amber-600"
+                            : "text-green-600"
+                        }`}
+                      >
+                        {Math.max(
+                          0,
+                          dialogOutstanding -
+                            dialogDiscountInput -
+                            (parseFloat(paymentAmount) || 0),
+                        ).toLocaleString()}{" "}
+                        افغانی
+                        {Math.max(
+                          0,
+                          dialogOutstanding -
+                            dialogDiscountInput -
+                            (parseFloat(paymentAmount) || 0),
+                        ) <= 0
+                          ? " — تسویه کامل"
+                          : " (بعداً قابل پرداخت)"}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2 border-t border-border pt-2">
+                  <label className="text-sm font-medium text-foreground">
+                    تخفیف / بخشش بدهی (اختیاری — مبلغ به افغانی)
+                  </label>
+                  <p className="text-xs text-muted-foreground">
+                    در صورت تمایل وارد کنید؛ همراه با «ثبت پرداخت» اعمال می‌شود
+                    و جزو درآمد نیست
+                  </p>
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      value={discountAmount}
+                      onChange={(e) => {
+                        const d = e.target.value;
+                        setDiscountAmount(d);
+                        // When discount increases, clamp the (pre-filled) payment
+                        // down to the new remaining so submit never stays blocked.
+                        const newMax = Math.max(
+                          0,
+                          dialogOutstanding - (parseFloat(d) || 0),
+                        );
+                        const currentPay = parseFloat(paymentAmount) || 0;
+                        if (currentPay > newMax + 1e-9) {
+                          setPaymentAmount(
+                            newMax > 0 ? String(newMax) : "",
+                          );
+                        }
+                      }}
+                      placeholder="مبلغ تخفیف به افغانی"
+                      step="0.01"
+                      min="0"
+                      max={dialogOutstanding}
+                      className="text-right border-border focus:border-rose-500 focus:ring-rose-500/20"
+                    />
+                    <Input
+                      value={discountNote}
+                      onChange={(e) => setDiscountNote(e.target.value)}
+                      placeholder="یادداشت (اختیاری)"
+                      className="text-right border-border focus:border-rose-500 focus:ring-rose-500/20"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">
+                    سوابق پرداخت و تخفیف
+                  </label>
+                  {paymentHistory.isLoading ? (
+                    <p className="text-xs text-muted-foreground text-center py-2">
+                      در حال بارگذاری سوابق...
+                    </p>
+                  ) : (
+                    <div className="max-h-32 overflow-y-auto space-y-1">
+                      {paymentHistoryEvents.map((ev) => (
+                        <div
+                          key={ev.key}
+                          className="flex items-center justify-between gap-2 text-xs bg-accent/40 rounded px-2 py-1.5"
+                        >
+                          <div className="flex flex-col">
+                            <span
+                              className={
+                                ev.type === "discount" ||
+                                (ev.type === "payment" && Number(ev.amount) < 0)
+                                  ? "font-medium text-rose-600"
+                                  : "font-medium text-green-600"
+                              }
+                            >
+                              {ev.type === "discount"
+                                ? "تخفیف − "
+                                : ev.type === "payment" && Number(ev.amount) < 0
+                                  ? "بازپرداخت − "
+                                  : ""}
+                              {Math.abs(Number(ev.amount)).toLocaleString()}{" "}
+                              افغانی
+                            </span>
+                            <span className="text-muted-foreground">
+                              {ev.date
+                                ? new Date(ev.date).toLocaleDateString("fa-IR")
+                                : ""}
+                              {ev.who ? ` — ${ev.who}` : ""}
+                            </span>
+                          </div>
+                          {ev.note && (
+                            <span
+                              className="text-muted-foreground truncate max-w-[110px]"
+                              title={ev.note}
+                            >
+                              {ev.note}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                      {paymentHistoryEvents.length === 0 &&
+                        paymentHistory.initialPaid <= 0 && (
+                          <p className="text-xs text-muted-foreground text-center py-2">
+                            هنوز پرداختی ثبت نشده است
+                          </p>
+                        )}
+                      {paymentHistory.initialPaid > 0 && (
+                        <div className="flex items-center justify-between gap-2 text-xs bg-accent/40 rounded px-2 py-1.5 border border-dashed border-border">
+                          <div className="flex flex-col">
+                            <span className="font-medium text-green-600">
+                              {paymentHistory.initialPaid.toLocaleString()}{" "}
+                              افغانی
+                            </span>
+                            <span className="text-muted-foreground">
+                              پرداخت اولیه (هنگام ثبت فروش)
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -1321,6 +2184,9 @@ export default function AdminSalesPage() {
                         customerName: "",
                         partName: "",
                         outstandingAmount: "0",
+                        totalAmount: "0",
+                        paidAmount: "0",
+                        discount: "0",
                       })
                     }
                     className="flex-1 border-border text-foreground hover:bg-accent hover:text-accent-foreground"
@@ -1330,9 +2196,12 @@ export default function AdminSalesPage() {
                   <Button
                     onClick={handleAddPayment}
                     disabled={
-                      !paymentAmount ||
-                      parseFloat(paymentAmount) <= 0 ||
-                      isProcessingPayment
+                      isProcessingPayment ||
+                      ((parseFloat(paymentAmount) || 0) <= 0 &&
+                        (parseFloat(discountAmount) || 0) <= 0) ||
+                      dialogDiscountInput > dialogOutstanding + 1e-9 ||
+                      (parseFloat(paymentAmount) || 0) >
+                        maxPaymentAfterDiscount + 1e-9
                     }
                     className="flex-1 bg-green-600 hover:bg-green-700 text-white shadow-md"
                   >
@@ -1352,6 +2221,99 @@ export default function AdminSalesPage() {
               </div>
             </DialogDescription>
           </DialogHeader>
+        </DialogContent>
+      </Dialog>
+
+      {/* Return (مرجوعی) Dialog */}
+      <Dialog
+        open={refundDialog.isOpen}
+        onOpenChange={(open) => {
+          if (!open) closeRefundDialog();
+        }}
+      >
+        <DialogContent className="sm:max-w-md" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-foreground">
+              <RotateCcw className="h-5 w-5 text-rose-600" />
+              مرجوعی فروش (برگشت کالا)
+            </DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              کالا به انبار برگشت داده می‌شود و پول پرداخت‌شده به مشتری
+              بازپرداخت می‌گردد — فروش از درآمد و گزارش‌ها خارج می‌شود
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-lg border border-border bg-accent/40 p-3 space-y-2 text-sm">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted-foreground">مشتری:</span>
+                <span className="font-medium text-foreground">
+                  {refundDialog.customerName}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted-foreground">قطعه:</span>
+                <span className="font-medium text-foreground">
+                  {refundDialog.partName}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2 border-t border-dashed border-border pt-2">
+                <span className="text-muted-foreground">مبلغ بازپرداختی:</span>
+                <span className="font-bold text-rose-600">
+                  {(parseFloat(refundDialog.paidAmount) || 0).toLocaleString()}{" "}
+                  افغانی
+                </span>
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <Checkbox
+                checked={returnRestoreStock}
+                onCheckedChange={(v) => setReturnRestoreStock(v === true)}
+              />
+              <span className="text-sm text-foreground">
+                برگشت کالا به انبار (افزایش موجودی)
+              </span>
+            </label>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">
+                یادداشت (اختیاری)
+              </label>
+              <Input
+                value={refundNote}
+                onChange={(e) => setRefundNote(e.target.value)}
+                placeholder="دلیل مرجوعی"
+                className="text-right border-border focus:border-primary focus:ring-primary/20"
+              />
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <Button
+                variant="outline"
+                onClick={closeRefundDialog}
+                className="flex-1 border-border text-foreground hover:bg-accent hover:text-accent-foreground"
+              >
+                انصراف
+              </Button>
+              <Button
+                onClick={handleRefund}
+                disabled={isProcessingRefund}
+                className="flex-1 bg-rose-600 hover:bg-rose-700 text-white shadow-md"
+              >
+                {isProcessingRefund ? (
+                  <>
+                    <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                    در حال پردازش...
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw className="ml-2 h-4 w-4" />
+                    ثبت مرجوعی
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -1454,6 +2416,164 @@ export default function AdminSalesPage() {
                         ثبت پرداخت انبوه
                       </>
                     )}
+                  </Button>
+                </div>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
+
+      {/* Print Report Dialog */}
+      <Dialog open={printDialogOpen} onOpenChange={setPrintDialogOpen}>
+        <DialogContent className="max-w-md border-mechanical bg-background">
+          <DialogHeader>
+            <DialogTitle className="text-center text-lg font-bold bg-linear-to-r from-primary to-primary/80 bg-clip-text text-transparent">
+              چاپ راپور فروش
+            </DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-4">
+                <p className="text-center text-sm text-muted-foreground">
+                  بازه زمانی و فیلترها را انتخاب کنید و راپور را چاپ کنید
+                </p>
+                {searchTerm && (
+                  <p className="text-center text-xs text-primary">
+                    جستجوی فعال صفحه «{searchTerm}» نیز در راپور اعمال می‌شود
+                  </p>
+                )}
+
+                <div className="bg-mechanical/50 p-3 rounded-lg border border-border space-y-3">
+                  <div className="flex items-center gap-3">
+                    <label className="text-sm text-muted-foreground w-8">
+                      از:
+                    </label>
+                    <HijriDatePicker
+                      value={printRange.from}
+                      onChange={(v) => handlePrintRangeChange("from", v)}
+                    />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <label className="text-sm text-muted-foreground w-8">
+                      تا:
+                    </label>
+                    <HijriDatePicker
+                      value={printRange.to}
+                      onChange={(v) => handlePrintRangeChange("to", v)}
+                    />
+                  </div>
+                </div>
+
+                {/* بخش + وضعیت پرداخت — فیلترهای اختیاری راپور */}
+                <div className="bg-mechanical/50 p-3 rounded-lg border border-border space-y-3">
+                  <div className="flex items-center gap-3">
+                    <label className="text-sm text-muted-foreground w-12">
+                      بخش:
+                    </label>
+                    <Select
+                      value={printSection}
+                      onValueChange={setPrintSection}
+                    >
+                      <SelectTrigger className="flex-1 bg-background border-border">
+                        <SelectValue placeholder="همه بخش‌ها" />
+                      </SelectTrigger>
+                      <SelectContent className="border-border bg-popover">
+                        <SelectItem value="all">همه بخش‌ها</SelectItem>
+                        {sectionOptions.map((s) => (
+                          <SelectItem key={s} value={s}>
+                            {s}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <label className="text-sm text-muted-foreground w-12">
+                      پرداخت:
+                    </label>
+                    <div className="flex flex-1 rounded-lg border border-border overflow-hidden">
+                      <Button
+                        variant={printPayment === "all" ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => setPrintPayment("all")}
+                        className={
+                          printPayment === "all"
+                            ? "bg-primary text-primary-foreground rounded-none flex-1"
+                            : "rounded-none flex-1"
+                        }
+                      >
+                        همه
+                      </Button>
+                      <Button
+                        variant={
+                          printPayment === "paid" ? "default" : "ghost"
+                        }
+                        size="sm"
+                        onClick={() => setPrintPayment("paid")}
+                        className={
+                          printPayment === "paid"
+                            ? "bg-green-600 text-white rounded-none flex-1"
+                            : "rounded-none flex-1"
+                        }
+                      >
+                        <CheckCircle className="ml-1 h-3 w-3" />
+                        پرداخت شده
+                      </Button>
+                      <Button
+                        variant={
+                          printPayment === "outstanding" ? "default" : "ghost"
+                        }
+                        size="sm"
+                        onClick={() => setPrintPayment("outstanding")}
+                        className={
+                          printPayment === "outstanding"
+                            ? "bg-amber-600 text-white rounded-none flex-1"
+                            : "rounded-none flex-1"
+                        }
+                      >
+                        <AlertCircle className="ml-1 h-3 w-3" />
+                        باقیمانده
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    onClick={handlePrintReport}
+                    disabled={isPrinting}
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                  >
+                    {isPrinting ? (
+                      <>
+                        <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                        در حال تهیه...
+                      </>
+                    ) : (
+                      <>
+                        <Printer className="ml-2 h-4 w-4" />
+                        چاپ راپور فروش
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handlePrintReturns}
+                    disabled={isPrinting}
+                    className="flex-1 border-rose-400 text-rose-600 hover:bg-rose-50"
+                  >
+                    <RotateCcw className="ml-2 h-4 w-4" />
+                    چاپ راپور مرجوعیات
+                  </Button>
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <Button
+                    variant="outline"
+                    onClick={() => setPrintDialogOpen(false)}
+                    disabled={isPrinting}
+                    className="flex-1 border-border text-foreground hover:bg-accent hover:text-accent-foreground"
+                  >
+                    انصراف
                   </Button>
                 </div>
               </div>

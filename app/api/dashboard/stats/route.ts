@@ -23,7 +23,8 @@ export async function GET() {
           COALESCE(SUM(CASE WHEN ${sales.saleDate} >= ${monthStart} THEN ${sales.totalAmount} ELSE 0 END), 0)
         `,
       })
-      .from(sales);
+      .from(sales)
+      .where(sql`${sales.returnedAt} IS NULL`);
 
     // Get total customers
     const customersData = await db

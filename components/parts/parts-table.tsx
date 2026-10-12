@@ -24,14 +24,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -40,21 +32,15 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import {
-  MoreHorizontal,
   ArrowUpDown,
   Search,
   Edit,
-  Trash2,
-  Copy,
-  Eye,
   Package,
-  Plus,
-  RotateCcw,
   Smartphone,
   Monitor,
 } from "lucide-react";
 import { Part, PartsResponse } from "@/types/parts";
-import { useParts, useDeletePart } from "@/hooks/use-parts";
+import { useParts } from "@/hooks/use-parts";
 import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { EditPartDialog } from "./edit-part-dialog";
@@ -63,7 +49,6 @@ import Loader from "@/components/loader";
 export function PartsTable() {
   const router = useRouter();
   const { data: session } = authClient.useSession();
-  const [userRole, setUserRole] = useState<string | null>(null);
   const [editingPart, setEditingPart] = useState<Part | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -74,17 +59,6 @@ export function PartsTable() {
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
-
-  useEffect(() => {
-    if (session?.user) {
-      fetch("/api/user/role", { credentials: "include" })
-        .then((res) => res.json())
-        .then((data) => setUserRole(data.role))
-        .catch((error) => console.error("Error fetching user role:", error));
-    }
-  }, [session?.user]);
-
-  const isAdmin = userRole === "admin";
 
   // State for table
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -115,10 +89,8 @@ export function PartsTable() {
     },
     {
       enabled: !!session?.user, // Only fetch when user is authenticated
-    }
+    },
   );
-
-  const deletePartMutation = useDeletePart();
 
   // Safe data extraction
   const partsData = (partsResponse as PartsResponse)?.data || [];
@@ -208,12 +180,10 @@ export function PartsTable() {
         return (
           <ActionMenu
             part={part}
-            isAdmin={isAdmin}
             onEdit={() => {
               setEditingPart(part);
               setIsEditDialogOpen(true);
             }}
-            onRefetch={refetch}
           />
         );
       },
@@ -334,12 +304,10 @@ export function PartsTable() {
         return (
           <ActionMenu
             part={part}
-            isAdmin={isAdmin}
             onEdit={() => {
               setEditingPart(part);
               setIsEditDialogOpen(true);
             }}
-            onRefetch={refetch}
           />
         );
       },
@@ -370,134 +338,19 @@ export function PartsTable() {
   });
 
   // Action Menu Component
-  function ActionMenu({
-    part,
-    isAdmin,
-    onEdit,
-    onRefetch,
-  }: {
-    part: Part;
-    isAdmin: boolean;
-    onEdit: () => void;
-    onRefetch: () => void;
-  }) {
-    const deletePartMutation = useDeletePart();
-
-    const handleDelete = async () => {
-      if (!isAdmin) {
-        alert(
-          "شما اجازه حذف پرزه را ندارید. فقط ادمین می‌تواند پرزه را حذف کند."
-        );
-        return;
-      }
-
-      if (
-        confirm(
-          `آیا مطمئن هستید که می‌خواهید قطعه "${part.partNumber}" را حذف کنید؟`
-        )
-      ) {
-        try {
-          await deletePartMutation.mutateAsync(part.id);
-          onRefetch();
-        } catch (error) {
-          console.error("Error deleting part:", error);
-          alert("خطا در حذف قطعه. لطفاً دوباره تلاش کنید.");
-        }
-      }
-    };
-
-    const handleReactivate = async () => {
-      if (!isAdmin) {
-        alert("شما اجازه فعال‌سازی مجدد پرزه را ندارید.");
-        return;
-      }
-
-      try {
-        const response = await fetch(`/api/parts/${part.id}`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ active: true }),
-        });
-
-        if (!response.ok) {
-          throw new Error("Failed to reactivate part");
-        }
-
-        onRefetch();
-      } catch (error) {
-        console.error("Error reactivating part:", error);
-        alert("خطا در فعال‌سازی مجدد قطعه. لطفاً دوباره تلاش کنید.");
-      }
-    };
-
-    const handleCopyPartNumber = () => {
-      navigator.clipboard.writeText(part.partNumber);
-    };
-
+  function ActionMenu({ part, onEdit }: { part: Part; onEdit: () => void }) {
     return (
       <div className="flex items-center gap-1">
         <Button
           variant="ghost"
           size={isMobile ? "sm" : "icon"}
           onClick={onEdit}
-          title="مشاهده و ویرایش"
+          title="ویرایش"
           className={isMobile ? "text-xs px-2" : ""}
         >
-          <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
-          {isMobile && <span className="mr-1">مشاهده</span>}
+          <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
+          {isMobile && <span className="mr-1">ویرایش</span>}
         </Button>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              className={`p-0 ${isMobile ? "h-8 w-8" : "h-8 w-8"}`}
-            >
-              <MoreHorizontal className="h-3 w-3 sm:h-4 sm:w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="border-border bg-popover">
-            <DropdownMenuLabel>عملیات</DropdownMenuLabel>
-
-            <DropdownMenuItem
-              onClick={handleCopyPartNumber}
-              className="focus:bg-accent"
-            >
-              <Copy className="mr-2 h-4 w-4" />
-              کپی شماره قطعه
-            </DropdownMenuItem>
-
-            <DropdownMenuItem onClick={onEdit} className="focus:bg-accent">
-              <Eye className="mr-2 h-4 w-4" />
-              مشاهده و ویرایش
-            </DropdownMenuItem>
-
-            {isAdmin && (
-              <>
-                <DropdownMenuSeparator />
-                {!part.active ? (
-                  <DropdownMenuItem
-                    onClick={handleReactivate}
-                    className="text-green-600 focus:bg-green-50 dark:focus:bg-green-950"
-                  >
-                    <RotateCcw className="mr-2 h-4 w-4" />
-                    فعال‌سازی مجدد
-                  </DropdownMenuItem>
-                ) : (
-                  <DropdownMenuItem
-                    onClick={handleDelete}
-                    className="text-red-600 focus:bg-red-50 dark:focus:bg-red-950"
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    حذف قطعه
-                  </DropdownMenuItem>
-                )}
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
     );
   }
@@ -560,7 +413,6 @@ export function PartsTable() {
             </div>
           </div>
         </div>
-
         <div className="bg-mechanical border-mechanical rounded-lg p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
@@ -576,7 +428,6 @@ export function PartsTable() {
             </div>
           </div>
         </div>
-
         <div className="bg-mechanical border-mechanical rounded-lg p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
@@ -663,7 +514,7 @@ export function PartsTable() {
                       ? null
                       : flexRender(
                           header.column.columnDef.header,
-                          header.getContext()
+                          header.getContext(),
                         )}
                   </TableHead>
                 ))}
@@ -698,7 +549,7 @@ export function PartsTable() {
                     >
                       {flexRender(
                         cell.column.columnDef.cell,
-                        cell.getContext()
+                        cell.getContext(),
                       )}
                     </TableCell>
                   ))}
@@ -732,7 +583,8 @@ export function PartsTable() {
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <div className="text-sm text-muted-foreground">
-            نمایش {table.getRowModel().rows.length} از {paginationData.total} قطعه
+            نمایش {table.getRowModel().rows.length} از {paginationData.total}{" "}
+            قطعه
           </div>
           <select
             value={pagination.pageSize}

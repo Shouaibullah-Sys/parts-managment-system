@@ -11,7 +11,13 @@ export async function GET() {
 
     return NextResponse.json({ user: sessionData.user });
   } catch (error) {
+    // Internal failure (e.g. transient DB error) — this is NOT "logged out".
+    // Return 500 so the client marks the check as failed and offers a retry
+    // instead of clearing the session and bouncing the user to /login.
     console.error("Session error:", error);
-    return NextResponse.json({ user: null }, { status: 401 });
+    return NextResponse.json(
+      { user: null, error: "Internal server error" },
+      { status: 500 }
+    );
   }
 }
