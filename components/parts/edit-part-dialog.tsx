@@ -50,6 +50,7 @@ export function EditPartDialog({
     defaultValues: {
       partNumber: "",
       name: "",
+      shelf: "",
       section: "E",
       minStock: 0,
       currentStock: 0,
@@ -65,6 +66,7 @@ export function EditPartDialog({
       form.reset({
         partNumber: part.partNumber,
         name: part.name,
+        shelf: part.shelf || "",
         section: part.section,
         minStock: part.minStock,
         currentStock: part.currentStock || 0,
@@ -175,6 +177,25 @@ export function EditPartDialog({
                       <Input
                         placeholder="فیلتر هوا"
                         {...field}
+                        className="border-border focus:border-primary focus:ring-primary/20"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="shelf"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>طاقچه</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="مثلاً A-1"
+                        {...field}
+                        value={field.value ?? ""}
                         className="border-border focus:border-primary focus:ring-primary/20"
                       />
                     </FormControl>

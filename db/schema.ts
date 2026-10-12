@@ -76,6 +76,7 @@ export const parts = pgTable("parts", {
   id: serial("id").primaryKey(),
   partNumber: varchar("part_number", { length: 100 }).unique().notNull(),
   name: varchar("name", { length: 255 }).notNull(),
+  shelf: varchar("shelf", { length: 100 }), // طاقچه — shelf location
   section: varchar("section", { length: 50 }).default("E"), // Changed from enum to varchar for flexibility
   minStock: integer("min_stock").default(0), // Minimum stock threshold
   currentStock: integer("current_stock").default(0), // Current available quantity

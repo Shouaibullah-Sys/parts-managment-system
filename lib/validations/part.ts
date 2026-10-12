@@ -14,6 +14,11 @@ export const partFormSchema = z
       .string()
       .min(1, "Name is required")
       .max(255, "Name must be less than 255 characters"),
+    shelf: z
+      .string()
+      .max(100, "Shelf must be less than 100 characters")
+      .optional()
+      .or(z.literal("")),
     section: z
       .string()
       .min(1, "Section is required")

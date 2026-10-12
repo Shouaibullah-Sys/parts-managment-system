@@ -50,6 +50,7 @@ export function CreatePartDialog({
     defaultValues: {
       partNumber: "",
       name: "",
+      shelf: "",
       section: "E",
       minStock: 0,
       currentStock: 0,
@@ -144,6 +145,21 @@ export function CreatePartDialog({
             </div>
 
             <div className="grid grid-cols-2 gap-4">
+              {/* Shelf */}
+              <FormField
+                control={form.control}
+                name="shelf"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>طاقچه</FormLabel>
+                    <FormControl>
+                      <Input placeholder="مثلاً A-1" {...field} value={field.value ?? ""} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
               {/* Section */}
               <FormField
                 control={form.control}

@@ -1,0 +1,9 @@
+node_modules
+.next
+.git
+backups
+deploy
+*.log
+.env*
+.vercel
+coverage

@@ -54,6 +54,7 @@ export async function GET(request: NextRequest) {
         p.id,
         p.part_number AS "partNumber",
         p.name,
+        p.shelf,
         p.section,
         p.min_stock AS "minStock",
         p.cost_price AS "costPrice",
@@ -102,6 +103,7 @@ export async function POST(request: NextRequest) {
     const {
       partNumber,
       name,
+      shelf,
       section,
       minStock,
       currentStock,
@@ -122,6 +124,7 @@ export async function POST(request: NextRequest) {
       .values({
         partNumber,
         name,
+        shelf: shelf || null,
         section: section || "E",
         minStock: minStock || 0,
         currentStock: currentStock || 0,

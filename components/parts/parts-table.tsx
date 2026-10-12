@@ -122,6 +122,11 @@ export function PartsTable() {
             <div className="text-sm text-muted-foreground truncate">
               {part.name}
             </div>
+            {part.shelf && (
+              <div className="text-xs text-muted-foreground">
+                طاقچه: <span className="font-mono">{part.shelf}</span>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-xs">
                 {part.section}
@@ -222,6 +227,18 @@ export function PartsTable() {
           {row.getValue("name")}
         </div>
       ),
+    },
+    {
+      accessorKey: "shelf",
+      header: "طاقچه",
+      cell: ({ row }) => {
+        const shelf = row.getValue("shelf") as string | null;
+        return (
+          <div className="font-mono text-center">
+            {shelf || <span className="text-muted-foreground">-</span>}
+          </div>
+        );
+      },
     },
     {
       accessorKey: "section",
