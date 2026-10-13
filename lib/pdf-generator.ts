@@ -55,18 +55,23 @@ export interface InvoiceData {
 }
 
 // ----------------------
-// Theme Colors
+// Theme Colors (matches the reference bill: red / ink / soft gray)
 // ----------------------
-const DARK_GRAY: [number, number, number] = [45, 45, 45];
-const DARK_RED: [number, number, number] = [139, 0, 0];
+const BRAND_RED: [number, number, number] = [192, 0, 32];
+const INK: [number, number, number] = [42, 42, 42];
+const MUTED: [number, number, number] = [110, 110, 110];
+const ROW_ALT: [number, number, number] = [244, 244, 244];
+const WHITE: [number, number, number] = [255, 255, 255];
+const BORDER: [number, number, number] = [214, 214, 214];
 const LIGHT_GRAY: [number, number, number] = [240, 240, 240];
-const TEXT_COLOR: [number, number, number] = [50, 50, 50];
+const DARK_GRAY: [number, number, number] = [64, 64, 64];
 
 // ----------------------
 // Cache for static assets
 // ----------------------
 let cachedFont: string | null = null;
 let cachedLogo: string | null = null;
+let cachedSideLogo: string | null = null;
 let cachedWatermark: string | null = null;
 let cacheInitialized = false;
 
@@ -112,6 +117,20 @@ const initializeCache = async (): Promise<void> => {
       cachedWatermark = "";
     }
 
+    // Load side logo (left of the header)
+    try {
+      const sideLogoPath = path.join(
+        process.cwd(),
+        "public",
+        "right-logo.jpeg",
+      );
+      const sideLogoBuffer = await fs.readFile(sideLogoPath);
+      cachedSideLogo = `data:image/jpeg;base64,${sideLogoBuffer.toString("base64")}`;
+    } catch {
+      console.warn("⚠️ right-logo.jpeg missing");
+      cachedSideLogo = "";
+    }
+
     cacheInitialized = true;
     console.log("✅ PDF assets cached successfully");
   } catch (error) {
@@ -119,6 +138,7 @@ const initializeCache = async (): Promise<void> => {
     // Set empty values to prevent repeated failures
     cachedFont = "";
     cachedLogo = "";
+    cachedSideLogo = "";
     cachedWatermark = "";
     cacheInitialized = true;
   }
@@ -132,6 +152,7 @@ const getCachedAssets = async () => {
   return {
     font: cachedFont || "",
     logo: cachedLogo || "",
+    sideLogo: cachedSideLogo || "",
     watermark: cachedWatermark || "",
   };
 };
@@ -157,19 +178,20 @@ export async function generateInvoicePDF(
       unit: "pt",
       format: "a4",
     });
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-
-    let y = 120;
+    const W = doc.internal.pageSize.getWidth();
+    const H = doc.internal.pageSize.getHeight();
+    const M = 40;
+    const contentW = W - M * 2;
 
     // Get cached assets
     const {
       font: fontBase64,
       logo: logoBase64,
+      sideLogo: sideLogoBase64,
       watermark: watermarkBase64,
     } = await getCachedAssets();
 
-    // Load font
+    // Load Persian font
     let fontLoaded = false;
     if (fontBase64) {
       try {
@@ -183,151 +205,248 @@ export async function generateInvoicePDF(
       console.warn("No font data available, using default font");
     }
 
-    // ----------------------
-    // WATERMARK background
-    // ----------------------
-    if (watermarkBase64) {
-      const wmSize = 300;
-      const gs = doc.GState({ opacity: 0.1 });
-      doc.setGState(gs);
+    const FONT = fontLoaded ? "vazirmatn" : "helvetica";
+    doc.setFont(FONT, "normal");
 
+    // helper: faint centered watermark
+    const drawWatermark = () => {
+      if (!watermarkBase64) return;
+      const wmW = 320;
+      const wmH = (320 * 500) / 600; // preserve 600x500 aspect
+      const gs = doc.GState({ opacity: 0.06 });
+      doc.setGState(gs);
       doc.addImage(
         watermarkBase64,
         "PNG",
-        (pageWidth - wmSize) / 2,
-        (pageHeight - wmSize) / 2,
-        wmSize,
-        wmSize,
+        (W - wmW) / 2,
+        (H - wmH) / 2,
+        wmW,
+        wmH,
         "",
         "FAST",
       );
+      doc.setGState(doc.GState({ opacity: 1 }));
+    };
 
-      const gsReset = doc.GState({ opacity: 1 });
-      doc.setGState(gsReset);
-    }
+    drawWatermark();
 
     // ----------------------
     // HEADER
     // ----------------------
+    // top-right banner (dark gray, right-anchored) with a 65° slanted left edge
+    const bannerW = 360;
+    const bannerH = 96;
+    const bannerX = W - bannerW;
+    const bannerY = 0;
+    const bannerSlant = bannerH / Math.tan((65 * Math.PI) / 180);
+
+    // dark gray banner (trapezoid)
     doc.setFillColor(...DARK_GRAY);
-    doc.rect(0, 0, pageWidth, 120, "F");
+    doc.triangle(
+      bannerX + bannerSlant,
+      bannerY,
+      W,
+      bannerY,
+      W,
+      bannerY + bannerH,
+      "F",
+    );
+    doc.triangle(
+      bannerX + bannerSlant,
+      bannerY,
+      W,
+      bannerY + bannerH,
+      bannerX,
+      bannerY + bannerH,
+      "F",
+    );
 
+    // centered logo + brand text group on the banner
+    const brandText = "دیپلوماسی لمتید";
+    const taglineText = "بل پرزه جات وسایط";
+    doc.setFontSize(17);
+    const brandTextW = doc.getTextWidth(brandText);
+    doc.setFontSize(10);
+    const taglineTextW = doc.getTextWidth(taglineText);
+    const textW = Math.max(brandTextW, taglineTextW);
+
+    const logoW = 74;
+    const logoH = Math.round((logoW * 497) / 793);
+    const logoGap = 16;
+    const groupW = logoW + logoGap + textW;
+    const groupX = bannerX + (bannerW - groupW) / 2;
+    const textRight = groupX + textW;
+
+    // logo.png (1080x1079 with transparent padding; content 144,293..937,790)
+    const logoContentX = textRight + logoGap;
+    const logoContentY = bannerY + (bannerH - logoH) / 2;
+    const logoScale = logoW / 793;
     if (logoBase64) {
-      doc.addImage(logoBase64, "PNG", 40, 15, 70, 70);
-    }
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(22);
-    doc.setTextColor(...LIGHT_GRAY);
-    doc.text("Diplomasi Ltd", pageWidth / 2, 40, { align: "center" });
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(11);
-    doc.text("Between Parwan Road, Kabul", pageWidth / 2, 60, {
-      align: "center",
-    });
-    doc.text("Phone: +93 744 441 079", pageWidth / 2, 75, { align: "center" });
-
-    if (fontLoaded) {
-      doc.setFont("vazirmatn", "normal");
-      doc.setFontSize(14);
-      doc.text("بل پرزه جات وسایط", pageWidth / 2, 92, { align: "center" });
-
-      doc.setFontSize(11);
-      doc.text(
-        "کابل — بین چهار راهی پروان دوم و سوم، مقابل قصر زرین",
-        pageWidth / 2,
-        110,
-        { align: "center" },
+      doc.addImage(
+        logoBase64,
+        "PNG",
+        logoContentX - 144 * logoScale,
+        logoContentY - 293 * logoScale,
+        1080 * logoScale,
+        1079 * logoScale,
       );
     }
 
-    // ----------------------
-    // INVOICE ID & DATE (Persian)
-    // ----------------------
-    y = 150;
-    doc.setFontSize(10);
-    doc.setTextColor(...TEXT_COLOR);
-
-    if (fontLoaded) {
-      doc.setFont("vazirmatn", "normal");
-      doc.text(
-        `آیدی فاکتور: INV-${toPersianNumber(String(data.issueId).padStart(4, "0"))}`,
-        40,
-        y,
-      );
-      doc.text(
-        `تاریخ: ${toPersianDate(data.createdAt)}`,
-        pageWidth - 40,
-        y,
-        { align: "right" },
-      );
-    } else {
-      doc.setFont("helvetica", "normal");
-      doc.text(`Invoice ID: INV-${String(data.issueId).padStart(4, "0")}`, 40, y);
-      doc.text(
-        `Date: ${data.createdAt.toLocaleDateString("en-GB")}`,
-        pageWidth - 40,
-        y,
-        { align: "right" },
-      );
-    }
-
-    y += 30;
-
-    // ----------------------
-    // TABLE HEADER (Persian)
-    // ----------------------
-    const colWidth = (pageWidth - 80) / 5;
-    doc.setFillColor(...DARK_RED);
-    doc.rect(40, y, pageWidth - 80, 25, "F");
-
-    doc.setFontSize(10);
+    doc.setFontSize(17);
     doc.setTextColor(255, 255, 255);
+    doc.text(brandText, textRight, bannerY + 44, { align: "right" });
 
-    if (fontLoaded) {
-      doc.setFont("vazirmatn", "normal");
-    } else {
-      doc.setFont("helvetica", "bold");
-    }
+    doc.setFontSize(10);
+    doc.setTextColor(205, 205, 205);
+    doc.text(taglineText, textRight, bannerY + 64, { align: "right" });
 
-    const headers = ["#", "نام", "مقدار", "قیمت واحد", "مجموع"];
-    headers.forEach((h, i) => {
-      doc.text(h, 45 + colWidth * i, y + 17);
+    // full-width red divider holding the phone + address (centered) on one line
+    const redY = bannerH;
+    const redH = 32;
+    doc.setFillColor(...BRAND_RED);
+    doc.rect(0, redY, W, redH, "F");
+
+    doc.setFontSize(11);
+    doc.setTextColor(255, 255, 255);
+    const phoneLine = "تلفن: +93 744 441 079";
+    const addrLine = "کابل — بین چهار راهی پروان دوم و سوم، مقابل قصر زرین";
+    const phoneW = doc.getTextWidth(phoneLine);
+    const addrW = doc.getTextWidth(addrLine);
+    const lineGap = 26;
+    const lineStart = (W - (phoneW + lineGap + addrW)) / 2;
+    const redTextY = redY + redH / 2 + 4;
+    doc.text(phoneLine, lineStart, redTextY, { align: "left" });
+    doc.text(addrLine, lineStart + phoneW + lineGap, redTextY, {
+      align: "left",
     });
 
-    y += 30;
-    doc.setTextColor(...TEXT_COLOR);
+    // side logo (right-logo.jpeg), centered in the empty left header area
+    if (sideLogoBase64) {
+      const slContentH = 58;
+      const slContentW = (slContentH * 1129) / 960;
+      const slScale = slContentH / 960;
+      const slContentX = (bannerX - slContentW) / 2;
+      const slContentY = (bannerH - slContentH) / 2;
+      doc.addImage(
+        sideLogoBase64,
+        "JPEG",
+        slContentX - 62 * slScale,
+        slContentY - 120 * slScale,
+        1254 * slScale,
+        1254 * slScale,
+      );
+    }
 
     // ----------------------
-    // TABLE ROWS
+    // INVOICE META
     // ----------------------
+    let y = 140;
+    doc.setFontSize(10);
+    doc.setTextColor(...INK);
+    doc.text(
+      `نمبر فاکتور: INV-${toPersianNumber(String(data.issueId).padStart(4, "0"))}`,
+      W - M,
+      y,
+      { align: "right" },
+    );
+    doc.text(`تاریخ: ${toPersianDate(data.createdAt)}`, M, y, {
+      align: "left",
+    });
+
+    // ----------------------
+    // SELLER / BUYER BOXES
+    // ----------------------
+    const boxY = 158;
+    const boxH = 78;
+    const gap = 12;
+    const boxW = (contentW - gap) / 2;
+    const rightBoxX = M + boxW + gap;
+    const leftBoxX = M;
+
+    const drawInfoBox = (
+      x: number,
+      label: string,
+      lines: string[],
+    ) => {
+      doc.setFillColor(...ROW_ALT);
+      doc.rect(x, boxY, boxW, boxH, "F");
+      doc.setFillColor(...BRAND_RED);
+      doc.rect(x + boxW - 3, boxY, 3, boxH, "F");
+
+      doc.setFontSize(10);
+      doc.setTextColor(...BRAND_RED);
+      doc.text(label, x + boxW - 12, boxY + 18, { align: "right" });
+
+      doc.setFontSize(9);
+      doc.setTextColor(...INK);
+      let ly = boxY + 36;
+      for (const ln of lines) {
+        if (!ln) continue;
+        doc.text(ln, x + boxW - 12, ly, { align: "right" });
+        ly += 13;
+      }
+    };
+
+    drawInfoBox(rightBoxX, "فروشنده", [
+      "دیپلوماسی لمتید",
+      "کابل، بین چهار راهی پروان دوم و سوم",
+      "تلفن: +93 744 441 079",
+    ]);
+    drawInfoBox(leftBoxX, "خریدار", [
+      data.customer.name,
+      data.customer.phone ? `تلفن: ${data.customer.phone}` : "",
+      data.customer.address || "",
+    ]);
+
+    // ----------------------
+    // ITEMS TABLE
+    // Table columns read right-to-left:
+    //   شماره | نام پرزه | تعداد | قیمت واحد | مجموع
+    // Page x-boundaries are laid out left-to-right (مجموع ... شماره).
+    // ----------------------
+    let ty = boxY + boxH + 22;
+
+    const wTotal = 110;
+    const wPrice = 105;
+    const wQty = 55;
+    const wName = 190;
+    const wNum = 55;
+    const xTotal0 = M;
+    const xTotal1 = xTotal0 + wTotal;
+    const xPrice0 = xTotal1;
+    const xPrice1 = xPrice0 + wPrice;
+    const xQty0 = xPrice1;
+    const xQty1 = xQty0 + wQty;
+    const xName0 = xQty1;
+    const xName1 = xName0 + wName;
+    const xNum0 = xName1;
+    const xNum1 = xNum0 + wNum;
+
+    const drawTableHeader = () => {
+      doc.setFillColor(...BRAND_RED);
+      doc.rect(M, ty, contentW, 26, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(10);
+      doc.text("مجموع", (xTotal0 + xTotal1) / 2, ty + 17, { align: "center" });
+      doc.text("قیمت واحد", (xPrice0 + xPrice1) / 2, ty + 17, {
+        align: "center",
+      });
+      doc.text("تعداد", (xQty0 + xQty1) / 2, ty + 17, { align: "center" });
+      doc.text("نام پرزه", xName1 - 8, ty + 17, { align: "right" });
+      doc.text("شماره", (xNum0 + xNum1) / 2, ty + 17, { align: "center" });
+      ty += 26;
+    };
+
+    drawTableHeader();
+
     let totalAmount = 0;
 
     data.sales.forEach((s, idx) => {
-      if (y > pageHeight - 140) {
+      if (ty > H - 190) {
         doc.addPage();
-        y = 80;
-
-        if (watermarkBase64) {
-          const wmSize2 = 300;
-          const gs = doc.GState({ opacity: 0.1 });
-          doc.setGState(gs);
-
-          doc.addImage(
-            watermarkBase64,
-            "PNG",
-            (pageWidth - wmSize2) / 2,
-            (pageHeight - wmSize2) / 2,
-            wmSize2,
-            wmSize2,
-            "",
-            "FAST",
-          );
-
-          const gsReset = doc.GState({ opacity: 1 });
-          doc.setGState(gsReset);
-        }
+        drawWatermark();
+        ty = 80;
+        drawTableHeader();
       }
 
       const totalValue =
@@ -338,72 +457,140 @@ export async function generateInvoicePDF(
       const unitPrice = qty ? totalValue / qty : 0;
       totalAmount += totalValue;
 
-      // Alternating row colors
-      if (idx % 2 === 0) {
-        doc.setFillColor(...LIGHT_GRAY);
-      } else {
-        doc.setFillColor(255, 255, 255);
-      }
-      doc.rect(40, y, pageWidth - 80, 20, "F");
+      // zebra row
+      doc.setFillColor(...(idx % 2 === 0 ? ROW_ALT : WHITE));
+      doc.rect(M, ty, contentW, 22, "F");
 
-      // Row number (Persian)
-      doc.setFont("vazirmatn", "normal");
-      doc.text(toPersianNumber(idx + 1), 45, y + 14);
+      doc.setTextColor(...INK);
+      doc.setFontSize(10);
 
-      // Part name — right-aligned Persian; shrink font so it fits on ONE line.
-      // Never pass maxWidth here: jsPDF would wrap the string and re-process
-      // each line, scrambling the RTL order.
+      // # (rightmost)
+      doc.text(toPersianNumber(idx + 1), (xNum0 + xNum1) / 2, ty + 15, {
+        align: "center",
+      });
+
+      // part name — shrink so it stays on ONE line (never pass maxWidth: jsPDF
+      // would wrap the RTL string and scramble the order)
       const nameText = s.part?.name || "نامشخص";
-      const nameColW = colWidth - 8;
       let nameSize = 10;
       doc.setFontSize(nameSize);
-      while (doc.getTextWidth(nameText) > nameColW && nameSize > 6) {
+      const nameColW = wName - 14;
+      while (doc.getTextWidth(nameText) > nameColW && nameSize > 6.5) {
         nameSize -= 0.5;
         doc.setFontSize(nameSize);
       }
-      doc.text(nameText, 45 + colWidth * 2 - 4, y + 14, { align: "right" });
+      doc.text(nameText, xName1 - 8, ty + 15, { align: "right" });
       doc.setFontSize(10);
 
-      // Qty, unit price, total (Persian numerals)
-      doc.text(toPersianNumber(qty), 45 + colWidth * 2, y + 14);
-      doc.text(toPersianNumber(unitPrice.toFixed(2)), 45 + colWidth * 3, y + 14);
-      doc.text(toPersianNumber(totalValue.toFixed(2)), 45 + colWidth * 4, y + 14);
+      // qty
+      doc.text(toPersianNumber(qty), (xQty0 + xQty1) / 2, ty + 15, {
+        align: "center",
+      });
 
-      y += 20;
+      // unit price
+      doc.text(
+        toPersianNumber(unitPrice.toFixed(2)),
+        xPrice1 - 8,
+        ty + 15,
+        { align: "right" },
+      );
+
+      // line total
+      doc.text(
+        toPersianNumber(totalValue.toFixed(2)),
+        xTotal1 - 8,
+        ty + 15,
+        { align: "right" },
+      );
+
+      ty += 22;
     });
 
     // ----------------------
-    // TOTAL BOX (Persian)
+    // TOTALS (left side — mirrored from the reference template)
     // ----------------------
-    y += 30;
+    ty += 16;
+    const tbW = 240;
+    const tbX = M;
+    const tbH = 58;
+
     doc.setFillColor(...LIGHT_GRAY);
-    doc.rect(pageWidth - 200, y, 160, 40, "F");
-    doc.setTextColor(...DARK_RED);
-    doc.text("مجموع کل:", pageWidth - 180, y + 15);
+    doc.rect(tbX, ty, tbW, tbH, "F");
 
-    doc.setTextColor(...TEXT_COLOR);
-    doc.text(toPersianCurrency(totalAmount), pageWidth - 180, y + 35);
+    doc.setFontSize(10);
+    doc.setTextColor(...MUTED);
+    doc.text("مجموع اقلام", tbX + tbW - 14, ty + 21, { align: "right" });
+    doc.setTextColor(...INK);
+    doc.text(toPersianCurrency(totalAmount), tbX + 14, ty + 21, {
+      align: "left",
+    });
 
-    // ----------------------
-    // SIGNATURE AREA (Persian)
-    // ----------------------
-    y += 100;
+    doc.setDrawColor(...BORDER);
+    doc.line(tbX + 12, ty + 30, tbX + tbW - 12, ty + 30);
+
     doc.setFontSize(12);
-    doc.setTextColor(...TEXT_COLOR);
-    doc.text("امضاء مسئول", 40, y);
-    doc.text("مهر شرکت", pageWidth - 200, y);
+    doc.setTextColor(...BRAND_RED);
+    doc.text("مجموع کل", tbX + tbW - 14, ty + 48, { align: "right" });
+    doc.text(toPersianCurrency(totalAmount), tbX + 14, ty + 48, {
+      align: "left",
+    });
+
+    ty += tbH + 22;
 
     // ----------------------
-    // FOOTER (Persian)
+    // TERMS & SIGNATURE
     // ----------------------
-    doc.setFontSize(9);
-    doc.setTextColor(120, 120, 120);
+    doc.setFontSize(9.5);
+    doc.setTextColor(...INK);
+    doc.text("شرایط و ملاحظات:", M, ty, { align: "left" });
+    ty += 14;
+    doc.setTextColor(...MUTED);
     doc.text(
-      "جنس فروخته شده بعد از ۲۴ ساعت قابل واپس گرفتن نیست.",
-      pageWidth / 2,
-      pageHeight - 20,
+      "• جنس فروخته شده بعد از ۲۴ ساعت قابل واپس گرفتن نمی باشد.",
+      M,
+      ty,
+      { align: "left" },
+    );
+    ty += 12;
+    doc.text("• لطفاً این رسید را تا زمان تسویه کامل حفظ نمایید.", M, ty, {
+      align: "left",
+    });
+
+    // signature area pinned near the bottom
+    const sigY = Math.max(ty + 46, H - 96);
+    doc.setDrawColor(...BORDER);
+    doc.setFontSize(10);
+    doc.setTextColor(...INK);
+    doc.text("امضاء مسئول", M, sigY, { align: "left" });
+    doc.line(M, sigY + 6, M + 150, sigY + 6);
+    doc.text("مهر شرکت", W - M, sigY, { align: "right" });
+    doc.line(W - M - 150, sigY + 6, W - M, sigY + 6);
+
+    // ----------------------
+    // FOOTER
+    // ----------------------
+    doc.setFontSize(8);
+    doc.setTextColor(150, 150, 150);
+    doc.text(
+      "دیپلوماسی لمتید — از اعتماد و خرید شما سپاسگزاریم.",
+      W / 2,
+      H - 40,
       { align: "center" },
     );
+
+    // two-tone footer ribbon: left brand red / right dark gray,
+    // divider slanted at 70° (instead of a 90° vertical split)
+    const ribbonH = 16;
+    const ribbonY = H - ribbonH;
+    const splitTop = W * 0.5;
+    const splitBottom = splitTop + ribbonH / Math.tan((70 * Math.PI) / 180);
+
+    doc.setFillColor(...DARK_GRAY);
+    doc.rect(0, ribbonY, W, ribbonH, "F");
+
+    doc.setFillColor(...BRAND_RED);
+    doc.triangle(0, ribbonY, splitTop, ribbonY, splitBottom, H, "F");
+    doc.triangle(0, ribbonY, splitBottom, H, 0, H, "F");
 
     // ----------------------
     // OUTPUT
