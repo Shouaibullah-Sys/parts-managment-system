@@ -3,18 +3,20 @@ export const permissions = {
     parts: ["read", "create", "update"],
     orders: ["read", "create", "update"],
     users: ["read"],
+    partners: ["read"],
     system: ["read"],
   },
   admin: {
     parts: ["read", "create", "update", "delete"],
     orders: ["read", "create", "update", "delete"],
     users: ["read", "create", "update", "delete"],
+    partners: ["read", "create", "update", "delete"],
     system: ["read", "update"],
   },
 } as const;
 
 export type Role = "staff" | "admin";
-export type Resource = "parts" | "orders" | "users" | "system";
+export type Resource = "parts" | "orders" | "users" | "partners" | "system";
 export type Action = "read" | "create" | "update" | "delete";
 
 export function hasPermission(

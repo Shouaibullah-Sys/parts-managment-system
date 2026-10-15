@@ -56,6 +56,7 @@ interface LowStockPart {
   deficit: number;
   total_cost: number;
   selected: boolean;
+  partner_name: string;
 }
 
 // API function
@@ -87,6 +88,7 @@ const fetchLowStockParts = async (): Promise<LowStockPart[]> => {
         (part.current_stock || part.currentStock || 0),
       total_cost: 0,
       selected: false,
+      partner_name: part.partner?.name || "-",
     }));
 
   return lowStockParts;
@@ -110,7 +112,12 @@ const bulkUpdateParts = async (data: LowStockPart[]) => {
 // Update part details API
 const updatePartDetails = async (
   partId: number,
-  updates: { section?: string; cost_price?: string; sale_price?: string }
+  updates: {
+    section?: string;
+    cost_price?: string;
+    sale_price?: string;
+    partner_id?: number | null;
+  }
 ) => {
   const response = await fetch(`/api/parts/${partId}`, {
     method: "PATCH",
@@ -122,6 +129,84 @@ const updatePartDetails = async (
 
   if (!response.ok) throw new Error("Failed to update part details");
   return response.json();
+};
+
+// Load all partners (used to match/auto-create شرکا coming from Excel)
+const fetchAllPartners = async (): Promise<{ id: number; name: string }[]> => {
+  const response = await fetch("/api/partners?limit=1000", {
+    credentials: "include",
+  });
+  if (!response.ok) throw new Error("Failed to fetch partners");
+  const result = await response.json();
+  return result.data ?? [];
+};
+
+// Create a partner by name and return its id
+const createPartner = async (name: string): Promise<number> => {
+  const response = await fetch("/api/partners", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ name }),
+  });
+  if (!response.ok) throw new Error("Failed to create partner");
+  const result = await response.json();
+  return result.data.id as number;
+};
+
+// Normalize a partner name for matching (trim, collapse spaces, unify ی/ک)
+const normalizePartnerName = (name: string) =>
+  name
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/[يى]/g, "ی")
+    .replace(/ك/g, "ک")
+    .toLowerCase();
+
+// Persist the شرکا names typed in the Excel sheet: match existing partners by
+// normalized name, create the missing ones, then assign them to the parts.
+const persistImportedPartners = async (rows: LowStockPart[]) => {
+  const targets = rows.filter((part) => {
+    const name = (part.partner_name || "").trim();
+    return name !== "" && name !== "-";
+  });
+
+  if (targets.length === 0) return { assigned: 0, failed: 0 };
+
+  const existingPartners = await fetchAllPartners();
+  const byName = new Map<string, number>();
+  for (const partner of existingPartners) {
+    const key = normalizePartnerName(partner.name);
+    if (!byName.has(key)) byName.set(key, partner.id);
+  }
+
+  const nameToId = new Map<string, number>();
+  for (const part of targets) {
+    const key = normalizePartnerName(part.partner_name);
+    if (nameToId.has(key)) continue;
+    let id = byName.get(key);
+    if (id == null) {
+      id = await createPartner(part.partner_name.trim());
+      byName.set(key, id);
+    }
+    nameToId.set(key, id);
+  }
+
+  let assigned = 0;
+  let failed = 0;
+  for (const part of targets) {
+    const partnerId = nameToId.get(normalizePartnerName(part.partner_name));
+    if (partnerId == null) continue;
+    try {
+      await updatePartDetails(part.id, { partner_id: partnerId });
+      assigned++;
+    } catch (error) {
+      console.error("Partner assign error:", error);
+      failed++;
+    }
+  }
+
+  return { assigned, failed };
 };
 
 export default function PriorityActionsPage() {
@@ -403,6 +488,7 @@ export default function PriorityActionsPage() {
         part_number: part.part_number,
         name: part.name,
         section: part.section,
+        partner_name: part.partner_name === "-" ? "" : part.partner_name,
         min_stock: part.min_stock,
         current_stock: part.current_stock,
         deficit: part.deficit,
@@ -458,12 +544,14 @@ export default function PriorityActionsPage() {
             const requestedQuantity = importedPart.requested_quantity;
             const totalCost =
               requestedQuantity * parseFloat(part.cost_price || "0");
+            const importedPartner = (importedPart.partner_name || "").trim();
 
             return {
               ...part,
               requested_quantity: requestedQuantity,
               total_cost: totalCost,
               selected: true,
+              partner_name: importedPartner || part.partner_name,
             };
           }
           return part;
@@ -511,6 +599,21 @@ export default function PriorityActionsPage() {
     setIsUpdating(true);
     try {
       const updateResult = await bulkUpdateParts(partsToUpdate);
+
+      // Persist شرکا typed in the Excel sheet (creates any missing partners)
+      try {
+        const { assigned, failed } =
+          await persistImportedPartners(partsToUpdate);
+        if (assigned > 0) {
+          toast.success(`شرکای ${assigned} قطعه ثبت شد`);
+        }
+        if (failed > 0) {
+          toast.error(`ثبت شرکای ${failed} قطعه ناموفق بود`);
+        }
+      } catch (partnerError) {
+        console.error("Partner persist error:", partnerError);
+        toast.error("خطا در ثبت شرکای وارد شده");
+      }
 
       // Refresh data to get updated current stock
       await refetch();
@@ -828,6 +931,7 @@ export default function PriorityActionsPage() {
                 <TableHead>شماره قطعه</TableHead>
                 <TableHead>نام قطعه</TableHead>
                 <TableHead>بخش</TableHead>
+                <TableHead>شرکا</TableHead>
                 <TableHead>حداقل موجودی</TableHead>
                 <TableHead>موجودی فعلی</TableHead>
                 <TableHead>کمبود</TableHead>
@@ -901,6 +1005,13 @@ export default function PriorityActionsPage() {
                           <RefreshCw className="h-3 w-3 animate-spin text-muted-foreground" />
                         )}
                       </div>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap max-w-[160px] truncate">
+                      {part.partner_name === "-" ? (
+                        <span className="text-muted-foreground">-</span>
+                      ) : (
+                        part.partner_name
+                      )}
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
                       {part.min_stock.toLocaleString("fa-IR")}

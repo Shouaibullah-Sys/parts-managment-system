@@ -115,7 +115,11 @@ export function CreatePartForm() {
                     <FormItem>
                       <FormLabel>Part Number *</FormLabel>
                       <FormControl>
-                        <Input placeholder="ABC-123" {...field} />
+                        <Input
+                          placeholder="ABC-123"
+                          autoComplete="off"
+                          {...field}
+                        />
                       </FormControl>
                       <FormDescription>
                         Unique identifier for the part

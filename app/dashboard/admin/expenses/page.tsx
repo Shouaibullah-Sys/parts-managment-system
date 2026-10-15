@@ -3,14 +3,6 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -23,7 +15,6 @@ import { ExpensesTable } from "@/components/expenses/expenses-table";
 import { ExpenseForm } from "@/components/forms/expense-form";
 import { authClient } from "@/lib/auth-client";
 import { toast } from "sonner";
-import Loader from "@/components/loader";
 
 export default function AdminExpensesPage() {
   const { data: session } = authClient.useSession();

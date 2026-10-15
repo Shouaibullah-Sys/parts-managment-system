@@ -23,6 +23,13 @@ export async function createSale(input: CreateSaleInput) {
   const outstanding = Number(totalAmount) - Number(paidAmount);
 
   const result = await db.transaction(async (tx) => {
+    // اسنپ‌شات لحظهٔ فروش (گزارش سود شرکا) — از روی قطعه
+    const [partRow] = await tx
+      .select({ partnerId: parts.partnerId, costPrice: parts.costPrice })
+      .from(parts)
+      .where(eq(parts.id, partId))
+      .limit(1);
+
     const sale = await tx
       .insert(sales)
       .values({
@@ -34,6 +41,8 @@ export async function createSale(input: CreateSaleInput) {
         outstanding: outstanding.toString(),
         isFullyPaid: outstanding <= 0,
         createdBy,
+        partnerId: partRow?.partnerId ?? null,
+        unitCost: partRow?.costPrice ?? null,
       })
       .returning();
 

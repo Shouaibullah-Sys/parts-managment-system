@@ -37,6 +37,8 @@ export type SaleItem = {
   sale: {
     quantity: number;
     totalAmount: string | number;
+    // نام پرزهٔ خارجی (خرید از فروشگاه دیگر) — زمانی که part تهی است
+    itemName?: string | null;
   };
   part: Part | null;
   user: { name: string } | null;
@@ -471,7 +473,7 @@ export async function generateInvoicePDF(
 
       // part name — shrink so it stays on ONE line (never pass maxWidth: jsPDF
       // would wrap the RTL string and scramble the order)
-      const nameText = s.part?.name || "نامشخص";
+      const nameText = s.part?.name || s.sale.itemName || "نامشخص";
       let nameSize = 10;
       doc.setFontSize(nameSize);
       const nameColW = wName - 14;

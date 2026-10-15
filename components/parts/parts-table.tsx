@@ -178,6 +178,15 @@ export function PartsTable() {
       },
     },
     {
+      id: "partners",
+      header: "شرکا",
+      cell: ({ row }) => (
+        <Badge variant="outline" className="text-xs">
+          {row.original.partner?.name ?? "-"}
+        </Badge>
+      ),
+    },
+    {
       id: "actions",
       header: "عملیات",
       cell: ({ row }) => {
@@ -298,6 +307,22 @@ export function PartsTable() {
           </div>
         );
       },
+    },
+    {
+      id: "partners",
+      header: "شرکا",
+      cell: ({ row }) => (
+        <Badge
+          variant="outline"
+          className={
+            row.original.partner
+              ? "capitalize border-primary/30"
+              : "border-primary/30 text-muted-foreground"
+          }
+        >
+          {row.original.partner?.name ?? "-"}
+        </Badge>
+      ),
     },
     {
       accessorKey: "active",

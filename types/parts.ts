@@ -1,3 +1,9 @@
+export type PartPartnerInfo = {
+  id: number;
+  name: string;
+  percentage: string | null;
+};
+
 export type Part = {
   id: number;
   partNumber: string;
@@ -10,6 +16,8 @@ export type Part = {
   active: boolean;
   createdAt: string;
   currentStock?: number; // Added to match API response with real stock data
+  partnerId?: number | null;
+  partner?: PartPartnerInfo | null; // شراکت انتخابشده برای این قطعه
 };
 
 export type CreatePartInput = {
@@ -22,6 +30,7 @@ export type CreatePartInput = {
   costPrice?: string;
   salePrice?: string;
   active?: boolean;
+  partnerId?: number | null;
 };
 
 export type UpdatePartInput = Partial<CreatePartInput>;

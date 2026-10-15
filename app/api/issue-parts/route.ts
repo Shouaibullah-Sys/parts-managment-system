@@ -54,6 +54,20 @@ export async function POST(request: NextRequest) {
       return bad("نام مشتری و قطعات الزامی است");
     }
 
+    // پرزه خارجی: kind === "external" (یا بدون partId و با نام).
+    // این پرزهها فقط وارد بل/مالی میشوند و به موجودی انبار کاری ندارند.
+    const isExternalItem = (item: any) =>
+      item.kind === "external" || (!item.partId && !!item.itemName);
+
+    const invalidExternalItem = items.find(
+      (item: any) =>
+        isExternalItem(item) &&
+        (!String(item.itemName || "").trim() || Number(item.quantity) < 1)
+    );
+    if (invalidExternalItem) {
+      return bad("نام و تعداد پرزه خارجی الزامی است");
+    }
+
     // Test database connection first
     try {
       console.log("Testing database connection...");
@@ -67,11 +81,13 @@ export async function POST(request: NextRequest) {
       return serverError("خطا در اتصال به پایگاه داده");
     }
 
+    const stockItems = items.filter((item: any) => !isExternalItem(item));
+
     // Validate stock availability and collect insufficient stock items
     console.log("Checking stock availability...");
     const insufficientStockItems = [];
 
-    for (const item of items) {
+    for (const item of stockItems) {
       console.log(
         `Checking stock for part ${item.partId}, quantity: ${item.quantity}`
       );
@@ -149,7 +165,49 @@ export async function POST(request: NextRequest) {
       );
 
       try {
+        // پرزه خارجی — فقط رکورد مالی در sales، بدون موجودی/انبار
+        if (isExternalItem(item)) {
+          const [externalSale] = await db
+            .insert(sales)
+            .values({
+              partId: null,
+              itemName: String(item.itemName).trim(),
+              itemCost:
+                item.itemCost != null && String(item.itemCost).trim() !== ""
+                  ? String(item.itemCost)
+                  : null,
+              customerId: customer.id,
+              quantity: item.quantity,
+              totalAmount: totalAmount,
+              paidAmount: "0",
+              outstanding: totalAmount,
+              isFullyPaid: false,
+              createdBy: session.user.id,
+              saleDate: invoiceDate ? new Date(invoiceDate) : new Date(),
+              // اسنپ‌شات: پرزه خارجی مال شریک نیست، بهای خرید واحد ثبت می‌شود
+              partnerId: null,
+              unitCost:
+                item.itemCost != null && String(item.itemCost).trim() !== ""
+                  ? String(item.itemCost)
+                  : null,
+            })
+            .returning();
+
+          console.log("External sale created:", externalSale.id);
+          salesRecords.push(externalSale);
+          continue;
+        }
+
         // Use Drizzle's insert instead of raw SQL
+        const [stockPart] = await db
+          .select({
+            partnerId: parts.partnerId,
+            costPrice: parts.costPrice,
+          })
+          .from(parts)
+          .where(eq(parts.id, item.partId))
+          .limit(1);
+
         const [sale] = await db
           .insert(sales)
           .values({
@@ -162,6 +220,9 @@ export async function POST(request: NextRequest) {
             isFullyPaid: false,
             createdBy: session.user.id,
             saleDate: invoiceDate ? new Date(invoiceDate) : new Date(),
+            // اسنپ‌شات لحظهٔ فروش (گزارش سود شرکا)
+            partnerId: stockPart?.partnerId ?? null,
+            unitCost: stockPart?.costPrice ?? null,
           })
           .returning();
 

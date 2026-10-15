@@ -18,6 +18,7 @@ import {
   DollarSign,
   Settings,
   ChevronRight,
+  Handshake,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logout } from "./logout";
@@ -94,6 +95,12 @@ const getNavigationConfig = (
               icon: FileText,
               description: "پیگیری و مدیریت مخارج",
             },
+            {
+              name: "شرکا",
+              href: "/dashboard/admin/partners",
+              icon: Handshake,
+              description: "مدیریت شرکا و سهم آن‌ها",
+            },
           ],
         },
         {
@@ -147,6 +154,12 @@ const getNavigationConfig = (
             href: "/dashboard/admin/expenses",
             icon: FileText,
             description: "پیگیری و مدیریت مخارج",
+          },
+          {
+            name: "شرکا",
+            href: "/dashboard/admin/partners",
+            icon: Handshake,
+            description: "مدیریت شرکا و سهم آنها",
           },
         ],
       },

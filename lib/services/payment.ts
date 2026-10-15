@@ -1,7 +1,7 @@
 // lib/services/payment.ts
 import { db } from "@/db/drizzle";
 import { payments, sales, customers, parts, saleDiscounts } from "@/db/schema";
-import { eq, and, isNotNull, gt } from "drizzle-orm";
+import { eq, and, gt } from "drizzle-orm";
 
 type AddPaymentInput = {
   saleId: number;
@@ -140,6 +140,7 @@ export async function applySaleDiscount(input: AddDiscountInput) {
       "این فروش بدهی باقیمانده ندارد و نمی‌توان تخفیف داد",
     );
   }
+
   if (amountNum > outstanding + 1e-9) {
     throw new PaymentValidationError(
       `مبلغ تخفیف (${amountNum.toLocaleString()}) از باقیمانده (${outstanding.toLocaleString()}) بیشتر است`,

@@ -5,6 +5,7 @@ export interface ExcelPart {
   part_number: string;
   name: string;
   section: string;
+  partner_name: string;
   min_stock: number;
   current_stock: number;
   deficit: number;
@@ -23,6 +24,7 @@ export const exportToExcel = (data: ExcelPart[]) => {
     "شماره قطعه": item.part_number,
     "نام قطعه": item.name,
     بخش: item.section,
+    شرکا: item.partner_name,
     "حداقل موجودی": item.min_stock,
     "موجودی فعلی": item.current_stock,
     کمبود: item.deficit,
@@ -39,6 +41,7 @@ export const exportToExcel = (data: ExcelPart[]) => {
     { wch: 15 }, // شماره قطعه
     { wch: 30 }, // نام قطعه
     { wch: 10 }, // بخش
+    { wch: 20 }, // شرکا
     { wch: 12 }, // حداقل موجودی
     { wch: 12 }, // موجودی فعلی
     { wch: 10 }, // کمبود
@@ -78,6 +81,9 @@ export const importFromExcel = (file: File): Promise<ExcelPart[]> => {
           part_number: row["شماره قطعه"] || row["part_number"],
           name: row["نام قطعه"] || row["name"],
           section: row["بخش"] || row["section"],
+          partner_name: String(
+            row["شرکا"] || row["partner_name"] || ""
+          ).trim(),
           min_stock: Number(row["حداقل موجودی"] || row["min_stock"] || 0),
           current_stock: Number(
             row["موجودی فعلی"] || row["current_stock"] || 0
@@ -114,6 +120,7 @@ export const generateExcelTemplate = () => {
       "شماره قطعه": "EXAMPLE-001",
       "نام قطعه": "نام قطعه نمونه",
       بخش: "E",
+      شرکا: "شریک نمونه",
       "حداقل موجودی": 10,
       "موجودی فعلی": 5,
       کمبود: 5,
@@ -130,6 +137,7 @@ export const generateExcelTemplate = () => {
     { wch: 15 },
     { wch: 30 },
     { wch: 10 },
+    { wch: 20 },
     { wch: 12 },
     { wch: 12 },
     { wch: 10 },

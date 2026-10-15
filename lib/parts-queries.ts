@@ -1,7 +1,40 @@
 // lib/parts-queries.ts
 import { db } from "@/db/drizzle";
-import { parts, inventory } from "@/db/schema";
-import { eq, and, or, like, sql } from "drizzle-orm";
+import { parts, inventory, partners } from "@/db/schema";
+import { eq, and, or, like, inArray, sql } from "drizzle-orm";
+
+export type PartPartnerInfo = {
+  id: number;
+  name: string;
+  percentage: string | null;
+};
+
+/**
+ * واکشی اطلاعات شرکای انتخابشده برای چند قطعه در یک کوئری.
+ * @returns نقشهای از شناسه شریک به اطلاعات آن
+ */
+export async function getPartnersMap(
+  partnerIds: Array<number | null | undefined>,
+): Promise<Map<number, PartPartnerInfo>> {
+  const map = new Map<number, PartPartnerInfo>();
+  const uniqueIds = [...new Set(partnerIds.filter((id): id is number => !!id))];
+  if (!uniqueIds.length) return map;
+
+  const rows = await db
+    .select({
+      id: partners.id,
+      name: partners.name,
+      percentage: partners.percentage,
+    })
+    .from(partners)
+    .where(inArray(partners.id, uniqueIds));
+
+  for (const row of rows) {
+    map.set(row.id, row);
+  }
+
+  return map;
+}
 
 export async function listParts(opts: {
   page?: number;
@@ -20,7 +53,7 @@ export async function listParts(opts: {
     const q = opts.search.trim();
     if (q.length) {
       whereConditions.push(
-        sql`LOWER(p.part_number) LIKE LOWER(${`%${q}%`}) OR LOWER(p.name) LIKE LOWER(${`%${q}%`})`
+        sql`LOWER(p.part_number) LIKE LOWER(${`%${q}%`}) OR LOWER(p.name) LIKE LOWER(${`%${q}%`})`,
       );
     }
   }
@@ -80,7 +113,9 @@ export async function listParts(opts: {
   };
 }
 
-export async function getPartById(id: number) {
+export async function getPartById(
+  id: number,
+): Promise<Record<string, any> | null> {
   const res = await db.execute(sql`
     SELECT
       p.id,
@@ -93,12 +128,22 @@ export async function getPartById(id: number) {
       p.sale_price AS "salePrice",
       p.active,
       p.created_at AS "createdAt",
-      p.current_stock AS "currentStock"
+      p.current_stock AS "currentStock",
+      p.partner_id AS "partnerId"
     FROM parts p
     WHERE p.id = ${id}
     LIMIT 1
   `);
-  return res.rows?.[0] ?? null;
+  const row = res.rows?.[0] as Record<string, any> | undefined;
+  if (!row) return null;
+
+  const partnerId = row.partnerId != null ? Number(row.partnerId) : null;
+  const partnersMap = await getPartnersMap([partnerId]);
+
+  return {
+    ...row,
+    partner: partnerId ? (partnersMap.get(partnerId) ?? null) : null,
+  };
 }
 
 export async function lowStockParts() {
@@ -125,7 +170,7 @@ export async function lowStockParts() {
 export async function getPartInventoryHistory(
   partId: number,
   page = 1,
-  limit = 20
+  limit = 20,
 ) {
   const offset = (page - 1) * limit;
 

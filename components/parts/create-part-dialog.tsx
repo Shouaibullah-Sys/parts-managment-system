@@ -30,6 +30,7 @@ import { Loader2 } from "lucide-react";
 import { partFormSchema, PartFormData } from "@/lib/validations/part";
 import { z } from "zod";
 import { useCreatePart } from "@/hooks/use-parts";
+import { PartnerSelectField } from "./partner-select-field";
 
 interface CreatePartDialogProps {
   open: boolean;
@@ -44,6 +45,7 @@ export function CreatePartDialog({
 }: CreatePartDialogProps) {
   const createPartMutation = useCreatePart();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [partnerId, setPartnerId] = useState<number | null>(null);
 
   const form = useForm<z.input<typeof partFormSchema>>({
     resolver: zodResolver(partFormSchema),
@@ -73,6 +75,7 @@ export function CreatePartDialog({
         currentStock: data.currentStock as number,
         costPrice: data.costPrice || undefined,
         salePrice: data.salePrice || undefined,
+        partnerId,
       };
       await createPartMutation.mutateAsync(transformedData);
       form.reset();
@@ -89,6 +92,7 @@ export function CreatePartDialog({
     if (!newOpen) {
       form.reset();
       setServerError(null);
+      setPartnerId(null);
     }
     onOpenChange(newOpen);
   };
@@ -121,7 +125,11 @@ export function CreatePartDialog({
                   <FormItem>
                     <FormLabel>شماره قطعه *</FormLabel>
                     <FormControl>
-                      <Input placeholder="ABC-123" {...field} />
+                      <Input
+                        placeholder="ABC-123"
+                        autoComplete="off"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -305,6 +313,9 @@ export function CreatePartDialog({
                 </FormItem>
               )}
             />
+
+            {/* --- شراکت قطعه --- */}
+            <PartnerSelectField value={partnerId} onChange={setPartnerId} />
 
             <DialogFooter>
               <Button

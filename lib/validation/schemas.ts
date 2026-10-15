@@ -49,3 +49,18 @@ export const addBulkPaymentSchema = z.object({
   note: z.string().optional(),
   receivedBy: z.string().optional().nullable(),
 });
+
+export const partnerSchema = z.object({
+  name: z.string().min(1, "نام شریک لازم است").max(255),
+  phone: z.string().max(50).optional().nullable(),
+  note: z.string().optional().nullable(),
+  percentage: z
+    .number()
+    .min(0, "درصد نمی‌تواند منفی باشد")
+    .max(100, "درصد باید حداکثر ۱۰۰ باشد")
+    .nullable()
+    .optional(),
+  active: z.boolean().optional(),
+});
+
+export type PartnerInput = z.infer<typeof partnerSchema>;

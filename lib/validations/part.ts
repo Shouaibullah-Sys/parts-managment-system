@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+// --- انتخاب شراکت (شریک) برای یک قطعه؛ null = بدون شراکت ---
+export const partPartnerIdSchema = z
+  .union([z.coerce.number().int().positive(), z.null()])
+  .optional();
+
 export const partFormSchema = z
   .object({
     partNumber: z

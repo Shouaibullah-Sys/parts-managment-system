@@ -28,6 +28,7 @@ import { Loader2 } from "lucide-react";
 import { partFormSchema } from "@/lib/validations/part";
 import { z } from "zod";
 import { Part } from "@/types/parts";
+import { PartnerSelectField } from "./partner-select-field";
 
 interface EditPartDialogProps {
   part: Part | null;
@@ -44,6 +45,7 @@ export function EditPartDialog({
 }: EditPartDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [partnerId, setPartnerId] = useState<number | null>(null);
 
   const form = useForm<z.input<typeof partFormSchema>>({
     resolver: zodResolver(partFormSchema),
@@ -77,6 +79,11 @@ export function EditPartDialog({
     }
   }, [part, form]);
 
+  // Load the partnership already selected for the part being edited
+  useEffect(() => {
+    setPartnerId(part?.partnerId ?? part?.partner?.id ?? null);
+  }, [part]);
+
   const costPrice = form.watch("costPrice");
   const salePrice = form.watch("salePrice");
 
@@ -94,6 +101,7 @@ export function EditPartDialog({
         active: data.active as boolean,
         costPrice: data.costPrice || undefined,
         salePrice: data.salePrice || undefined,
+        partnerId,
       };
 
       const response = await fetch(`/api/parts/${part.id}`, {
@@ -326,6 +334,13 @@ export function EditPartDialog({
                   </AlertDescription>
                 </Alert>
               )}
+
+            {/* --- شراکت قطعه --- */}
+            <PartnerSelectField
+              value={partnerId}
+              onChange={setPartnerId}
+              selectedName={part?.partner?.name ?? null}
+            />
 
             <FormField
               control={form.control}

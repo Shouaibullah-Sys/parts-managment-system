@@ -30,7 +30,8 @@ export async function GET(request: NextRequest) {
           like(customers.name, `%${search}%`),
           like(customers.normalizedName, `%${search}%`),
           like(parts.name, `%${search}%`),
-          like(parts.partNumber, `%${search}%`)
+          like(parts.partNumber, `%${search}%`),
+          like(sales.itemName, `%${search}%`)
         )
       );
     }
@@ -50,6 +51,7 @@ export async function GET(request: NextRequest) {
         issuedBy: user.name,
         partNumber: parts.partNumber,
         partName: parts.name,
+        itemName: sales.itemName,
       })
       .from(sales)
       .leftJoin(customers, eq(sales.customerId, customers.id))
@@ -90,7 +92,7 @@ export async function GET(request: NextRequest) {
       quantity: record.quantity || 0,
       issuedBy: record.issuedBy || "نامشخص",
       partNumber: record.partNumber || "",
-      partName: record.partName || "نامشخص",
+      partName: record.partName || record.itemName || "نامشخص",
       itemCount: 1,
       status: record.isFullyPaid
         ? ("completed" as const)

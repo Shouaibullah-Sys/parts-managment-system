@@ -8,7 +8,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Package,
+  PackagePlus,
   ShoppingCart,
   Trash2,
   Plus,
@@ -60,9 +69,26 @@ interface CartItem {
   customPrice?: number;
 }
 
+// پرزه خارجی (خرید از فروشگاه دیگر) — فقط وارد بل/مالی میشود، بدون موجودی
+interface ExternalItem {
+  tempId: string;
+  itemName: string;
+  quantity: number;
+  customPrice: number;
+  itemCost: number;
+}
+
 export function IssuePartsTable() {
   const router = useRouter();
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [externalItems, setExternalItems] = useState<ExternalItem[]>([]);
+  const [externalDialogOpen, setExternalDialogOpen] = useState(false);
+  const [externalForm, setExternalForm] = useState({
+    itemName: "",
+    quantity: 1,
+    unitPrice: "",
+    itemCost: "",
+  });
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
     null,
   );
@@ -92,7 +118,7 @@ export function IssuePartsTable() {
       return;
     }
 
-    if (cart.length === 0) {
+    if (cart.length === 0 && externalItems.length === 0) {
       alert("لطفاً قطعات را به سبد اضافه کنید");
       return;
     }
@@ -113,12 +139,7 @@ export function IssuePartsTable() {
           invoiceDate: invoiceDate,
           invoiceNumber: invoiceNumber.trim(),
           notes: notes.trim(),
-          items: cart.map((item) => ({
-            partId: item.part.id,
-            quantity: item.quantity,
-            unitPrice:
-              item.customPrice || parseFloat(item.part.salePrice || "0"),
-          })),
+          items: buildItemsPayload(),
           action: "save",
         }),
       });
@@ -134,6 +155,7 @@ export function IssuePartsTable() {
 
         // Reset form
         setCart([]);
+        setExternalItems([]);
         setSelectedCustomer(null);
         setIsNewCustomer(false);
         setCustomerName("");
@@ -251,11 +273,78 @@ export function IssuePartsTable() {
     setCart((prev) => prev.filter((item) => item.part.id !== partId));
   };
 
+  // پرزه خارجی — فقط یک قلم مالی در سبد (بدون موجودی)
+  const addExternalItem = (item: Omit<ExternalItem, "tempId">) => {
+    setExternalItems((prev) => [
+      ...prev,
+      {
+        ...item,
+        tempId: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      },
+    ]);
+  };
+
+  const removeExternalItem = (tempId: string) => {
+    setExternalItems((prev) => prev.filter((item) => item.tempId !== tempId));
+  };
+
+  const updateExternalItem = (
+    tempId: string,
+    patch: Partial<Omit<ExternalItem, "tempId">>,
+  ) => {
+    setExternalItems((prev) =>
+      prev.map((item) =>
+        item.tempId === tempId ? { ...item, ...patch } : item,
+      ),
+    );
+  };
+
+  const handleAddExternalFromForm = () => {
+    const name = externalForm.itemName.trim();
+    if (!name) {
+      alert("نام پرزه را وارد کنید");
+      return;
+    }
+    if (externalForm.quantity < 1) {
+      alert("تعداد باید حداقل ۱ باشد");
+      return;
+    }
+
+    addExternalItem({
+      itemName: name,
+      quantity: externalForm.quantity,
+      customPrice: parseFloat(externalForm.unitPrice) || 0,
+      itemCost: parseFloat(externalForm.itemCost) || 0,
+    });
+    setExternalForm({ itemName: "", quantity: 1, unitPrice: "", itemCost: "" });
+  };
+
+  const buildItemsPayload = () => [
+    ...cart.map((item) => ({
+      kind: "stock" as const,
+      partId: item.part.id,
+      quantity: item.quantity,
+      unitPrice: item.customPrice || parseFloat(item.part.salePrice || "0"),
+    })),
+    ...externalItems.map((item) => ({
+      kind: "external" as const,
+      itemName: item.itemName,
+      quantity: item.quantity,
+      unitPrice: item.customPrice,
+      itemCost: item.itemCost,
+    })),
+  ];
+
   const getTotalAmount = () => {
-    return cart.reduce((total, item) => {
+    const stockTotal = cart.reduce((total, item) => {
       const price = item.customPrice || parseFloat(item.part.salePrice || "0");
       return total + price * item.quantity;
     }, 0);
+    const externalTotal = externalItems.reduce(
+      (total, item) => total + item.customPrice * item.quantity,
+      0,
+    );
+    return stockTotal + externalTotal;
   };
 
   const handleSave = async () => {
@@ -264,7 +353,7 @@ export function IssuePartsTable() {
       return;
     }
 
-    if (cart.length === 0) {
+    if (cart.length === 0 && externalItems.length === 0) {
       alert("لطفاً قطعات را به سبد اضافه کنید");
       return;
     }
@@ -285,12 +374,7 @@ export function IssuePartsTable() {
           invoiceDate: invoiceDate,
           invoiceNumber: invoiceNumber.trim(),
           notes: notes.trim(),
-          items: cart.map((item) => ({
-            partId: item.part.id,
-            quantity: item.quantity,
-            unitPrice:
-              item.customPrice || parseFloat(item.part.salePrice || "0"),
-          })),
+          items: buildItemsPayload(),
           action: "save",
         }),
       });
@@ -306,6 +390,7 @@ export function IssuePartsTable() {
 
         // Reset form
         setCart([]);
+        setExternalItems([]);
         setCustomerName("");
         setCustomerPhone("");
         setCustomerAddress("");
@@ -351,7 +436,7 @@ export function IssuePartsTable() {
       return;
     }
 
-    if (cart.length === 0) {
+    if (cart.length === 0 && externalItems.length === 0) {
       alert("لطفاً قطعات را به سبد اضافه کنید");
       return;
     }
@@ -372,12 +457,7 @@ export function IssuePartsTable() {
           invoiceDate: invoiceDate,
           invoiceNumber: invoiceNumber.trim(),
           notes: notes.trim(),
-          items: cart.map((item) => ({
-            partId: item.part.id,
-            quantity: item.quantity,
-            unitPrice:
-              item.customPrice || parseFloat(item.part.salePrice || "0"),
-          })),
+          items: buildItemsPayload(),
           action: "refer",
         }),
       });
@@ -387,6 +467,7 @@ export function IssuePartsTable() {
       if (result.success) {
         alert("سند برای تأیید مدیر ارسال شد");
         setCart([]);
+        setExternalItems([]);
         setSelectedCustomer(null);
         setIsNewCustomer(false);
         setCustomerName("");
@@ -441,14 +522,25 @@ export function IssuePartsTable() {
             <CardTitle className="flex items-center gap-2 text-foreground">
               <ShoppingCart className="h-5 w-5 text-primary" />
               سبد صادرات
-              {cart.length > 0 && (
+              {(cart.length > 0 || externalItems.length > 0) && (
                 <Badge
                   variant="secondary"
                   className="text-xs bg-primary text-primary-foreground"
                 >
-                  {cart.length} قلم
+                  {cart.length + externalItems.length} قلم
                 </Badge>
               )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="ml-auto gap-1 border-primary/40 text-primary hover:bg-primary/10"
+                onClick={() => setExternalDialogOpen(true)}
+                disabled={isLoading}
+              >
+                <PackagePlus className="h-4 w-4" />
+                افزودن پرزه از فروشگاه دیگر
+              </Button>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 p-4">
@@ -542,7 +634,7 @@ export function IssuePartsTable() {
               </div>
             )}
 
-            {cart.length === 0 ? (
+            {cart.length === 0 && externalItems.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p>هیچ قطعه‌ای در سبد وجود ندارد</p>
@@ -650,6 +742,87 @@ export function IssuePartsTable() {
                       </div>
                     </div>
                   ))}
+
+                  {externalItems.map((item) => (
+                    <div
+                      key={item.tempId}
+                      className={`flex ${isMobile ? "flex-col" : "items-center justify-between"} p-4 border-b border-border hover:bg-accent/30 transition-colors`}
+                    >
+                      <div className="flex-1 mb-3 sm:mb-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Badge
+                            variant="outline"
+                            className="border-amber-500/50 text-amber-600"
+                          >
+                            خارجی
+                          </Badge>
+                        </div>
+                        <p className="font-medium text-foreground">
+                          {item.itemName}
+                        </p>
+                        <div
+                          className={`flex ${isMobile ? "flex-col gap-2" : "items-center gap-4"} text-sm text-muted-foreground mt-1`}
+                        >
+                          <span className="flex items-center gap-1">
+                            <span>قیمت واحد:</span>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={item.customPrice}
+                              onChange={(e) =>
+                                updateExternalItem(item.tempId, {
+                                  customPrice: parseFloat(e.target.value) || 0,
+                                })
+                              }
+                              className="w-24 h-7 text-xs border-border focus:border-primary focus:ring-primary/20"
+                              disabled={isLoading}
+                            />
+                            <span>افغانی</span>
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 justify-end">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            updateExternalItem(item.tempId, {
+                              quantity: Math.max(1, item.quantity - 1),
+                            })
+                          }
+                          disabled={item.quantity <= 1 || isLoading}
+                          className="border-border text-foreground hover:bg-accent hover:text-accent-foreground"
+                        >
+                          <Minus className="h-3 w-3" />
+                        </Button>
+                        <span className="w-8 text-center font-mono font-bold">
+                          {item.quantity}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            updateExternalItem(item.tempId, {
+                              quantity: item.quantity + 1,
+                            })
+                          }
+                          disabled={isLoading}
+                          className="border-border text-foreground hover:bg-accent hover:text-accent-foreground"
+                        >
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => removeExternalItem(item.tempId)}
+                          className="hover:bg-destructive/90"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
 
                 <div className="border-t border-border pt-4">
@@ -695,6 +868,120 @@ export function IssuePartsTable() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={externalDialogOpen} onOpenChange={setExternalDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <PackagePlus className="h-5 w-5 text-primary" />
+              افزودن پرزه از فروشگاه دیگر
+            </DialogTitle>
+            <DialogDescription>
+              این پرزهها فقط در بل محاسبه میشوند و به موجودی انبار اضافه
+              نمیشوند.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-2">
+            <div className="sm:col-span-2 space-y-1">
+              <label className="text-sm font-medium">نام پرزه</label>
+              <Input
+                value={externalForm.itemName}
+                onChange={(e) =>
+                  setExternalForm((prev) => ({
+                    ...prev,
+                    itemName: e.target.value,
+                  }))
+                }
+                placeholder="نام پرزه"
+                disabled={isLoading}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">تعداد</label>
+              <Input
+                type="number"
+                min="1"
+                value={externalForm.quantity}
+                onChange={(e) =>
+                  setExternalForm((prev) => ({
+                    ...prev,
+                    quantity: parseInt(e.target.value) || 1,
+                  }))
+                }
+                disabled={isLoading}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">قیمت واحد (افغانی)</label>
+              <Input
+                type="number"
+                min="0"
+                value={externalForm.unitPrice}
+                onChange={(e) =>
+                  setExternalForm((prev) => ({
+                    ...prev,
+                    unitPrice: e.target.value,
+                  }))
+                }
+                disabled={isLoading}
+              />
+            </div>
+            <div className="space-y-1 sm:col-span-2">
+              <label className="text-sm font-medium">
+                بهای خرید (فقط ذخیره، در بل نمایش داده نمیشود)
+              </label>
+              <Input
+                type="number"
+                min="0"
+                value={externalForm.itemCost}
+                onChange={(e) =>
+                  setExternalForm((prev) => ({
+                    ...prev,
+                    itemCost: e.target.value,
+                  }))
+                }
+                disabled={isLoading}
+              />
+            </div>
+          </div>
+
+          {externalItems.length > 0 && (
+            <div className="border border-border rounded-lg max-h-40 overflow-y-auto">
+              {externalItems.map((item) => (
+                <div
+                  key={item.tempId}
+                  className="flex items-center justify-between px-3 py-2 border-b border-border last:border-b-0 text-sm"
+                >
+                  <span className="font-medium">{item.itemName}</span>
+                  <span className="text-muted-foreground">
+                    {item.quantity} × {item.customPrice.toLocaleString()}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setExternalDialogOpen(false)}
+            >
+              بستن
+            </Button>
+            <Button
+              type="button"
+              onClick={handleAddExternalFromForm}
+              disabled={isLoading}
+              className="gap-1"
+            >
+              <Plus className="h-4 w-4" />
+              افزودن به سبد
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

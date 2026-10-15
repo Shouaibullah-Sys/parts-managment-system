@@ -72,6 +72,21 @@ export const session = pgTable("session", {
     .references(() => user.id, { onDelete: "cascade" }),
 });
 
+// --- جدول شرکا (لیست شراکت‌ها؛ هر ردیف یک نام + درصد) ---
+export const partners = pgTable("partners", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  phone: varchar("phone", { length: 50 }),
+  note: text("note"),
+  percentage: numeric("percentage", { precision: 5, scale: 2 }), // درصد / قیمت شریک (٪)
+  active: boolean("active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export type Partner = typeof partners.$inferSelect;
+
+// --- جدول قطعات ---
 export const parts = pgTable("parts", {
   id: serial("id").primaryKey(),
   partNumber: varchar("part_number", { length: 100 }).unique().notNull(),
@@ -82,6 +97,10 @@ export const parts = pgTable("parts", {
   currentStock: integer("current_stock").default(0), // Current available quantity
   costPrice: numeric("cost_price", { precision: 12, scale: 2 }),
   salePrice: numeric("sale_price", { precision: 12, scale: 2 }),
+  // شراکت انتخاب‌شده برای این قطعه (از دراپ‌داون «نام شراکت»)
+  partnerId: integer("partner_id").references(() => partners.id, {
+    onDelete: "set null",
+  }),
   active: boolean("active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -109,9 +128,17 @@ export const sales = pgTable("sales", {
   saleDate: timestamp("sale_date").defaultNow(),
   createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
   discount: numeric("discount", { precision: 12, scale: 2 }).default("0"),
+  // پرزه خارجی (خرید از فروشگاه دیگر) — تنها برای بل/مالی، بدون مدیریت موجودی
+  itemName: varchar("item_name", { length: 255 }),
+  itemCost: numeric("item_cost", { precision: 12, scale: 2 }),
   // مرجوعی فروش (برگشت کالا + بازپرداخت) — خالده = فروش فعال
   returnedAt: timestamp("returned_at"),
   returnNote: text("return_note"),
+  // اسنپ‌شات لحظهٔ فروش (گزارش سود شرکا) — تاریخچه با ویرایش قطعه بازنویسی نمی‌شود
+  partnerId: integer("partner_id").references(() => partners.id, {
+    onDelete: "set null",
+  }),
+  unitCost: numeric("unit_cost", { precision: 12, scale: 2 }),
 });
 
 // --- جدول پرداخت‌های بعدی مشتری ---
@@ -217,4 +244,5 @@ export const schema = {
   inventory,
   searchIndex,
   expenses,
+  partners,
 };
