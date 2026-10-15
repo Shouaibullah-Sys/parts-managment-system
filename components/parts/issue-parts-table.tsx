@@ -1016,6 +1016,8 @@ export function IssuePartsTable() {
 // Issue Records Table Component (keep existing)
 interface IssueRecord {
   id: number;
+  saleIds?: number[];
+  invoiceNumber?: string;
   customerName: string;
   totalAmount: string;
   issueDate: string;
@@ -1024,6 +1026,7 @@ interface IssueRecord {
   issuedBy: string;
   partNumber?: string;
   partName?: string;
+  partNames?: string[];
   quantity?: number;
 }
 
@@ -1098,9 +1101,29 @@ export function IssueRecordsTable() {
     }
   };
 
-  const handleDownloadPDF = (recordId: number) => {
-    // Implement PDF download logic
-    console.log("Download PDF for record:", recordId);
+  const handleDownloadPDF = async (record: IssueRecord) => {
+    // یک فاکتور با همهٔ قلم‌های همان صدور
+    const saleIds = record.saleIds?.length ? record.saleIds : [record.id];
+    try {
+      const response = await fetch(
+        `/api/issue-parts/${saleIds[0]}/pdf?saleIds=${saleIds.join(",")}`,
+      );
+      if (!response.ok) throw new Error("Failed to generate PDF");
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.style.display = "none";
+      a.href = url;
+      a.download = `${record.invoiceNumber || `invoice-${record.id}`}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error("Error downloading PDF:", error);
+      alert("خطا در تولید فایل PDF");
+    }
   };
 
   const handleViewDetails = (recordId: number) => {
@@ -1182,6 +1205,11 @@ export function IssueRecordsTable() {
                           <span className="font-semibold text-foreground">
                             {record.customerName}
                           </span>
+                          {record.invoiceNumber && (
+                            <span className="font-mono text-[11px] text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                              {record.invoiceNumber}
+                            </span>
+                          )}
                         </div>
                         <Badge
                           variant={getStatusVariant(record.status)}
@@ -1201,7 +1229,19 @@ export function IssueRecordsTable() {
                             "fa-IR",
                           )}
                         </div>
-                        {record.partName && <span>{record.partName}</span>}
+                        {record.partName && (
+                          <span
+                            className="min-w-0 max-w-[14rem] truncate"
+                            title={record.partName}
+                          >
+                            {record.partNames?.[0] || record.partName}
+                          </span>
+                        )}
+                        {record.itemCount > 1 && (
+                          <Badge variant="outline" className="text-[10px]">
+                            {record.itemCount} قلم
+                          </Badge>
+                        )}
                         {record.quantity && (
                           <span>تعداد: {record.quantity}</span>
                         )}
@@ -1228,7 +1268,7 @@ export function IssueRecordsTable() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleDownloadPDF(record.id)}
+                      onClick={() => handleDownloadPDF(record)}
                       className="border-primary text-primary hover:bg-primary hover:text-primary-foreground"
                     >
                       <Download className="ml-2 h-4 w-4" />
