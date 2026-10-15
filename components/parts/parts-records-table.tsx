@@ -41,6 +41,10 @@ import Loader from "@/components/loader";
 // Define interfaces
 interface PartsRecord {
   id: number;
+  // یک صدور (همهٔ قلم‌های یک بل) — چاپ همه با یک فاکتور
+  issueId: string;
+  invoiceNumber: string;
+  saleIds: number[];
   customerName: string;
   normalizedName: string;
   totalAmount: string;
@@ -52,6 +56,7 @@ interface PartsRecord {
   issuedBy: string;
   partNumber: string;
   partName: string;
+  partNames: string[];
   itemCount: number;
   status: "completed" | "pending" | "approved";
 }
@@ -184,9 +189,13 @@ export function PartsRecordsTable() {
     }
   };
 
-  const handleDownloadPDF = async (recordId: number) => {
+  // یک فاکتور با همهٔ قلم‌های همان صدور (saleIds گروه)
+  const handleDownloadPDF = async (record: PartsRecord) => {
+    const saleIds = record.saleIds?.length ? record.saleIds : [record.id];
     try {
-      const response = await fetch(`/api/issue-parts/${recordId}/pdf`);
+      const response = await fetch(
+        `/api/issue-parts/${saleIds[0]}/pdf?saleIds=${saleIds.join(",")}`
+      );
       if (!response.ok) {
         throw new Error("Failed to generate PDF");
       }
@@ -196,7 +205,7 @@ export function PartsRecordsTable() {
       const a = document.createElement("a");
       a.style.display = "none";
       a.href = url;
-      a.download = `record-${recordId}.pdf`;
+      a.download = `${record.invoiceNumber || `invoice-${record.id}`}.pdf`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -209,7 +218,7 @@ export function PartsRecordsTable() {
 
   const handlePrintPDF = async (record: PartsRecord) => {
     // For now, use the same PDF generation as download
-    await handleDownloadPDF(record.id);
+    await handleDownloadPDF(record);
   };
 
   return (
@@ -286,10 +295,13 @@ export function PartsRecordsTable() {
                   className="p-4 border border-border rounded-lg hover:bg-accent/30 transition-colors"
                 >
                   <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <FileText className="h-5 w-5 text-primary" />
                       <span className="font-semibold text-foreground">
                         {record.customerName}
+                      </span>
+                      <span className="font-mono text-[11px] text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                        {record.invoiceNumber}
                       </span>
                     </div>
                     <Badge
@@ -303,11 +315,19 @@ export function PartsRecordsTable() {
                   </div>
 
                   <div className="space-y-2 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 flex-wrap">
                       <Package className="h-3 w-3" />
-                      <span>{record.partName}</span>
+                      <span>{record.partNames?.[0] || record.partName}</span>
+                      {record.itemCount > 1 && (
+                        <Badge variant="outline" className="text-[10px]">
+                          {record.itemCount} قلم
+                        </Badge>
+                      )}
                       {record.partNumber && (
-                        <span className="font-mono bg-primary/10 px-1 rounded text-xs">
+                        <span
+                          title={record.partNumber}
+                          className="font-mono bg-primary/10 px-1 rounded text-xs min-w-0 max-w-[8rem] truncate"
+                        >
                           {record.partNumber}
                         </span>
                       )}
@@ -362,7 +382,7 @@ export function PartsRecordsTable() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleDownloadPDF(record.id)}
+                            onClick={() => handleDownloadPDF(record)}
                       className="flex-1 border-primary text-primary hover:bg-primary hover:text-primary-foreground"
                     >
                       <Printer className="ml-2 h-4 w-4" />
@@ -401,15 +421,30 @@ export function PartsRecordsTable() {
                           <User className="h-4 w-4 text-muted-foreground" />
                           {record.customerName}
                         </div>
+                        <div className="font-mono text-[11px] text-primary mt-0.5">
+                          {record.invoiceNumber}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="space-y-1">
-                          <div className="font-medium">{record.partName}</div>
-                          {record.partNumber && (
-                            <span className="font-mono text-xs bg-primary/10 px-2 py-1 rounded">
-                              {record.partNumber}
-                            </span>
-                          )}
+                          <div className="font-medium">
+                            {record.partNames?.[0] || record.partName}
+                          </div>
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {record.itemCount > 1 && (
+                              <Badge variant="outline" className="text-[10px]">
+                                {record.itemCount} قلم
+                              </Badge>
+                            )}
+                            {record.partNumber && (
+                              <span
+                                title={record.partNumber}
+                                className="font-mono text-xs bg-primary/10 px-2 py-1 rounded min-w-0 max-w-[14rem] truncate block"
+                              >
+                                {record.partNumber}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell className="text-center">
@@ -475,7 +510,7 @@ export function PartsRecordsTable() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleDownloadPDF(record.id)}
+                      onClick={() => handleDownloadPDF(record)}
                             className="border-primary text-primary hover:bg-primary hover:text-primary-foreground"
                           >
                             <Printer className="ml-2 h-4 w-4" />
@@ -534,13 +569,19 @@ function RecordDetailDialog({
               <div>
                 <h3 className="font-semibold mb-2">اطلاعات قطعه</h3>
                 <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">نام قطعه:</span>
-                    <span className="font-medium">{record.partName}</span>
+                  <div className="flex justify-between gap-3 flex-wrap">
+                    <span className="text-muted-foreground shrink-0">
+                      قطعات ({record.itemCount}):
+                    </span>
+                    <span className="font-medium text-left max-w-[70%] break-words">
+                      {record.partNames?.join("، ") || record.partName}
+                    </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">شماره قطعه:</span>
-                    <span className="font-medium font-mono">
+                  <div className="flex justify-between gap-3 flex-wrap">
+                    <span className="text-muted-foreground shrink-0">
+                      شماره قطعه:
+                    </span>
+                    <span className="font-medium font-mono text-left max-w-[70%] break-words">
                       {record.partNumber}
                     </span>
                   </div>
@@ -566,6 +607,12 @@ function RecordDetailDialog({
               <div>
                 <h3 className="font-semibold mb-2">اطلاعات صدور</h3>
                 <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">نمبر فاکتور:</span>
+                    <span className="font-medium font-mono">
+                      {record.invoiceNumber}
+                    </span>
+                  </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">تاریخ صدور:</span>
                     <span className="font-medium">

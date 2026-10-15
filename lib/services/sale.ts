@@ -1,4 +1,5 @@
 // lib/services/sale.ts
+import { randomUUID } from "crypto";
 import { db } from "@/db/drizzle";
 import { sales, inventory, parts, payments } from "@/db/schema";
 import { findOrCreateCustomer } from "./customer";
@@ -43,6 +44,8 @@ export async function createSale(input: CreateSaleInput) {
         createdBy,
         partnerId: partRow?.partnerId ?? null,
         unitCost: partRow?.costPrice ?? null,
+        // فروش تنها یک قلم است → صدور مستقل خودش را دارد
+        issueId: randomUUID(),
       })
       .returning();
 

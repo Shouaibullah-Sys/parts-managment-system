@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import type { NextRequest } from "next/server";
+import { randomUUID } from "crypto";
 import { requireAuth } from "@/lib/auth-session";
 import { ok, bad, unauthorized, serverError } from "@/lib/api-response";
 import { db } from "@/db/drizzle";
@@ -151,6 +152,13 @@ export async function POST(request: NextRequest) {
 
     console.log("Customer created:", customer.id);
 
+    // همهٔ قلم‌های این بل یک issueId دارند (گروه سوابق + چاپ یک‌جای فاکتور)
+    const issueId = randomUUID();
+    const invoiceNumberValue =
+      typeof invoiceNumber === "string" && invoiceNumber.trim() !== ""
+        ? invoiceNumber.trim().slice(0, 100)
+        : null;
+
     // Create sales records and inventory transactions
     console.log("Creating sales records...");
     const salesRecords = [];
@@ -220,6 +228,8 @@ export async function POST(request: NextRequest) {
                   : null,
               supplierId,
               supplierName,
+              issueId,
+              invoiceNumber: invoiceNumberValue,
             })
             .returning();
 
@@ -253,6 +263,8 @@ export async function POST(request: NextRequest) {
             // اسنپ‌شات لحظهٔ فروش (گزارش سود شرکا)
             partnerId: stockPart?.partnerId ?? null,
             unitCost: stockPart?.costPrice ?? null,
+            issueId,
+            invoiceNumber: invoiceNumberValue,
           })
           .returning();
 

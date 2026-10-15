@@ -54,6 +54,8 @@ export interface InvoiceData {
   };
   sales: SaleItem[];
   issueId: number;
+  // شماره فاکتور تایپ‌شده هنگام صدور (اختیاری) — خالی = INV-{issueId}
+  invoiceNumber?: string | null;
   createdAt: Date;
   createdBy: string;
 }
@@ -348,7 +350,11 @@ export async function generateInvoicePDF(
     doc.setFontSize(10);
     doc.setTextColor(...INK);
     doc.text(
-      `نمبر فاکتور: INV-${toPersianNumber(String(data.issueId).padStart(4, "0"))}`,
+      `نمبر فاکتور: ${toPersianNumber(
+        data.invoiceNumber && data.invoiceNumber.trim() !== ""
+          ? data.invoiceNumber.trim()
+          : `INV-${String(data.issueId).padStart(4, "0")}`,
+      )}`,
       W - M,
       y,
       { align: "right" },

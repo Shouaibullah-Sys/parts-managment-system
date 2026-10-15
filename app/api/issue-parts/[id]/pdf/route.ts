@@ -45,6 +45,7 @@ export async function GET(
             saleDate: sales.saleDate,
             itemName: sales.itemName,
             supplierName: sales.supplierName,
+            invoiceNumber: sales.invoiceNumber,
           },
           part: {
             id: parts.id,
@@ -92,6 +93,7 @@ export async function GET(
             saleDate: sales.saleDate,
             itemName: sales.itemName,
             supplierName: sales.supplierName,
+            invoiceNumber: sales.invoiceNumber,
           },
           part: {
             id: parts.id,
@@ -129,6 +131,18 @@ export async function GET(
 
     const customer = salesData[0].customer;
     const userInfo = salesData[0].user;
+
+    // شماره فاکتور تایپ‌شده (مشترک همهٔ قلم‌های همین صدور) — وگرنه INV-{customerId}
+    const typedInvoiceNumbers = [
+      ...new Set(
+        salesData
+          .map((d) => (d.sale.invoiceNumber || "").trim())
+          .filter((v) => v !== ""),
+      ),
+    ];
+    const invoiceNumber = typedInvoiceNumbers.length === 1
+      ? typedInvoiceNumbers[0]
+      : null;
 
     if (!customer) {
       console.error("Customer not found for sale data");
@@ -175,6 +189,7 @@ export async function GET(
       customer: invoiceCustomer,
       sales: invoiceSales,
       issueId: customer.id,
+      invoiceNumber,
       createdAt: salesData[0].sale.saleDate ?? new Date(),
       createdBy: userInfo?.name ?? "نامشخص",
     });

@@ -10,6 +10,7 @@ import {
   varchar,
   integer,
   numeric,
+  uuid,
 } from "drizzle-orm/pg-core";
 
 // Role enum for simple staff/admin system
@@ -157,6 +158,11 @@ export const sales = pgTable("sales", {
     onDelete: "set null",
   }),
   supplierName: varchar("supplier_name", { length: 255 }),
+  // شناسهٔ یک صدور — همهٔ قلم‌هایی که در یک بل صادر شده‌اند issueId یکسان دارند
+  // (سوابق گروه‌بندی می‌شود و چاپ، یک فاکتور با همهٔ قلم‌ها می‌دهد)
+  issueId: uuid("issue_id").notNull(),
+  // شماره فاکتور تایپ‌شده هنگام صدور (اختیاری) — خالی = INV-{customerId}
+  invoiceNumber: varchar("invoice_number", { length: 100 }),
 });
 
 // --- جدول پرداخت‌های بعدی مشتری ---
