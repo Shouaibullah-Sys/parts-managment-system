@@ -4,10 +4,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, Loader2, Plus, Store } from "lucide-react";
+import { Check, Loader2, Pencil, Plus, Store } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SupplierFormDialog, type Supplier } from "./supplier-form-dialog";
+import { SupplierManageDialog } from "./supplier-manage-dialog";
 
 const MIN_CHARS = 2;
 const DEBOUNCE_MS = 300;
@@ -28,6 +29,7 @@ export function SupplierSelectField({
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [manageOpen, setManageOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -93,6 +95,26 @@ export function SupplierSelectField({
 
   const handleCreated = (supplier: Supplier) => {
     handleSelect(supplier);
+  };
+
+  // پس از مدیریت فروشگاه‌ها: نام انتخاب‌شده را تازه کن؛ اگر حذف شده بود، انتخاب برداشته شود
+  const handleManaged = async () => {
+    if (!value) return;
+    try {
+      const res = await fetch(`/api/suppliers/${value.id}`, {
+        credentials: "include",
+      });
+      if (res.status === 404) {
+        onChange(null);
+        return;
+      }
+      const json = await res.json().catch(() => null);
+      if (res.ok && json?.success && json.data) {
+        onChange(json.data as Supplier);
+      }
+    } catch {
+      /* در صورت خطا انتخاب قبلی حفظ می‌شود */
+    }
   };
 
   return (
@@ -183,6 +205,24 @@ export function SupplierSelectField({
         onOpenChange={setCreateOpen}
         initialName={q}
         onCreated={handleCreated}
+      />
+
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => setManageOpen(true)}
+          disabled={disabled}
+          className="text-xs text-muted-foreground hover:text-primary inline-flex items-center gap-1"
+        >
+          <Pencil className="h-3 w-3" />
+          مدیریت فروشگاه‌ها
+        </button>
+      </div>
+
+      <SupplierManageDialog
+        open={manageOpen}
+        onOpenChange={setManageOpen}
+        onChanged={handleManaged}
       />
     </div>
   );
