@@ -37,7 +37,8 @@ export async function GET(request: NextRequest) {
         quantity: sales.quantity,
         issuedBy: user.name,
         partNumber: parts.partNumber,
-        partName: parts.name,
+        // پرزه خارجی: partId خالی است → نام اسنپ‌شات itemName
+        partName: sql<string | null>`COALESCE(${parts.name}, ${sales.itemName})`,
       })
       .from(sales)
       .innerJoin(customers, eq(sales.customerId, customers.id))

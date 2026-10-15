@@ -336,6 +336,8 @@ export async function addBulkPayment(input: AddBulkPaymentInput) {
         totalAmount: sales.totalAmount,
         outstanding: sales.outstanding,
         partName: parts.name,
+        // پرزه خارجی: نام اسنپ‌شات وقتی partId خالی است
+        itemName: sales.itemName,
       })
       .from(sales)
       .leftJoin(parts, eq(sales.partId, parts.id))
@@ -452,7 +454,7 @@ export async function addBulkPayment(input: AddBulkPaymentInput) {
         saleId: sale.saleId,
         customerId: sale.customerId,
         amount: paymentAmount,
-        partName: sale.partName || "نامشخص",
+        partName: sale.partName || sale.itemName || "نامشخص",
         previousOutstanding: currentOutstanding,
         newOutstanding: newOutstanding,
       });

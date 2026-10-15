@@ -146,6 +146,9 @@ export async function GET(
       sale: {
         quantity: data.sale.quantity,
         totalAmount: data.sale.totalAmount,
+        // پرزه خارجی: نام تایپ‌شده + نام فروشگاه (partId خالی است)
+        itemName: data.sale.itemName,
+        supplierName: data.sale.supplierName,
       },
       part: data.part
         ? {

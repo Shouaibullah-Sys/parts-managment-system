@@ -160,7 +160,8 @@ async function fetchSalesData(params: {
     const searchCondition = sql`
         (${customers.name} ILIKE ${`%${search}%`} OR 
         ${parts.name} ILIKE ${`%${search}%`} OR 
-        ${parts.partNumber} ILIKE ${`%${search}%`})
+        ${parts.partNumber} ILIKE ${`%${search}%`} OR 
+        ${sales.itemName} ILIKE ${`%${search}%`})
       `;
     baseConditions.push(searchCondition);
   }
@@ -215,7 +216,8 @@ async function fetchSalesData(params: {
       quantity: sales.quantity,
       issuedBy: user.name, // Get user name instead of ID
       partNumber: parts.partNumber,
-      partName: parts.name,
+      // پرزه خارجی: partId خالی است → نام اسنپ‌شات itemName را نشان بده
+      partName: sql<string | null>`COALESCE(${parts.name}, ${sales.itemName})`,
       section: parts.section,
       // Calculate actual paid amount from payments table
       actualPaidAmount: sql<string>`COALESCE(
@@ -246,6 +248,7 @@ async function fetchSalesData(params: {
       user.name, // Group by user name instead of ID
       parts.partNumber,
       parts.name,
+      sales.itemName,
       parts.section
     )
     .limit(limit)
