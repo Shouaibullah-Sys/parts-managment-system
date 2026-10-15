@@ -475,12 +475,8 @@ export async function generateInvoicePDF(
 
       // part name — shrink so it stays on ONE line (never pass maxWidth: jsPDF
       // would wrap the RTL string and scramble the order)
-      // پرزه خارجی: نام فروشگاه/تأمین‌کننده هم کنار نام نمایش داده می‌شود
-      const baseName = s.part?.name || s.sale.itemName || "نامشخص";
-      const nameText =
-        !s.part && s.sale.supplierName
-          ? `${baseName} — ${s.sale.supplierName}`
-          : baseName;
+      // external parts: invoice shows the typed part name only (no supplier name)
+      const nameText = s.part?.name || s.sale.itemName || "نامشخص";
       let nameSize = 10;
       doc.setFontSize(nameSize);
       const nameColW = wName - 14;
