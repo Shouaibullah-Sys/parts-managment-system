@@ -6,7 +6,7 @@ import type { NextRequest } from "next/server";
 import { requireAuth } from "@/lib/auth-session";
 import { ok, bad, unauthorized, serverError } from "@/lib/api-response";
 import { db } from "@/db/drizzle";
-import { parts, inventory, customers, sales, user } from "@/db/schema";
+import { parts, inventory, customers, sales, user, partners, suppliers } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { normalizeName } from "@/lib/utils/normalize";
 
@@ -155,6 +155,13 @@ export async function POST(request: NextRequest) {
     console.log("Creating sales records...");
     const salesRecords = [];
 
+    // شریک FM — فروش مستقیم (پرزه از فروشگاه دیگر)؛ سود ۱۰۰٪ مغازه (درصد ۰)
+    const [fmPartner] = await db
+      .select({ id: partners.id })
+      .from(partners)
+      .where(eq(partners.name, "FM"))
+      .limit(1);
+
     for (const item of items) {
       const totalAmount = (
         parseFloat(item.unitPrice) * item.quantity
@@ -167,6 +174,27 @@ export async function POST(request: NextRequest) {
       try {
         // پرزه خارجی — فقط رکورد مالی در sales، بدون موجودی/انبار
         if (isExternalItem(item)) {
+          // فروشگاه/تأمین‌کننده (اختیاری) — نام از DB اسنپ‌شات می‌شود
+          let supplierId: number | null = null;
+          let supplierName: string | null = null;
+          const rawSupplierId = Number(item.supplierId);
+          if (Number.isInteger(rawSupplierId) && rawSupplierId > 0) {
+            const [supplierRow] = await db
+              .select({ id: suppliers.id, name: suppliers.name })
+              .from(suppliers)
+              .where(eq(suppliers.id, rawSupplierId))
+              .limit(1);
+            if (supplierRow) {
+              supplierId = supplierRow.id;
+              supplierName = supplierRow.name;
+            }
+          } else if (
+            item.supplierName != null &&
+            String(item.supplierName).trim() !== ""
+          ) {
+            supplierName = String(item.supplierName).trim();
+          }
+
           const [externalSale] = await db
             .insert(sales)
             .values({
@@ -184,12 +212,14 @@ export async function POST(request: NextRequest) {
               isFullyPaid: false,
               createdBy: session.user.id,
               saleDate: invoiceDate ? new Date(invoiceDate) : new Date(),
-              // اسنپ‌شات: پرزه خارجی مال شریک نیست، بهای خرید واحد ثبت می‌شود
-              partnerId: null,
+              // اسنپ‌شات: فروش مستقیم به شریک FM تعلق دارد (سود ۱۰۰٪ مغازه)
+              partnerId: fmPartner?.id ?? null,
               unitCost:
                 item.itemCost != null && String(item.itemCost).trim() !== ""
                   ? String(item.itemCost)
                   : null,
+              supplierId,
+              supplierName,
             })
             .returning();
 

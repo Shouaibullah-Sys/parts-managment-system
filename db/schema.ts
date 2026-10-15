@@ -86,6 +86,19 @@ export const partners = pgTable("partners", {
 
 export type Partner = typeof partners.$inferSelect;
 
+// --- جدول فروشگاه‌ها / تأمین‌کنندگان (پرزه خارجی از فروشگاه دیگر) ---
+export const suppliers = pgTable("suppliers", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  phone: varchar("phone", { length: 50 }),
+  note: text("note"),
+  active: boolean("active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export type Supplier = typeof suppliers.$inferSelect;
+
 // --- جدول قطعات ---
 export const parts = pgTable("parts", {
   id: serial("id").primaryKey(),
@@ -139,6 +152,11 @@ export const sales = pgTable("sales", {
     onDelete: "set null",
   }),
   unitCost: numeric("unit_cost", { precision: 12, scale: 2 }),
+  // فروشگاه/تأمین‌کننده (فقط پرزه خارجی) — نام اسنپ‌شات می‌شود
+  supplierId: integer("supplier_id").references(() => suppliers.id, {
+    onDelete: "set null",
+  }),
+  supplierName: varchar("supplier_name", { length: 255 }),
 });
 
 // --- جدول پرداخت‌های بعدی مشتری ---
@@ -245,4 +263,5 @@ export const schema = {
   searchIndex,
   expenses,
   partners,
+  suppliers,
 };

@@ -44,6 +44,7 @@ export async function GET(
             totalAmount: sales.totalAmount,
             saleDate: sales.saleDate,
             itemName: sales.itemName,
+            supplierName: sales.supplierName,
           },
           part: {
             id: parts.id,
@@ -90,6 +91,7 @@ export async function GET(
             totalAmount: sales.totalAmount,
             saleDate: sales.saleDate,
             itemName: sales.itemName,
+            supplierName: sales.supplierName,
           },
           part: {
             id: parts.id,

@@ -39,6 +39,8 @@ export type SaleItem = {
     totalAmount: string | number;
     // نام پرزهٔ خارجی (خرید از فروشگاه دیگر) — زمانی که part تهی است
     itemName?: string | null;
+    // نام فروشگاه/تأمین‌کننده (فقط پرزه خارجی)
+    supplierName?: string | null;
   };
   part: Part | null;
   user: { name: string } | null;
@@ -473,7 +475,12 @@ export async function generateInvoicePDF(
 
       // part name — shrink so it stays on ONE line (never pass maxWidth: jsPDF
       // would wrap the RTL string and scramble the order)
-      const nameText = s.part?.name || s.sale.itemName || "نامشخص";
+      // پرزه خارجی: نام فروشگاه/تأمین‌کننده هم کنار نام نمایش داده می‌شود
+      const baseName = s.part?.name || s.sale.itemName || "نامشخص";
+      const nameText =
+        !s.part && s.sale.supplierName
+          ? `${baseName} — ${s.sale.supplierName}`
+          : baseName;
       let nameSize = 10;
       doc.setFontSize(nameSize);
       const nameColW = wName - 14;

@@ -64,3 +64,12 @@ export const partnerSchema = z.object({
 });
 
 export type PartnerInput = z.infer<typeof partnerSchema>;
+
+export const supplierSchema = z.object({
+  name: z.string().min(1, "نام فروشگاه لازم است").max(255),
+  phone: z.string().max(50).optional().nullable(),
+  note: z.string().optional().nullable(),
+  active: z.boolean().optional(),
+});
+
+export type SupplierInput = z.infer<typeof supplierSchema>;

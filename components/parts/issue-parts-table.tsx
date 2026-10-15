@@ -39,6 +39,8 @@ import {
 } from "lucide-react";
 import { SmartSearchEngine } from "./smart-search-engine";
 import { CustomerSelector } from "./customer-selector";
+import { SupplierSelectField } from "./supplier-select-field";
+import type { Supplier } from "./supplier-form-dialog";
 import Loader from "@/components/loader";
 import HijriDatePicker from "@/components/hijri-date-picker";
 
@@ -76,6 +78,8 @@ interface ExternalItem {
   quantity: number;
   customPrice: number;
   itemCost: number;
+  supplierId?: number | null;
+  supplierName?: string | null;
 }
 
 export function IssuePartsTable() {
@@ -89,6 +93,9 @@ export function IssuePartsTable() {
     unitPrice: "",
     itemCost: "",
   });
+  const [externalSupplier, setExternalSupplier] = useState<Supplier | null>(
+    null,
+  );
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
     null,
   );
@@ -315,8 +322,11 @@ export function IssuePartsTable() {
       quantity: externalForm.quantity,
       customPrice: parseFloat(externalForm.unitPrice) || 0,
       itemCost: parseFloat(externalForm.itemCost) || 0,
+      supplierId: externalSupplier?.id ?? null,
+      supplierName: externalSupplier?.name ?? null,
     });
     setExternalForm({ itemName: "", quantity: 1, unitPrice: "", itemCost: "" });
+    setExternalSupplier(null);
   };
 
   const buildItemsPayload = () => [
@@ -332,6 +342,8 @@ export function IssuePartsTable() {
       quantity: item.quantity,
       unitPrice: item.customPrice,
       itemCost: item.itemCost,
+      supplierId: item.supplierId ?? null,
+      supplierName: item.supplierName ?? null,
     })),
   ];
 
@@ -756,6 +768,14 @@ export function IssuePartsTable() {
                           >
                             خارجی
                           </Badge>
+                          {item.supplierName && (
+                            <Badge
+                              variant="outline"
+                              className="border-primary/40 text-primary"
+                            >
+                              {item.supplierName}
+                            </Badge>
+                          )}
                         </div>
                         <p className="font-medium text-foreground">
                           {item.itemName}
@@ -894,6 +914,13 @@ export function IssuePartsTable() {
                   }))
                 }
                 placeholder="نام پرزه"
+                disabled={isLoading}
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <SupplierSelectField
+                value={externalSupplier}
+                onChange={setExternalSupplier}
                 disabled={isLoading}
               />
             </div>
