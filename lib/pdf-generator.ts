@@ -22,13 +22,26 @@ import { Part } from "@/lib/types";
 // ----------------------
 const PERSIAN_DIGITS = ["۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"];
 
-const toPersianNumber = (num: number | string): string =>
-  String(num).replace(/\d/g, (d) => PERSIAN_DIGITS[+d]);
+// Persian/Arabic digits → Latin (for typed invoice numbers)
+const persianToLatin = (value: string): string =>
+  value.replace(/[۰-۹]/g, (d) => String(PERSIAN_DIGITS.indexOf(d)));
 
-const toPersianCurrency = (amount: number): string =>
-  `${amount.toLocaleString("fa-IR")} افغانی`;
+// Numbers on the invoice: Latin digits, no decimals, thousands separator
+const toEnglishNumber = (value: number | string): string => {
+  const n =
+    typeof value === "number"
+      ? value
+      : parseFloat(persianToLatin(String(value)).replace(/,/g, ""));
+  if (!Number.isFinite(n)) return persianToLatin(String(value));
+  return Math.round(n).toLocaleString("en-US");
+};
 
-const toPersianDate = (date: Date): string => date.toLocaleDateString("fa-IR");
+const toEnglishCurrency = (amount: number): string =>
+  `${toEnglishNumber(amount)} افغانی`;
+
+// Solar Hijri date with Latin digits (۱۴۰۵/۷/۲۳ → 1405/7/23)
+const toEnglishDate = (date: Date): string =>
+  persianToLatin(date.toLocaleDateString("fa-IR"));
 
 // ----------------------
 // Types
@@ -421,7 +434,7 @@ export async function generateInvoicePDF(
     doc.setFontSize(10);
     doc.setTextColor(...INK);
     doc.text(
-      `نمبر فاکتور: ${toPersianNumber(
+      `نمبر بل: ${toEnglishNumber(
         data.invoiceNumber && data.invoiceNumber.trim() !== ""
           ? data.invoiceNumber.trim()
           : `INV-${String(data.issueId).padStart(4, "0")}`,
@@ -430,7 +443,7 @@ export async function generateInvoicePDF(
       y,
       { align: "right" },
     );
-    doc.text(`تاریخ: ${toPersianDate(data.createdAt)}`, M, y, {
+    doc.text(`تاریخ: ${toEnglishDate(data.createdAt)}`, M, y, {
       align: "left",
     });
 
@@ -465,11 +478,7 @@ export async function generateInvoicePDF(
     };
 
     drawInfoBox(rightBoxX, "فروشنده", ["بصیر آریا"]);
-    drawInfoBox(leftBoxX, "خریدار", [
-      data.customer.name,
-      data.customer.phone ? `تلفن: ${data.customer.phone}` : "",
-      data.customer.address || "",
-    ]);
+    drawInfoBox(leftBoxX, "خریدار", [data.customer.name]);
 
     // ----------------------
     // ITEMS TABLE
@@ -506,7 +515,7 @@ export async function generateInvoicePDF(
       });
       doc.text("تعداد", (xQty0 + xQty1) / 2, ty + 17, { align: "center" });
       doc.text("نام پرزه", xName1 - 8, ty + 17, { align: "right" });
-      doc.text("شماره", (xNum0 + xNum1) / 2, ty + 17, { align: "center" });
+      doc.text("نمبر", (xNum0 + xNum1) / 2, ty + 17, { align: "center" });
       ty += 26;
     };
 
@@ -538,7 +547,7 @@ export async function generateInvoicePDF(
       doc.setFontSize(10);
 
       // # (rightmost)
-      doc.text(toPersianNumber(idx + 1), (xNum0 + xNum1) / 2, ty + 15, {
+      doc.text(toEnglishNumber(idx + 1), (xNum0 + xNum1) / 2, ty + 15, {
         align: "center",
       });
 
@@ -557,17 +566,17 @@ export async function generateInvoicePDF(
       doc.setFontSize(10);
 
       // qty
-      doc.text(toPersianNumber(qty), (xQty0 + xQty1) / 2, ty + 15, {
+      doc.text(toEnglishNumber(qty), (xQty0 + xQty1) / 2, ty + 15, {
         align: "center",
       });
 
       // unit price
-      doc.text(toPersianNumber(unitPrice.toFixed(2)), xPrice1 - 8, ty + 15, {
+      doc.text(toEnglishNumber(unitPrice), xPrice1 - 8, ty + 15, {
         align: "right",
       });
 
       // line total
-      doc.text(toPersianNumber(totalValue.toFixed(2)), xTotal1 - 8, ty + 15, {
+      doc.text(toEnglishNumber(totalValue), xTotal1 - 8, ty + 15, {
         align: "right",
       });
 
@@ -586,7 +595,7 @@ export async function generateInvoicePDF(
     doc.setFillColor(...LIGHT_GRAY);
     doc.rect(tbX, ty, tbW, tbH, "F");
 
-    const totalText = toPersianCurrency(totalAmount);
+    const totalText = toEnglishCurrency(totalAmount);
 
     doc.setFontSize(13);
     doc.setTextColor(...BRAND_RED);
@@ -611,7 +620,7 @@ export async function generateInvoicePDF(
     ty += 14;
     doc.setTextColor(...MUTED);
     doc.text(
-      "• جنس فروخته شده بعد از ۲۴ ساعت قابل واپس گرفتن نمی باشد.",
+      "• جنس فروخته شده بعد از 24 ساعت قابل واپس گرفتن نمی باشد.",
       M,
       ty,
       { align: "left" },
@@ -628,7 +637,7 @@ export async function generateInvoicePDF(
     doc.setTextColor(...INK);
     doc.text("امضاء مسئول", M, sigY, { align: "left" });
     doc.line(M, sigY + 6, M + 150, sigY + 6);
-    doc.text("مهر شرکت", W - M, sigY, { align: "right" });
+    doc.text("تاپه شرکت", W - M, sigY, { align: "right" });
     doc.line(W - M - 150, sigY + 6, W - M, sigY + 6);
 
     // ----------------------
