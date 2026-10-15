@@ -76,6 +76,8 @@ const DARK_GRAY: [number, number, number] = [64, 64, 64];
 // Cache for static assets
 // ----------------------
 let cachedFont: string | null = null;
+let cachedFontBold: string | null = null;
+let cachedFontDisplay: string | null = null;
 let cachedLogo: string | null = null;
 let cachedSideLogo: string | null = null;
 let cachedWatermark: string | null = null;
@@ -101,6 +103,34 @@ const initializeCache = async (): Promise<void> => {
     } catch {
       console.warn("⚠️ Persian font not found, fallback to default.");
       cachedFont = "";
+    }
+
+    // Load bold weight (bold «مجموع کل» amount) — optional
+    try {
+      const boldPath = path.join(
+        process.cwd(),
+        "public",
+        "fonts",
+        "Vazirmatn-Bold.ttf",
+      );
+      cachedFontBold = (await fs.readFile(boldPath)).toString("base64");
+    } catch {
+      console.warn("⚠️ Vazirmatn-Bold.ttf missing, no bold weight.");
+      cachedFontBold = "";
+    }
+
+    // Load display weight for the shop name (heavier brand look) — optional
+    try {
+      const displayPath = path.join(
+        process.cwd(),
+        "public",
+        "fonts",
+        "Vazirmatn-Black.ttf",
+      );
+      cachedFontDisplay = (await fs.readFile(displayPath)).toString("base64");
+    } catch {
+      console.warn("⚠️ Vazirmatn-Black.ttf missing, using regular for brand.");
+      cachedFontDisplay = "";
     }
 
     // Load logo
@@ -146,6 +176,8 @@ const initializeCache = async (): Promise<void> => {
     cachedLogo = "";
     cachedSideLogo = "";
     cachedWatermark = "";
+    cachedFontBold = "";
+    cachedFontDisplay = "";
     cacheInitialized = true;
   }
 };
@@ -157,6 +189,8 @@ const getCachedAssets = async () => {
   await initializeCache();
   return {
     font: cachedFont || "",
+    fontBold: cachedFontBold || "",
+    fontDisplay: cachedFontDisplay || "",
     logo: cachedLogo || "",
     sideLogo: cachedSideLogo || "",
     watermark: cachedWatermark || "",
@@ -192,6 +226,8 @@ export async function generateInvoicePDF(
     // Get cached assets
     const {
       font: fontBase64,
+      fontBold: fontBoldBase64,
+      fontDisplay: fontDisplayBase64,
       logo: logoBase64,
       sideLogo: sideLogoBase64,
       watermark: watermarkBase64,
@@ -211,7 +247,34 @@ export async function generateInvoicePDF(
       console.warn("No font data available, using default font");
     }
 
+    // Bold weight of the same family (used for bold amounts)
+    let fontBoldLoaded = false;
+    if (fontBoldBase64) {
+      try {
+        doc.addFileToVFS("vazirmatn-bold.ttf", fontBoldBase64);
+        doc.addFont("vazirmatn-bold.ttf", "vazirmatn", "bold");
+        fontBoldLoaded = true;
+      } catch (err) {
+        console.warn("Failed to load bold font", err);
+      }
+    }
+
+    // Heavier display face for the shop name in the header
+    const DISPLAY_FONT = "vazirmatn-display";
+    let fontDisplayLoaded = false;
+    if (fontDisplayBase64) {
+      try {
+        doc.addFileToVFS("vazirmatn-display.ttf", fontDisplayBase64);
+        doc.addFont("vazirmatn-display.ttf", DISPLAY_FONT, "normal");
+        fontDisplayLoaded = true;
+      } catch (err) {
+        console.warn("Failed to load display font", err);
+      }
+    }
+
     const FONT = fontLoaded ? "vazirmatn" : "helvetica";
+    const FONT_BOLD = fontBoldLoaded ? "vazirmatn" : FONT;
+    const FONT_DISPLAY = fontDisplayLoaded ? DISPLAY_FONT : FONT;
     doc.setFont(FONT, "normal");
 
     // helper: faint centered watermark
@@ -268,10 +331,16 @@ export async function generateInvoicePDF(
     );
 
     // centered logo + brand text group on the banner
-    const brandText = "دیپلوماسی لمتید";
-    const taglineText = "بل پرزه جات وسایط";
-    doc.setFontSize(17);
+    const brandText = "دیپلماسی";
+    const taglineText = "بل پرزه جات ";
+    const brandSize = 34;
+
+    // shop name in the heavier display face, bigger
+    doc.setFont(FONT_DISPLAY, "normal");
+    doc.setFontSize(brandSize);
     const brandTextW = doc.getTextWidth(brandText);
+
+    doc.setFont(FONT, "normal");
     doc.setFontSize(10);
     const taglineTextW = doc.getTextWidth(taglineText);
     const textW = Math.max(brandTextW, taglineTextW);
@@ -298,13 +367,15 @@ export async function generateInvoicePDF(
       );
     }
 
-    doc.setFontSize(17);
+    doc.setFont(FONT_DISPLAY, "normal");
+    doc.setFontSize(brandSize);
     doc.setTextColor(255, 255, 255);
-    doc.text(brandText, textRight, bannerY + 44, { align: "right" });
+    doc.text(brandText, textRight, bannerY + 42, { align: "right" });
 
+    doc.setFont(FONT, "normal");
     doc.setFontSize(10);
     doc.setTextColor(205, 205, 205);
-    doc.text(taglineText, textRight, bannerY + 64, { align: "right" });
+    doc.text(taglineText, textRight, bannerY + 66, { align: "right" });
 
     // full-width red divider holding the phone + address (centered) on one line
     const redY = bannerH;
@@ -314,7 +385,7 @@ export async function generateInvoicePDF(
 
     doc.setFontSize(11);
     doc.setTextColor(255, 255, 255);
-    const phoneLine = "تلفن: +93 744 441 079";
+    const phoneLine = "Phone: +93 744 441 079";
     const addrLine = "کابل — بین چهار راهی پروان دوم و سوم، مقابل قصر زرین";
     const phoneW = doc.getTextWidth(phoneLine);
     const addrW = doc.getTextWidth(addrLine);
@@ -367,17 +438,13 @@ export async function generateInvoicePDF(
     // SELLER / BUYER BOXES
     // ----------------------
     const boxY = 158;
-    const boxH = 78;
+    const boxH = 50;
     const gap = 12;
     const boxW = (contentW - gap) / 2;
     const rightBoxX = M + boxW + gap;
     const leftBoxX = M;
 
-    const drawInfoBox = (
-      x: number,
-      label: string,
-      lines: string[],
-    ) => {
+    const drawInfoBox = (x: number, label: string, lines: string[]) => {
       doc.setFillColor(...ROW_ALT);
       doc.rect(x, boxY, boxW, boxH, "F");
       doc.setFillColor(...BRAND_RED);
@@ -397,11 +464,7 @@ export async function generateInvoicePDF(
       }
     };
 
-    drawInfoBox(rightBoxX, "فروشنده", [
-      "دیپلوماسی لمتید",
-      "کابل، بین چهار راهی پروان دوم و سوم",
-      "تلفن: +93 744 441 079",
-    ]);
+    drawInfoBox(rightBoxX, "فروشنده", ["بصیر آریا"]);
     drawInfoBox(leftBoxX, "خریدار", [
       data.customer.name,
       data.customer.phone ? `تلفن: ${data.customer.phone}` : "",
@@ -499,52 +562,43 @@ export async function generateInvoicePDF(
       });
 
       // unit price
-      doc.text(
-        toPersianNumber(unitPrice.toFixed(2)),
-        xPrice1 - 8,
-        ty + 15,
-        { align: "right" },
-      );
+      doc.text(toPersianNumber(unitPrice.toFixed(2)), xPrice1 - 8, ty + 15, {
+        align: "right",
+      });
 
       // line total
-      doc.text(
-        toPersianNumber(totalValue.toFixed(2)),
-        xTotal1 - 8,
-        ty + 15,
-        { align: "right" },
-      );
+      doc.text(toPersianNumber(totalValue.toFixed(2)), xTotal1 - 8, ty + 15, {
+        align: "right",
+      });
 
       ty += 22;
     });
 
     // ----------------------
     // TOTALS (left side — mirrored from the reference template)
+    // «مجموع اقلام» حذف شد؛ فقط «مجموع کل» با مبلغ bold
     // ----------------------
     ty += 16;
-    const tbW = 240;
+    const tbW = 260;
     const tbX = M;
-    const tbH = 58;
+    const tbH = 44;
 
     doc.setFillColor(...LIGHT_GRAY);
     doc.rect(tbX, ty, tbW, tbH, "F");
 
-    doc.setFontSize(10);
-    doc.setTextColor(...MUTED);
-    doc.text("مجموع اقلام", tbX + tbW - 14, ty + 21, { align: "right" });
-    doc.setTextColor(...INK);
-    doc.text(toPersianCurrency(totalAmount), tbX + 14, ty + 21, {
-      align: "left",
-    });
+    const totalText = toPersianCurrency(totalAmount);
 
-    doc.setDrawColor(...BORDER);
-    doc.line(tbX + 12, ty + 30, tbX + tbW - 12, ty + 30);
-
-    doc.setFontSize(12);
+    doc.setFontSize(13);
     doc.setTextColor(...BRAND_RED);
-    doc.text("مجموع کل", tbX + tbW - 14, ty + 48, { align: "right" });
-    doc.text(toPersianCurrency(totalAmount), tbX + 14, ty + 48, {
-      align: "left",
-    });
+    doc.text("مجموع کل", tbX + tbW - 14, ty + 29, { align: "right" });
+
+    if (fontBoldLoaded) {
+      doc.setFont(FONT_BOLD, "bold");
+    }
+    doc.setFontSize(13);
+    doc.setTextColor(...INK);
+    doc.text(totalText, tbX + 14, ty + 29, { align: "left" });
+    doc.setFont(FONT, "normal");
 
     ty += tbH + 22;
 
