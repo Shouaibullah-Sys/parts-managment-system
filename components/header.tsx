@@ -23,8 +23,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Logout } from "./logout";
 import { ModeSwitcher } from "./mode-switcher";
+import { ReadOnlyBanner } from "./read-only-banner";
 import { cn } from "@/lib/utils";
 import { authClient } from "@/lib/auth-client";
+import { isRemoteHost } from "@/lib/remote-mode";
 
 interface NavigationItem {
   name: string;
@@ -190,8 +192,29 @@ const getNavigationConfig = (
   ];
 };
 
+// Menu entries that imply writing — hidden for the remote (read-only) view.
+const WRITE_HREFS = [
+  "/parts/manage",
+  "/parts/issue",
+  "/parts/priority-actions",
+];
+
+const filterReadOnlySections = (
+  sections: NavigationSection[],
+  readOnly: boolean
+): NavigationSection[] => {
+  if (!readOnly) return sections;
+  return sections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => !WRITE_HREFS.includes(item.href)),
+    }))
+    .filter((section) => section.items.length > 0);
+};
+
 export function Header() {
   const [userRole, setUserRole] = useState<string>("staff");
+  const [readOnly, setReadOnly] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
@@ -203,6 +226,10 @@ export function Header() {
     };
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  useEffect(() => {
+    setReadOnly(isRemoteHost(window.location.hostname));
   }, []);
 
   useEffect(() => {
@@ -227,8 +254,14 @@ export function Header() {
   }, []);
 
   // Get separate configs for desktop and mobile
-  const desktopNavigationConfig = getNavigationConfig(userRole, false);
-  const mobileNavigationConfig = getNavigationConfig(userRole, true);
+  const desktopNavigationConfig = filterReadOnlySections(
+    getNavigationConfig(userRole, false),
+    readOnly
+  );
+  const mobileNavigationConfig = filterReadOnlySections(
+    getNavigationConfig(userRole, true),
+    readOnly
+  );
 
   // Flatten desktop navigation items (without animations)
   const desktopNavItems = desktopNavigationConfig.flatMap(
@@ -529,6 +562,8 @@ export function Header() {
           </>
         )}
       </AnimatePresence>
+
+      <ReadOnlyBanner />
     </>
   );
 }

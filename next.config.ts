@@ -10,6 +10,15 @@ const nextConfig: NextConfig = {
     root: __dirname,
   },
 
+  // Allow the dev server to be opened through the public hostname / LAN IP
+  // (used to test the remote read-only mode). Dev-only; no effect in prod.
+  allowedDevOrigins: [
+    "diplmasiltd.net",
+    "www.diplmasiltd.net",
+    "127.0.0.1",
+    "localhost",
+  ],
+
   webpack: (config, { isServer }) => {
     if (!isServer) {
       // Exclude Node.js modules that might try to access stdout/stderr in browser

@@ -1,26 +1,38 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { isReadOnly } from "@/lib/remote-mode";
 
-// Read-only mirror guard (READ_ONLY=true on the online/Vercel copy).
-// Blocks all mutating API methods except the auth routes needed to log in.
-// The shop terminal (MacBook) does not set READ_ONLY, so it is unaffected.
+// Read-only guard for the public hostname (diplmasiltd.net via the tunnel).
+//
+// The shop terminal is reached over the LAN (IP/local hostname) and is NOT
+// treated as remote, so it keeps full read/write. Remote requests may only use
+// safe methods (GET/HEAD/OPTIONS); every mutating request is rejected before it
+// reaches a route handler. The only exceptions are the auth routes needed to
+// sign in and out.
 const OPEN_MUTATIONS = ["/api/auth/login", "/api/auth/logout"];
+const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+const READ_ONLY_MESSAGE =
+  "این نسخه فقط برای مشاهده است. برای ثبت یا تغییر اطلاعات از ترمینال فروشگاه استفاده کنید.";
 
 export function middleware(req: NextRequest) {
-  if (process.env.READ_ONLY !== "true") return NextResponse.next();
-  if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method))
+  const host = req.headers.get("host") ?? req.headers.get("x-forwarded-host");
+
+  if (!isReadOnly(host)) return NextResponse.next();
+  if (!MUTATING_METHODS.has(req.method)) return NextResponse.next();
+
+  const { pathname } = req.nextUrl;
+  if (OPEN_MUTATIONS.some((p) => pathname.startsWith(p)))
     return NextResponse.next();
-  if (OPEN_MUTATIONS.some((p) => req.nextUrl.pathname.startsWith(p)))
-    return NextResponse.next();
-  return NextResponse.json(
-    {
-      error:
-        "The online copy is read-only. Please make changes from the shop terminal.",
-    },
-    { status: 403 }
-  );
+
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.json({ error: READ_ONLY_MESSAGE }, { status: 403 });
+  }
+  return new NextResponse(READ_ONLY_MESSAGE, { status: 403 });
 }
 
 export const config = {
-  matcher: "/api/:path*",
+  // Run on app routes only — skip Next internals and any static asset (paths
+  // containing a file extension).
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)"],
 };
