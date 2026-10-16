@@ -15,6 +15,7 @@ import {
 } from "@tanstack/react-table";
 import { format, startOfToday, startOfWeek, startOfMonth } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ExternalPayablesBreakdown } from "@/components/parts/external-payables-breakdown";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -67,6 +68,8 @@ import {
   Printer,
   Coins,
   RotateCcw,
+  Store,
+  Wallet,
 } from "lucide-react";
 import Loader from "@/components/loader";
 import HijriDatePicker from "@/components/hijri-date-picker";
@@ -79,7 +82,11 @@ interface SaleRecord {
   id: number;
   customerName: string;
   normalizedName: string;
+  // قابل وصول خالص (پرزهٔ خارجی: فقط سود مغازه)
   totalAmount: string;
+  grossAmount?: string;
+  externalCost?: string;
+  isExternal?: boolean;
   paidAmount: string;
   outstanding: string;
   discount: string;
@@ -501,8 +508,14 @@ export default function AdminSalesPage() {
       header: "قطعه",
       cell: ({ row }) => (
         <div className="space-y-1">
-          <div className="font-medium text-foreground">
+          <div className="flex items-center gap-2 font-medium text-foreground">
             {row.original.partName}
+            {row.original.isExternal && (
+              <Badge className="bg-amber-500 text-xs text-white hover:bg-amber-500">
+                <Store className="ml-1 h-3 w-3" />
+                خارجی
+              </Badge>
+            )}
           </div>
           {row.original.partNumber && (
             <span className="font-mono text-xs bg-primary/10 px-2 py-1 rounded">
@@ -540,10 +553,16 @@ export default function AdminSalesPage() {
     },
     {
       accessorKey: "totalAmount",
-      header: "مبلغ کل",
+      header: "مبلغ قابل وصول",
       cell: ({ row }) => (
         <div className="font-medium">
           {parseFloat(row.original.totalAmount).toLocaleString()} افغانی
+          {row.original.isExternal && (
+            <div className="text-xs font-normal text-amber-600">
+              سود مغازه از فروش{" "}
+              {parseFloat(row.original.grossAmount || "0").toLocaleString()}
+            </div>
+          )}
         </div>
       ),
     },
@@ -1540,19 +1559,19 @@ export default function AdminSalesPage() {
       </Card>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <Card className="bg-mechanical border-mechanical shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-foreground">
-              کل فروش
+              مجموع فروش (ناخالص)
             </CardTitle>
             <DollarSign className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-foreground">
-              {(salesData?.summary?.totalSales ??
+              {(salesData?.summary?.grossSales ??
                 filteredRecords.reduce(
-                  (sum, r) => sum + parseFloat(r.totalAmount),
+                  (sum, r) => sum + parseFloat(r.grossAmount ?? r.totalAmount),
                   0
                 )
               ).toLocaleString()}{" "}
@@ -1621,7 +1640,51 @@ export default function AdminSalesPage() {
             ) : null}
           </CardContent>
         </Card>
+
+        {/* کارت قابل پرداخت به فروشگاه‌های خارجی */}
+        <Card className="bg-mechanical border-mechanical shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-foreground">
+              قابل پرداخت به فروشگاه‌ها
+            </CardTitle>
+            <Store className="h-4 w-4 text-amber-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-amber-600">
+              {(salesData?.summary?.externalPayable ?? 0).toLocaleString()}{" "}
+              افغانی
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              بهای خرید پرزه‌های خارجی
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* کارت درآمد خالص (کل فروش − قابل پرداخت) */}
+        <Card className="bg-mechanical border-mechanical shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-foreground">
+              درآمد خالص
+            </CardTitle>
+            <Wallet className="h-4 w-4 text-emerald-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-emerald-600">
+              {(salesData?.summary?.netSales ?? 0).toLocaleString()} افغانی
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              کل فروش منهای قابل پرداخت به فروشگاه‌ها
+            </p>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* تفکیک قابل پرداخت به فروشگاه‌ها */}
+      <ExternalPayablesBreakdown
+        from={dateRange.from}
+        to={dateRange.to}
+        period={datePeriod === "custom" ? "lifetime" : datePeriod}
+      />
 
       {/* Customer Summary */}
       <Card className="border-mechanical shadow-lg">

@@ -40,7 +40,6 @@ export async function POST(request: NextRequest) {
       invoiceNumber,
       notes,
       items,
-      action,
     } = body;
 
     console.log("Validating request data...");
@@ -203,6 +202,17 @@ export async function POST(request: NextRequest) {
             supplierName = String(item.supplierName).trim();
           }
 
+          // پرزهٔ خارجی: مغازه فقط سود را وصول می‌کند؛ بهای خرید به
+          // فروشگاه دیگر پرداخت می‌شود و قابل وصول از مشتری نیست.
+          const externalUnitCost =
+            item.itemCost != null && String(item.itemCost).trim() !== ""
+              ? Number(item.itemCost)
+              : 0;
+          const externalNet = Math.max(
+            0,
+            Number(totalAmount) - externalUnitCost * item.quantity,
+          );
+
           const [externalSale] = await db
             .insert(sales)
             .values({
@@ -216,8 +226,8 @@ export async function POST(request: NextRequest) {
               quantity: item.quantity,
               totalAmount: totalAmount,
               paidAmount: "0",
-              outstanding: totalAmount,
-              isFullyPaid: false,
+              outstanding: externalNet.toString(),
+              isFullyPaid: externalNet <= 0,
               createdBy: session.user.id,
               saleDate: invoiceDate ? new Date(invoiceDate) : new Date(),
               // اسنپ‌شات: فروش مستقیم به شریک FM تعلق دارد (سود ۱۰۰٪ مغازه)
@@ -304,17 +314,6 @@ export async function POST(request: NextRequest) {
     }, 0);
 
     console.log("Total amount:", totalAmount);
-
-    if (action === "refer") {
-      console.log("Action: refer to admin");
-      return ok({
-        message: "سند برای تأیید مدیر ارسال شد",
-        customerId: customer.id,
-        salesCount: salesRecords.length,
-        totalAmount: totalAmount,
-        action: "referred",
-      });
-    }
 
     console.log("Action: save completed");
     return ok({

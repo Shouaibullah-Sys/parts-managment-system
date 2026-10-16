@@ -30,11 +30,15 @@ export interface SalesPrintRow {
 
 export interface SalesPrintSummary {
   totalSales: number;
+  grossSales?: number;
   totalPaid: number;
   totalOutstanding: number;
   count: number;
   totalRefunds?: number;
   refundCount?: number;
+  externalSale?: number;
+  externalPayable?: number;
+  netSales?: number;
 }
 
 // Active filters shown as chips in the report header (self-describing report).
@@ -128,6 +132,11 @@ ${chipsHTML}
   <div class="metric is-green"><div class="label">پرداخت شده</div><div class="value">${money(sumPaid)}</div></div>
   <div class="metric is-amber"><div class="label">باقیمانده</div><div class="value">${money(sumOutstanding)}</div></div>
 </div>
+${
+  (summary?.externalSale ?? 0) > 0
+    ? `<div class="note">مجموع فروش ناخالص: <b>${money(summary?.grossSales ?? 0)}</b> — بهای خرید پرزه‌های خارجی (قابل پرداخت به فروشگاه‌ها): <b>${money(summary?.externalPayable ?? 0)}</b>. «مجموع فروش» و ردیف‌ها به صورت خالص (سود مغازه) نمایش داده شده‌اند.</div>`
+    : ""
+}
 
 <div class="sec-title">جزئیات فروش${truncated ? ` (نمایش ${money(rows.length)} از ${money(total)})` : ""}</div>
 <table class="rpt">

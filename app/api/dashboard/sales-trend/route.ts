@@ -50,7 +50,7 @@ export async function GET(request: Request) {
         COALESCE(pa.payments, 0) as payments
       FROM (
         SELECT DATE(s.sale_date) as day,
-               COALESCE(SUM(s.total_amount), 0) as sales
+               COALESCE(SUM(s.total_amount - CASE WHEN s.part_id IS NULL THEN COALESCE(s.item_cost, s.unit_cost, 0) * s.quantity ELSE 0 END), 0) as sales
         FROM sales s
         ${salesFilter}
         GROUP BY 1

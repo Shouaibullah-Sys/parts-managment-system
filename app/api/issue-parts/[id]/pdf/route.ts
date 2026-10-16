@@ -45,6 +45,7 @@ export async function GET(
             saleDate: sales.saleDate,
             itemName: sales.itemName,
             supplierName: sales.supplierName,
+            itemCost: sales.itemCost,
             invoiceNumber: sales.invoiceNumber,
           },
           part: {
@@ -93,6 +94,7 @@ export async function GET(
             saleDate: sales.saleDate,
             itemName: sales.itemName,
             supplierName: sales.supplierName,
+            itemCost: sales.itemCost,
             invoiceNumber: sales.invoiceNumber,
           },
           part: {
@@ -163,6 +165,8 @@ export async function GET(
         // پرزه خارجی: نام تایپ‌شده + نام فروشگاه (partId خالی است)
         itemName: data.sale.itemName,
         supplierName: data.sale.supplierName,
+        // بهای خرید واحد — برای جداسازی مبلغ قابل پرداخت به فروشگاه
+        itemCost: data.sale.itemCost,
       },
       part: data.part
         ? {

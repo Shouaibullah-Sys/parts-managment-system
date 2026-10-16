@@ -54,6 +54,8 @@ export type SaleItem = {
     itemName?: string | null;
     // نام فروشگاه/تأمین‌کننده (فقط پرزه خارجی)
     supplierName?: string | null;
+    // بهای خرید هر واحد پرزهٔ خارجی (قابل پرداخت به فروشگاه دیگر)
+    itemCost?: string | number | null;
   };
   part: Part | null;
   user: { name: string } | null;
@@ -522,6 +524,8 @@ export async function generateInvoicePDF(
     drawTableHeader();
 
     let totalAmount = 0;
+    // بهای خرید پرزه‌های خارجی — قابل پرداخت به فروشگاه‌های دیگر، نه به مغازه
+    let externalPayable = 0;
 
     data.sales.forEach((s, idx) => {
       if (ty > H - 190) {
@@ -538,6 +542,12 @@ export async function generateInvoicePDF(
       const qty = s.sale.quantity;
       const unitPrice = qty ? totalValue / qty : 0;
       totalAmount += totalValue;
+
+      // پرزهٔ خارجی (part تهی): بهای خرید به فروشگاه دیگر تعلق دارد
+      if (!s.part) {
+        const costUnit = parseFloat(String(s.sale.itemCost ?? "0")) || 0;
+        externalPayable += costUnit * qty;
+      }
 
       // zebra row
       doc.setFillColor(...(idx % 2 === 0 ? ROW_ALT : WHITE));
@@ -590,24 +600,60 @@ export async function generateInvoicePDF(
     ty += 16;
     const tbW = 260;
     const tbX = M;
-    const tbH = 44;
+    const hasExternal = externalPayable > 0;
+    const netAmount = Math.max(0, totalAmount - externalPayable);
+    const tbH = hasExternal ? 92 : 44;
 
     doc.setFillColor(...LIGHT_GRAY);
     doc.rect(tbX, ty, tbW, tbH, "F");
 
-    const totalText = toEnglishCurrency(totalAmount);
+    if (!hasExternal) {
+      doc.setFontSize(13);
+      doc.setTextColor(...BRAND_RED);
+      doc.text("مجموع کل", tbX + tbW - 14, ty + 29, { align: "right" });
+      if (fontBoldLoaded) doc.setFont(FONT_BOLD, "bold");
+      doc.setFontSize(13);
+      doc.setTextColor(...INK);
+      doc.text(toEnglishCurrency(totalAmount), tbX + 14, ty + 29, {
+        align: "left",
+      });
+      doc.setFont(FONT, "normal");
+    } else {
+      // مجموع کل فاکتور
+      doc.setFontSize(11);
+      doc.setTextColor(...INK);
+      doc.text("مجموع کل فاکتور", tbX + tbW - 14, ty + 22, { align: "right" });
+      doc.text(toEnglishCurrency(totalAmount), tbX + 14, ty + 22, {
+        align: "left",
+      });
 
-    doc.setFontSize(13);
-    doc.setTextColor(...BRAND_RED);
-    doc.text("مجموع کل", tbX + tbW - 14, ty + 29, { align: "right" });
+      // منها: بهای خرید پرزه‌های خارجی (قابل پرداخت به فروشگاه‌ها)
+      doc.setTextColor(...MUTED);
+      doc.text("منها: بهای خرید پرزه‌های خارجی", tbX + tbW - 14, ty + 46, {
+        align: "right",
+      });
+      doc.text(`- ${toEnglishCurrency(externalPayable)}`, tbX + 14, ty + 46, {
+        align: "left",
+      });
 
-    if (fontBoldLoaded) {
-      doc.setFont(FONT_BOLD, "bold");
+      // جداکننده
+      doc.setDrawColor(...BORDER);
+      doc.line(tbX + 10, ty + 60, tbX + tbW - 10, ty + 60);
+
+      // خالص قابل پرداخت (سود مغازه + قطعات انبار)
+      doc.setFontSize(13);
+      doc.setTextColor(...BRAND_RED);
+      doc.text("خالص قابل پرداخت", tbX + tbW - 14, ty + 82, {
+        align: "right",
+      });
+      if (fontBoldLoaded) doc.setFont(FONT_BOLD, "bold");
+      doc.setFontSize(13);
+      doc.setTextColor(...INK);
+      doc.text(toEnglishCurrency(netAmount), tbX + 14, ty + 82, {
+        align: "left",
+      });
+      doc.setFont(FONT, "normal");
     }
-    doc.setFontSize(13);
-    doc.setTextColor(...INK);
-    doc.text(totalText, tbX + 14, ty + 29, { align: "left" });
-    doc.setFont(FONT, "normal");
 
     ty += tbH + 22;
 

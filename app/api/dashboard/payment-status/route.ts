@@ -6,12 +6,18 @@ import { sql } from "drizzle-orm";
 
 export async function GET() {
   try {
+    // قابل وصول خالص = فاکتور − بهای خرید پرزهٔ خارجی (فقط سود مغازه وصول میشود)
     const paymentData = await db.execute(sql`
       SELECT 
         COUNT(CASE WHEN is_fully_paid = true THEN 1 END) as fully_paid,
-        COUNT(CASE WHEN is_fully_paid = false AND outstanding < total_amount AND outstanding > 0 THEN 1 END) as partially_paid,
-        COUNT(CASE WHEN is_fully_paid = false AND outstanding = total_amount THEN 1 END) as not_paid
-      FROM sales
+        COUNT(CASE WHEN is_fully_paid = false AND outstanding > 0 AND outstanding < net_total THEN 1 END) as partially_paid,
+        COUNT(CASE WHEN is_fully_paid = false AND net_total > 0 AND outstanding = net_total THEN 1 END) as not_paid
+      FROM (
+        SELECT is_fully_paid,
+               outstanding,
+               total_amount - CASE WHEN part_id IS NULL THEN COALESCE(item_cost, unit_cost, 0) * quantity ELSE 0 END AS net_total
+        FROM sales
+      ) s
     `);
 
     const rows = paymentData.rows as any[];

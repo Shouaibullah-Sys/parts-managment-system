@@ -1,12 +1,28 @@
 // components/parts/issue-parts-table.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import Fuse from "fuse.js";
+import { toast } from "sonner";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -23,28 +39,22 @@ import {
   Plus,
   Minus,
   User,
-  Save,
-  Send,
   Loader2,
   FileText,
-  Calendar,
-  Eye,
-  Download,
-  MapPin,
+  Search,
+  X,
+  Pencil,
   Phone,
-  FileText as InvoiceIcon,
+  MapPin,
   MessageSquare,
-  Smartphone,
-  Monitor,
+  CheckCircle2,
+  AlertTriangle,
 } from "lucide-react";
-import { SmartSearchEngine } from "./smart-search-engine";
 import { CustomerSelector } from "./customer-selector";
 import { SupplierSelectField } from "./supplier-select-field";
 import type { Supplier } from "./supplier-form-dialog";
-import Loader from "@/components/loader";
 import HijriDatePicker from "@/components/hijri-date-picker";
 
-// Define interfaces
 interface Customer {
   id: number;
   name: string;
@@ -68,10 +78,9 @@ interface Part {
 interface CartItem {
   part: Part;
   quantity: number;
-  customPrice?: number;
+  customPrice: number;
 }
 
-// پرزه خارجی (خرید از فروشگاه دیگر) — فقط وارد بل/مالی میشود، بدون موجودی
 interface ExternalItem {
   tempId: string;
   itemName: string;
@@ -82,23 +91,58 @@ interface ExternalItem {
   supplierName?: string | null;
 }
 
+const afn = (n: number) =>
+  `${n.toLocaleString("en-US", { maximumFractionDigits: 2 })} افغانی`;
+
+const unitPriceOf = (item: CartItem) =>
+  item.customPrice ?? parseFloat(item.part.salePrice || "0");
+
+function StockPill({ part }: { part: Part }) {
+  const low = part.currentStock <= part.minStock;
+  const out = part.currentStock <= 0;
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span
+        className={`font-mono font-bold tabular-nums ${
+          out
+            ? "text-destructive"
+            : low
+              ? "text-orange-500"
+              : "text-emerald-600"
+        }`}
+      >
+        {part.currentStock}
+      </span>
+      {(low || out) && (
+        <AlertTriangle
+          className={`h-3.5 w-3.5 ${out ? "text-destructive" : "text-orange-500"}`}
+        />
+      )}
+      <span className="text-[11px] text-muted-foreground">
+        / حداقل {part.minStock}
+      </span>
+    </span>
+  );
+}
+
 export function IssuePartsTable() {
   const router = useRouter();
+
+  const [parts, setParts] = useState<Part[]>([]);
+  const [partsLoading, setPartsLoading] = useState(true);
+  const fuseRef = useRef<Fuse<Part> | null>(null);
+
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<Part[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const searchRef = useRef<HTMLInputElement>(null);
+
   const [cart, setCart] = useState<CartItem[]>([]);
   const [externalItems, setExternalItems] = useState<ExternalItem[]>([]);
-  const [externalDialogOpen, setExternalDialogOpen] = useState(false);
-  const [externalForm, setExternalForm] = useState({
-    itemName: "",
-    quantity: 1,
-    unitPrice: "",
-    itemCost: "",
-  });
-  const [externalSupplier, setExternalSupplier] = useState<Supplier | null>(
-    null,
-  );
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
-    null,
-  );
+
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [isNewCustomer, setIsNewCustomer] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
@@ -107,216 +151,171 @@ export function IssuePartsTable() {
   );
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [notes, setNotes] = useState("");
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isMobile, setIsMobile] = useState(false);
-  const [isNewCustomer, setIsNewCustomer] = useState(false);
 
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener("resize", checkMobile);
-    return () => window.removeEventListener("resize", checkMobile);
+  const [externalDialogOpen, setExternalDialogOpen] = useState(false);
+  const [externalForm, setExternalForm] = useState({
+    itemName: "",
+    quantity: 1,
+    unitPrice: "",
+    itemCost: "",
+  });
+  const [externalSupplier, setExternalSupplier] = useState<Supplier | null>(null);
+
+  const loadParts = useCallback(async () => {
+    try {
+      setPartsLoading(true);
+      const res = await fetch("/api/parts/search?limit=2000");
+      const json = await res.json();
+      if (json.success && Array.isArray(json.data)) {
+        const processed: Part[] = json.data.map((p: Part) => ({
+          ...p,
+          currentStock: Number(p.currentStock) || 0,
+          minStock: Number(p.minStock) || 0,
+          salePrice: p.salePrice ?? "0",
+          costPrice: p.costPrice ?? "0",
+        }));
+        setParts(processed);
+        fuseRef.current = new Fuse(processed, {
+          keys: [
+            { name: "partNumber", weight: 2 },
+            { name: "name", weight: 1 },
+          ],
+          threshold: 0.35,
+          ignoreLocation: true,
+          includeScore: true,
+        });
+      }
+    } catch (e) {
+      console.error("Error loading parts:", e);
+      toast.error("خطا در بارگذاری قطعات");
+    } finally {
+      setPartsLoading(false);
+    }
   }, []);
 
-  const handleSaveAndGeneratePDF = async () => {
-    if (!customerName.trim()) {
-      alert("لطفاً نام مشتری را وارد کنید");
+  useEffect(() => {
+    loadParts();
+  }, [loadParts]);
+
+  // Instant client-side search over the loaded catalog.
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 1) {
+      setResults([]);
+      setShowDropdown(false);
+      setActiveIndex(0);
       return;
     }
+    const res = fuseRef.current
+      ? fuseRef.current.search(q).slice(0, 8).map((r) => r.item)
+      : parts
+          .filter(
+            (p) =>
+              p.partNumber.toLowerCase().includes(q.toLowerCase()) ||
+              p.name.toLowerCase().includes(q.toLowerCase()),
+          )
+          .slice(0, 8);
+    setResults(res);
+    setShowDropdown(true);
+    setActiveIndex(0);
+  }, [query, parts]);
 
-    if (cart.length === 0 && externalItems.length === 0) {
-      alert("لطفاً قطعات را به سبد اضافه کنید");
-      return;
-    }
+  // "/" focuses the search box.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = document.activeElement;
+      const typing =
+        el instanceof HTMLInputElement ||
+        el instanceof HTMLTextAreaElement ||
+        (el as HTMLElement)?.isContentEditable;
+      if (e.key === "/" && !typing) {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const response = await fetch("/api/issue-parts", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          customerName: customerName.trim(),
-          customerPhone: customerPhone.trim(),
-          customerAddress: customerAddress.trim(),
-          invoiceDate: invoiceDate,
-          invoiceNumber: invoiceNumber.trim(),
-          notes: notes.trim(),
-          items: buildItemsPayload(),
-          action: "save",
-        }),
+  const addToCart = useCallback(
+    (part: Part) => {
+      setQuery("");
+      setShowDropdown(false);
+      searchRef.current?.focus();
+      setCart((prev) => {
+        const existing = prev.find((i) => i.part.id === part.id);
+        if (existing) {
+          if (existing.quantity + 1 > part.currentStock) {
+            toast.warning(`موجودی کافی نیست (${part.currentStock})`);
+            return prev;
+          }
+          return prev.map((i) =>
+            i.part.id === part.id ? { ...i, quantity: i.quantity + 1 } : i,
+          );
+        }
+        return [
+          ...prev,
+          {
+            part,
+            quantity: 1,
+            customPrice: parseFloat(part.salePrice || "0") || 0,
+          },
+        ];
       });
+    },
+    [],
+  );
 
-      const result = await response.json();
-
-      if (result.success) {
-        // Generate PDF after successful save with the sale IDs
-        await generateAndDownloadPDF(
-          result.data.customerId,
-          result.data.salesIds,
-        );
-
-        // Reset form
-        setCart([]);
-        setExternalItems([]);
-        setSelectedCustomer(null);
-        setIsNewCustomer(false);
-        setCustomerName("");
-        setCustomerPhone("");
-        setCustomerAddress("");
-        setInvoiceDate(new Date().toISOString().split("T")[0]);
-        setInvoiceNumber("");
-        setNotes("");
-
-        // Redirect to records page
-        router.push("/parts/records");
-      } else {
-        setError(result.message || "خطا در ایجاد سند");
-      }
-    } catch (error) {
-      console.error("Error saving issue:", error);
-      setError("خطا در اتصال به سرور");
-    } finally {
-      setIsLoading(false);
+  const updateQuantity = (partId: number, q: number) => {
+    if (q < 1) return removeFromCart(partId);
+    const item = cart.find((i) => i.part.id === partId);
+    if (item && q > item.part.currentStock) {
+      toast.warning(`موجودی موجود: ${item.part.currentStock}`);
+      return;
     }
-  };
-
-  const generateAndDownloadPDF = async (
-    customerId: number,
-    salesIds?: number[],
-  ) => {
-    try {
-      // Build URL with sale IDs if provided
-      const url =
-        salesIds && salesIds.length > 0
-          ? `/api/issue-parts/${customerId}/pdf?saleIds=${salesIds.join(",")}`
-          : `/api/issue-parts/${customerId}/pdf`;
-
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error("Failed to generate PDF");
-      }
-
-      const blob = await response.blob();
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.style.display = "none";
-      a.href = downloadUrl;
-      a.download = `invoice-${customerId}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(downloadUrl);
-      document.body.removeChild(a);
-    } catch (error) {
-      console.error("Error downloading PDF:", error);
-      // Don't show error to user, just log it
-    }
-  };
-
-  // Add part to cart from smart search
-  const addToCartFromSearch = (part: Part) => {
-    // Allow adding even with 0 stock for testing
-    if (part.currentStock <= 0) {
-      if (!confirm("این قطعه موجودی صفر دارد. آیا می‌خواهید ادامه دهید؟")) {
-        return;
-      }
-    }
-
-    setCart((prev) => {
-      const existing = prev.find((item) => item.part.id === part.id);
-      if (existing) {
-        return prev.map((item) =>
-          item.part.id === part.id
-            ? { ...item, quantity: item.quantity + 1 }
-            : item,
-        );
-      }
-      const newCart = [
-        ...prev,
-        {
-          part,
-          quantity: 1,
-          customPrice: parseFloat(part.salePrice || "0"),
-        },
-      ];
-      return newCart;
-    });
-  };
-
-  // Update custom price for cart item
-  const updateCustomPrice = (partId: number, newPrice: number) => {
     setCart((prev) =>
-      prev.map((item) =>
-        item.part.id === partId ? { ...item, customPrice: newPrice } : item,
-      ),
+      prev.map((i) => (i.part.id === partId ? { ...i, quantity: q } : i)),
     );
   };
 
-  // Cart management functions
-  const updateQuantity = (partId: number, newQuantity: number) => {
-    if (newQuantity < 1) {
-      removeFromCart(partId);
-      return;
-    }
-
-    const cartItem = cart.find((item) => item.part.id === partId);
-    if (cartItem && newQuantity > cartItem.part.currentStock) {
-      alert(`موجودی موجود: ${cartItem.part.currentStock}`);
-      return;
-    }
-
+  const updateCustomPrice = (partId: number, price: number) =>
     setCart((prev) =>
-      prev.map((item) =>
-        item.part.id === partId ? { ...item, quantity: newQuantity } : item,
-      ),
+      prev.map((i) => (i.part.id === partId ? { ...i, customPrice: price } : i)),
     );
-  };
 
-  const removeFromCart = (partId: number) => {
-    setCart((prev) => prev.filter((item) => item.part.id !== partId));
-  };
+  const removeFromCart = (partId: number) =>
+    setCart((prev) => prev.filter((i) => i.part.id !== partId));
 
-  // پرزه خارجی — فقط یک قلم مالی در سبد (بدون موجودی)
-  const addExternalItem = (item: Omit<ExternalItem, "tempId">) => {
+  const addExternalItem = (item: Omit<ExternalItem, "tempId">) =>
     setExternalItems((prev) => [
       ...prev,
-      {
-        ...item,
-        tempId: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      },
+      { ...item, tempId: `${Date.now()}-${Math.random().toString(36).slice(2)}` },
     ]);
-  };
 
-  const removeExternalItem = (tempId: string) => {
-    setExternalItems((prev) => prev.filter((item) => item.tempId !== tempId));
-  };
+  const removeExternalItem = (tempId: string) =>
+    setExternalItems((prev) => prev.filter((i) => i.tempId !== tempId));
 
   const updateExternalItem = (
     tempId: string,
     patch: Partial<Omit<ExternalItem, "tempId">>,
-  ) => {
+  ) =>
     setExternalItems((prev) =>
-      prev.map((item) =>
-        item.tempId === tempId ? { ...item, ...patch } : item,
-      ),
+      prev.map((i) => (i.tempId === tempId ? { ...i, ...patch } : i)),
     );
-  };
 
   const handleAddExternalFromForm = () => {
     const name = externalForm.itemName.trim();
     if (!name) {
-      alert("نام پرزه را وارد کنید");
+      toast.error("نام پرزه را وارد کنید");
       return;
     }
     if (externalForm.quantity < 1) {
-      alert("تعداد باید حداقل ۱ باشد");
+      toast.error("تعداد باید حداقل ۱ باشد");
       return;
     }
-
     addExternalItem({
       itemName: name,
       quantity: externalForm.quantity,
@@ -327,14 +326,36 @@ export function IssuePartsTable() {
     });
     setExternalForm({ itemName: "", quantity: 1, unitPrice: "", itemCost: "" });
     setExternalSupplier(null);
+    toast.success("پرزه خارجی افزوده شد");
   };
+
+  const totals = useMemo(() => {
+    const stockSubtotal = cart.reduce(
+      (s, i) => s + unitPriceOf(i) * i.quantity,
+      0,
+    );
+    const externalSubtotal = externalItems.reduce(
+      (s, i) => s + i.customPrice * i.quantity,
+      0,
+    );
+    const qty =
+      cart.reduce((s, i) => s + i.quantity, 0) +
+      externalItems.reduce((s, i) => s + i.quantity, 0);
+    return {
+      stockSubtotal,
+      externalSubtotal,
+      total: stockSubtotal + externalSubtotal,
+      qty,
+      lines: cart.length + externalItems.length,
+    };
+  }, [cart, externalItems]);
 
   const buildItemsPayload = () => [
     ...cart.map((item) => ({
       kind: "stock" as const,
       partId: item.part.id,
       quantity: item.quantity,
-      unitPrice: item.customPrice || parseFloat(item.part.salePrice || "0"),
+      unitPrice: unitPriceOf(item),
     })),
     ...externalItems.map((item) => ({
       kind: "external" as const,
@@ -347,83 +368,93 @@ export function IssuePartsTable() {
     })),
   ];
 
-  const getTotalAmount = () => {
-    const stockTotal = cart.reduce((total, item) => {
-      const price = item.customPrice || parseFloat(item.part.salePrice || "0");
-      return total + price * item.quantity;
-    }, 0);
-    const externalTotal = externalItems.reduce(
-      (total, item) => total + item.customPrice * item.quantity,
-      0,
-    );
-    return stockTotal + externalTotal;
+  const resetForm = () => {
+    setCart([]);
+    setExternalItems([]);
+    setSelectedCustomer(null);
+    setIsNewCustomer(false);
+    setCustomerName("");
+    setCustomerPhone("");
+    setCustomerAddress("");
+    setInvoiceDate(new Date().toISOString().split("T")[0]);
+    setInvoiceNumber("");
+    setNotes("");
+    setError(null);
+  };
+
+  const generateAndDownloadPDF = async (customerId: number, salesIds?: number[]) => {
+    try {
+      const url =
+        salesIds && salesIds.length > 0
+          ? `/api/issue-parts/${customerId}/pdf?saleIds=${salesIds.join(",")}`
+          : `/api/issue-parts/${customerId}/pdf`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("Failed to generate PDF");
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.style.display = "none";
+      a.href = downloadUrl;
+      a.download = `invoice-${customerId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(downloadUrl);
+      document.body.removeChild(a);
+    } catch (e) {
+      console.error("Error downloading PDF:", e);
+    }
+  };
+
+  const validate = () => {
+    if (!customerName.trim()) {
+      toast.error("لطفاً نام مشتری را وارد کنید");
+      return false;
+    }
+    if (cart.length === 0 && externalItems.length === 0) {
+      toast.error("سبد خالی است؛ قطعه‌ای اضافه کنید");
+      return false;
+    }
+    return true;
   };
 
   const handleSave = async () => {
-    if (!customerName.trim()) {
-      alert("لطفاً نام مشتری را وارد کنید");
-      return;
-    }
-
-    if (cart.length === 0 && externalItems.length === 0) {
-      alert("لطفاً قطعات را به سبد اضافه کنید");
-      return;
-    }
-
+    if (!validate()) return;
     setIsLoading(true);
     setError(null);
-
     try {
       const response = await fetch("/api/issue-parts", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           customerName: customerName.trim(),
           customerPhone: customerPhone.trim(),
           customerAddress: customerAddress.trim(),
-          invoiceDate: invoiceDate,
+          invoiceDate,
           invoiceNumber: invoiceNumber.trim(),
           notes: notes.trim(),
           items: buildItemsPayload(),
           action: "save",
         }),
       });
-
       const result = await response.json();
-
       if (result.success) {
-        // Generate PDF after successful save with the sale IDs
-        await generateAndDownloadPDF(
-          result.data.customerId,
-          result.data.salesIds,
-        );
-
-        // Reset form
-        setCart([]);
-        setExternalItems([]);
-        setCustomerName("");
-        setCustomerPhone("");
-        setCustomerAddress("");
-        setInvoiceDate(new Date().toISOString().split("T")[0]);
-        setInvoiceNumber("");
-        setNotes("");
-
-        // Redirect to records page
+        await generateAndDownloadPDF(result.data.customerId, result.data.salesIds);
+        toast.success("بل ذخیره شد");
+        resetForm();
         router.push("/parts/records");
       } else {
         setError(result.message || "خطا در ایجاد سند");
+        toast.error(result.message || "خطا در ایجاد سند");
       }
-    } catch (error) {
-      console.error("Error saving issue:", error);
+    } catch (e) {
+      console.error("Error submitting issue:", e);
       setError("خطا در اتصال به سرور");
+      toast.error("خطا در اتصال به سرور");
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Customer selection handlers
   const handleCustomerSelect = (customer: Customer | null) => {
     setSelectedCustomer(customer);
     if (customer) {
@@ -442,569 +473,766 @@ export function IssuePartsTable() {
     setCustomerAddress("");
   };
 
-  const handleReferToAdmin = async () => {
-    if (!customerName.trim()) {
-      alert("لطفاً نام مشتری را وارد کنید");
-      return;
-    }
-
-    if (cart.length === 0 && externalItems.length === 0) {
-      alert("لطفاً قطعات را به سبد اضافه کنید");
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const response = await fetch("/api/issue-parts", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          customerName: customerName.trim(),
-          customerPhone: customerPhone.trim(),
-          customerAddress: customerAddress.trim(),
-          invoiceDate: invoiceDate,
-          invoiceNumber: invoiceNumber.trim(),
-          notes: notes.trim(),
-          items: buildItemsPayload(),
-          action: "refer",
-        }),
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
-        alert("سند برای تأیید مدیر ارسال شد");
-        setCart([]);
-        setExternalItems([]);
-        setSelectedCustomer(null);
-        setIsNewCustomer(false);
-        setCustomerName("");
-        setCustomerPhone("");
-        setCustomerAddress("");
-        setInvoiceDate(new Date().toISOString().split("T")[0]);
-        setInvoiceNumber("");
-        setNotes("");
-      } else {
-        setError(result.message || "خطا در ارسال به مدیر");
-      }
-    } catch (error) {
-      console.error("Error referring to admin:", error);
-      setError("خطا در اتصال به سرور");
-    } finally {
-      setIsLoading(false);
+  const onSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showDropdown || results.length === 0) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIndex((i) => Math.min(i + 1, results.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIndex((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      addToCart(results[activeIndex] ?? results[0]);
+    } else if (e.key === "Escape") {
+      setShowDropdown(false);
     }
   };
 
+  const empty = cart.length === 0 && externalItems.length === 0;
+
   return (
-    <div className="space-y-6">
-      {/* View Toggle */}
-      <div className="flex items-center justify-end">
-        <div className="flex items-center gap-2 bg-muted/50 rounded-lg p-1">
-          <Button
-            variant={isMobile ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setIsMobile(true)}
-            className={`${isMobile ? "bg-primary text-primary-foreground" : "text-muted-foreground"} px-3`}
-          >
-            <Smartphone className="h-4 w-4" />
-          </Button>
-          <Button
-            variant={!isMobile ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setIsMobile(false)}
-            className={`${!isMobile ? "bg-primary text-primary-foreground" : "text-muted-foreground"} px-3`}
-          >
-            <Monitor className="h-4 w-4" />
-          </Button>
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+      {/* ── Main: search + basket grid ───────────────────────────────── */}
+      <div className="lg:col-span-2 space-y-4">
+        <div className="relative">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              ref={searchRef}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onFocus={() => query.trim() && setShowDropdown(true)}
+              onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
+              onKeyDown={onSearchKeyDown}
+              placeholder="جستجوی قطعه بر اساس شماره یا نام… (برای جستجو / را بزنید)"
+              className="pl-9 pr-9 h-12 text-base"
+              autoComplete="off"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery("");
+                  searchRef.current?.focus();
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
+          {showDropdown && (
+            <div className="absolute z-30 mt-1 w-full rounded-lg border border-border bg-popover shadow-lg overflow-hidden">
+              {partsLoading ? (
+                <div className="p-4 text-center text-sm text-muted-foreground">
+                  در حال بارگذاری قطعات…
+                </div>
+              ) : results.length === 0 ? (
+                <div className="p-4 text-center text-sm text-muted-foreground">
+                  قطعه‌ای یافت نشد
+                </div>
+              ) : (
+                <ul className="max-h-80 overflow-y-auto divide-y divide-border">
+                  {results.map((part, idx) => (
+                    <li key={part.id}>
+                      <button
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          addToCart(part);
+                        }}
+                        onMouseEnter={() => setActiveIndex(idx)}
+                        className={`w-full flex items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors ${
+                          idx === activeIndex ? "bg-accent" : "hover:bg-accent/50"
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+                              {part.partNumber}
+                            </span>
+                            <Badge variant="outline" className="text-[10px]">
+                              {part.section}
+                            </Badge>
+                          </div>
+                          <p className="font-medium truncate mt-0.5">{part.name}</p>
+                        </div>
+                        <div className="flex items-center gap-4 shrink-0">
+                          <StockPill part={part} />
+                          <span className="text-sm font-medium tabular-nums w-28 text-right">
+                            {afn(parseFloat(part.salePrice || "0"))}
+                          </span>
+                          <Plus className="h-4 w-4 text-primary" />
+                        </div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
-      </div>
 
-      <div
-        className={`grid gap-6 ${isMobile ? "grid-cols-1" : "grid-cols-1 lg:grid-cols-2"}`}
-      >
-        <SmartSearchEngine onPartSelect={addToCartFromSearch} />
-
-        {/* Cart Section */}
-        <Card className="border-mechanical shadow-lg">
-          <CardHeader className="bg-mechanical/50 border-b border-border">
-            <CardTitle className="flex items-center gap-2 text-foreground">
+        <Card className="shadow-sm">
+          <CardHeader className="border-b border-border py-3">
+            <CardTitle className="flex items-center gap-2 text-base">
               <ShoppingCart className="h-5 w-5 text-primary" />
-              سبد صادرات
-              {(cart.length > 0 || externalItems.length > 0) && (
-                <Badge
-                  variant="secondary"
-                  className="text-xs bg-primary text-primary-foreground"
-                >
-                  {cart.length + externalItems.length} قلم
+              سبد صدور
+              {totals.lines > 0 && (
+                <Badge className="bg-primary text-primary-foreground">
+                  {totals.lines} قلم / {totals.qty} عدد
                 </Badge>
               )}
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                className="ml-auto gap-1 border-primary/40 text-primary hover:bg-primary/10"
+                className="ml-auto gap-1"
                 onClick={() => setExternalDialogOpen(true)}
                 disabled={isLoading}
               >
                 <PackagePlus className="h-4 w-4" />
-                افزودن پرزه از فروشگاه دیگر
+                پرزه از فروشگاه دیگر
               </Button>
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4 p-4">
-            {/* Customer Selector */}
-            <CustomerSelector
-              onCustomerSelect={handleCustomerSelect}
-              onNewCustomer={handleNewCustomer}
-              disabled={isLoading}
-            />
-
-            {/* Show manual inputs only for new customers */}
-            {isNewCustomer && (
-              <div
-                className={`gap-4 ${isMobile ? "space-y-3" : "grid grid-cols-1 md:grid-cols-2"}`}
-              >
-                <div className="flex items-center gap-2">
-                  <User className="h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="نام مشتری"
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    disabled={isLoading}
-                    className="border-border focus:border-primary focus:ring-primary/20"
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <Phone className="h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="شماره تماس"
-                    value={customerPhone}
-                    onChange={(e) => setCustomerPhone(e.target.value)}
-                    disabled={isLoading}
-                    className="border-border focus:border-primary focus:ring-primary/20"
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="آدرس"
-                    value={customerAddress}
-                    onChange={(e) => setCustomerAddress(e.target.value)}
-                    disabled={isLoading}
-                    className="border-border focus:border-primary focus:ring-primary/20"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Date and Invoice Fields */}
-            <div
-              className={`gap-4 ${isMobile ? "space-y-3" : "grid grid-cols-1 md:grid-cols-2"}`}
-            >
-              <div className="flex items-center gap-2">
-                <HijriDatePicker
-                  value={invoiceDate}
-                  onChange={setInvoiceDate}
-                  placeholder="تاریخ صدور"
-                />
-              </div>
-            </div>
-
-            {/* Invoice Information */}
-            <div
-              className={`gap-4 ${isMobile ? "space-y-3" : "grid grid-cols-1 md:grid-cols-2"}`}
-            >
-              <div className="flex items-center gap-2">
-                <InvoiceIcon className="h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="شماره فاکتور (اختیاری)"
-                  value={invoiceNumber}
-                  onChange={(e) => setInvoiceNumber(e.target.value)}
-                  disabled={isLoading}
-                  className="border-border focus:border-primary focus:ring-primary/20"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <MessageSquare className="h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="توضیحات (اختیاری)"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  disabled={isLoading}
-                  className="border-border focus:border-primary focus:ring-primary/20"
-                />
-              </div>
-            </div>
-
-            {error && (
-              <div className="text-destructive text-sm bg-destructive/10 p-3 rounded border border-destructive/50">
-                {error}
-              </div>
-            )}
-
-            {cart.length === 0 && externalItems.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>هیچ قطعه‌ای در سبد وجود ندارد</p>
-                <p className="text-sm">قطعات را جستجو و به سبد اضافه کنید</p>
+          <CardContent className="p-0">
+            {empty ? (
+              <div className="text-center py-16 text-muted-foreground">
+                <Package className="h-12 w-12 mx-auto mb-3 opacity-40" />
+                <p>سبد خالی است</p>
+                <p className="text-sm">قطعه را جستجو کرده و اضافه کنید</p>
               </div>
             ) : (
-              <>
-                <div className="border border-border rounded-lg max-h-96 overflow-y-auto">
-                  {cart.map((item) => (
-                    <div
-                      key={item.part.id}
-                      className={`flex ${isMobile ? "flex-col" : "items-center justify-between"} p-4 border-b border-border hover:bg-accent/30 transition-colors`}
-                    >
-                      <div className="flex-1 mb-3 sm:mb-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-mono text-sm bg-primary/10 px-2 py-1 rounded">
-                            {item.part.partNumber}
-                          </span>
-                          <Badge
-                            variant="outline"
-                            className="border-primary/30"
-                          >
-                            {item.part.section}
-                          </Badge>
-                        </div>
-                        <p className="font-medium text-foreground">
-                          {item.part.name}
-                        </p>
-                        <div
-                          className={`flex ${isMobile ? "flex-col gap-2" : "items-center gap-4"} text-sm text-muted-foreground mt-1`}
-                        >
-                          {/* Stock Info */}
-                          <span className="flex items-center gap-1">
-                            <span>موجودی:</span>
-                            <span
-                              className={`font-mono font-bold ${item.part.currentStock <= item.part.minStock ? "text-red-600" : "text-green-600"}`}
-                            >
-                              {item.part.currentStock}
+              <div className="max-h-[28rem] overflow-y-auto">
+                <Table>
+                  <TableHeader className="sticky top-0 z-10 bg-muted/60 backdrop-blur">
+                    <TableRow>
+                      <TableHead className="w-8 text-center">#</TableHead>
+                      <TableHead>کد قطعه</TableHead>
+                      <TableHead>نام قطعه</TableHead>
+                      <TableHead>بخش</TableHead>
+                      <TableHead>موجودی</TableHead>
+                      <TableHead className="text-center">تعداد</TableHead>
+                      <TableHead>قیمت واحد</TableHead>
+                      <TableHead>جمع</TableHead>
+                      <TableHead className="w-10"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {cart.map((item, i) => {
+                      const price = unitPriceOf(item);
+                      return (
+                        <TableRow key={`s-${item.part.id}`}>
+                          <TableCell className="text-center text-muted-foreground">
+                            {i + 1}
+                          </TableCell>
+                          <TableCell>
+                            <span className="font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+                              {item.part.partNumber}
                             </span>
-                            <span className="text-xs">
-                              (حداقل: {item.part.minStock})
+                          </TableCell>
+                          <TableCell className="max-w-[16rem]">
+                            <span className="font-medium line-clamp-1">
+                              {item.part.name}
                             </span>
-                          </span>
-
-                          {/* Price Input */}
-                          <div className="flex items-center gap-1">
-                            <span>قیمت:</span>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{item.part.section}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <StockPill part={item.part} />
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center justify-center gap-1">
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                className="h-7 w-7"
+                                onClick={() =>
+                                  updateQuantity(item.part.id, item.quantity - 1)
+                                }
+                                disabled={isLoading}
+                              >
+                                <Minus className="h-3 w-3" />
+                              </Button>
+                              <Input
+                                type="number"
+                                min={1}
+                                max={item.part.currentStock}
+                                value={item.quantity}
+                                onChange={(e) =>
+                                  updateQuantity(
+                                    item.part.id,
+                                    parseInt(e.target.value) || 1,
+                                  )
+                                }
+                                disabled={isLoading}
+                                className="w-16 h-7 text-center tabular-nums"
+                              />
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                className="h-7 w-7"
+                                onClick={() =>
+                                  updateQuantity(item.part.id, item.quantity + 1)
+                                }
+                                disabled={
+                                  item.quantity >= item.part.currentStock ||
+                                  isLoading
+                                }
+                              >
+                                <Plus className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                          <TableCell>
                             <Input
                               type="number"
-                              value={
-                                item.customPrice ||
-                                parseFloat(item.part.salePrice || "0")
-                              }
+                              min={0}
+                              value={price}
                               onChange={(e) =>
                                 updateCustomPrice(
                                   item.part.id,
                                   parseFloat(e.target.value) || 0,
                                 )
                               }
-                              className="w-20 h-7 text-xs border-border focus:border-primary focus:ring-primary/20"
                               disabled={isLoading}
+                              className="w-24 h-7 tabular-nums"
                             />
-                            <span>افغانی</span>
-                          </div>
-                        </div>
-                      </div>
+                          </TableCell>
+                          <TableCell className="font-semibold tabular-nums">
+                            {afn(price * item.quantity)}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                              onClick={() => removeFromCart(item.part.id)}
+                              disabled={isLoading}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
 
-                      <div className="flex items-center gap-2 justify-end">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() =>
-                            updateQuantity(item.part.id, item.quantity - 1)
-                          }
-                          disabled={item.quantity <= 1 || isLoading}
-                          className="border-border text-foreground hover:bg-accent hover:text-accent-foreground"
-                        >
-                          <Minus className="h-3 w-3" />
-                        </Button>
-                        <span className="w-8 text-center font-mono font-bold">
-                          {item.quantity}
-                        </span>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() =>
-                            updateQuantity(item.part.id, item.quantity + 1)
-                          }
-                          disabled={
-                            item.quantity >= item.part.currentStock || isLoading
-                          }
-                          className="border-border text-foreground hover:bg-accent hover:text-accent-foreground"
-                        >
-                          <Plus className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => removeFromCart(item.part.id)}
-                          disabled={isLoading}
-                          className="hover:bg-destructive/90"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-
-                  {externalItems.map((item) => (
-                    <div
-                      key={item.tempId}
-                      className={`flex ${isMobile ? "flex-col" : "items-center justify-between"} p-4 border-b border-border hover:bg-accent/30 transition-colors`}
-                    >
-                      <div className="flex-1 mb-3 sm:mb-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Badge
-                            variant="outline"
-                            className="border-amber-500/50 text-amber-600"
-                          >
+                    {externalItems.map((item, i) => (
+                      <TableRow key={item.tempId} className="bg-amber-50/40 dark:bg-amber-950/10">
+                        <TableCell className="text-center text-muted-foreground">
+                          {cart.length + i + 1}
+                        </TableCell>
+                        <TableCell>
+                          <Badge className="bg-amber-500 hover:bg-amber-500 text-white text-[10px]">
                             خارجی
                           </Badge>
+                        </TableCell>
+                        <TableCell className="max-w-[16rem]">
+                          <span className="font-medium line-clamp-1">
+                            {item.itemName}
+                          </span>
                           {item.supplierName && (
-                            <Badge
-                              variant="outline"
-                              className="border-primary/40 text-primary"
-                            >
+                            <span className="block text-xs text-muted-foreground">
                               {item.supplierName}
-                            </Badge>
+                            </span>
                           )}
-                        </div>
-                        <p className="font-medium text-foreground">
-                          {item.itemName}
-                        </p>
-                        <div
-                          className={`flex ${isMobile ? "flex-col gap-2" : "items-center gap-4"} text-sm text-muted-foreground mt-1`}
-                        >
-                          <span className="flex items-center gap-1">
-                            <span>قیمت واحد:</span>
-                            <Input
-                              type="number"
-                              min="0"
-                              value={item.customPrice}
-                              onChange={(e) =>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">—</TableCell>
+                        <TableCell className="text-muted-foreground">—</TableCell>
+                        <TableCell>
+                          <div className="flex items-center justify-center gap-1">
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              className="h-7 w-7"
+                              onClick={() =>
                                 updateExternalItem(item.tempId, {
-                                  customPrice: parseFloat(e.target.value) || 0,
+                                  quantity: Math.max(1, item.quantity - 1),
                                 })
                               }
-                              className="w-24 h-7 text-xs border-border focus:border-primary focus:ring-primary/20"
                               disabled={isLoading}
+                            >
+                              <Minus className="h-3 w-3" />
+                            </Button>
+                            <Input
+                              type="number"
+                              min={1}
+                              value={item.quantity}
+                              onChange={(e) =>
+                                updateExternalItem(item.tempId, {
+                                  quantity: parseInt(e.target.value) || 1,
+                                })
+                              }
+                              disabled={isLoading}
+                              className="w-16 h-7 text-center tabular-nums"
                             />
-                            <span>افغانی</span>
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 justify-end">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() =>
-                            updateExternalItem(item.tempId, {
-                              quantity: Math.max(1, item.quantity - 1),
-                            })
-                          }
-                          disabled={item.quantity <= 1 || isLoading}
-                          className="border-border text-foreground hover:bg-accent hover:text-accent-foreground"
-                        >
-                          <Minus className="h-3 w-3" />
-                        </Button>
-                        <span className="w-8 text-center font-mono font-bold">
-                          {item.quantity}
-                        </span>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() =>
-                            updateExternalItem(item.tempId, {
-                              quantity: item.quantity + 1,
-                            })
-                          }
-                          disabled={isLoading}
-                          className="border-border text-foreground hover:bg-accent hover:text-accent-foreground"
-                        >
-                          <Plus className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => removeExternalItem(item.tempId)}
-                          className="hover:bg-destructive/90"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="border-t border-border pt-4">
-                  <div className="flex justify-between items-center mb-4">
-                    <span className="font-semibold text-foreground">
-                      مبلغ کل:
-                    </span>
-                    <span className="text-xl font-bold text-primary">
-                      {getTotalAmount().toLocaleString()} افغانی
-                    </span>
-                  </div>
-
-                  <div className={`flex gap-3 ${isMobile ? "flex-col" : ""}`}>
-                    <Button
-                      onClick={handleSaveAndGeneratePDF}
-                      disabled={isLoading}
-                      className="bg-green-600 hover:bg-green-700 text-white shadow-md flex-1"
-                    >
-                      {isLoading ? (
-                        <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <FileText className="ml-2 h-4 w-4" />
-                      )}
-                      {isLoading ? "در حال پردازش..." : "ذخیره و ایجاد بل"}
-                    </Button>
-                    <Button
-                      onClick={handleReferToAdmin}
-                      disabled={isLoading}
-                      variant="outline"
-                      className="border-blue-600 text-blue-600 hover:bg-blue-50 hover:text-blue-700 flex-1"
-                    >
-                      {isLoading ? (
-                        <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <Send className="ml-2 h-4 w-4" />
-                      )}
-                      ارسال به مدیر
-                    </Button>
-                  </div>
-                </div>
-              </>
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              className="h-7 w-7"
+                              onClick={() =>
+                                updateExternalItem(item.tempId, {
+                                  quantity: item.quantity + 1,
+                                })
+                              }
+                              disabled={isLoading}
+                            >
+                              <Plus className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            min={0}
+                            value={item.customPrice}
+                            onChange={(e) =>
+                              updateExternalItem(item.tempId, {
+                                customPrice: parseFloat(e.target.value) || 0,
+                              })
+                            }
+                            disabled={isLoading}
+                            className="w-24 h-7 tabular-nums"
+                          />
+                        </TableCell>
+                        <TableCell className="font-semibold tabular-nums">
+                          {afn(item.customPrice * item.quantity)}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7"
+                              onClick={() => setExternalDialogOpen(true)}
+                              disabled={isLoading}
+                              title="ویرایش"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                              onClick={() => removeExternalItem(item.tempId)}
+                              disabled={isLoading}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                  <TableFooter className="bg-muted/40">
+                    <TableRow>
+                      <TableCell colSpan={5} className="font-medium">
+                        مجموع
+                      </TableCell>
+                      <TableCell className="text-center font-medium tabular-nums">
+                        {totals.qty}
+                      </TableCell>
+                      <TableCell />
+                      <TableCell className="text-base font-bold text-primary tabular-nums">
+                        {afn(totals.total)}
+                      </TableCell>
+                      <TableCell />
+                    </TableRow>
+                  </TableFooter>
+                </Table>
+              </div>
             )}
           </CardContent>
         </Card>
       </div>
 
+      {/* ── Sidebar: checkout ────────────────────────────────────────── */}
+      <div className="space-y-4 lg:sticky lg:top-6">
+        <Card className="shadow-sm">
+          <CardHeader className="border-b border-border py-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <User className="h-5 w-5 text-primary" />
+              مشتری و فاکتور
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 pt-4">
+            <CustomerSelector
+              onCustomerSelect={handleCustomerSelect}
+              onNewCustomer={handleNewCustomer}
+              disabled={isLoading}
+            />
+
+            {isNewCustomer && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <User className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <Input
+                    placeholder="نام مشتری *"
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    disabled={isLoading}
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <Input
+                    placeholder="شماره تماس"
+                    value={customerPhone}
+                    onChange={(e) => setCustomerPhone(e.target.value)}
+                    disabled={isLoading}
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <Input
+                    placeholder="آدرس"
+                    value={customerAddress}
+                    onChange={(e) => setCustomerAddress(e.target.value)}
+                    disabled={isLoading}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <HijriDatePicker
+                value={invoiceDate}
+                onChange={setInvoiceDate}
+                placeholder="تاریخ صدور"
+              />
+              <Input
+                placeholder="شماره فاکتور (اختیاری)"
+                value={invoiceNumber}
+                onChange={(e) => setInvoiceNumber(e.target.value)}
+                disabled={isLoading}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <MessageSquare className="h-4 w-4 text-muted-foreground shrink-0" />
+              <Input
+                placeholder="توضیحات (اختیاری)"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                disabled={isLoading}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm">
+          <CardContent className="pt-5 space-y-3">
+            <div className="flex items-center justify-between text-sm text-muted-foreground">
+              <span>اجناس انبار</span>
+              <span className="tabular-nums">{afn(totals.stockSubtotal)}</span>
+            </div>
+            {externalItems.length > 0 && (
+              <div className="flex items-center justify-between text-sm text-muted-foreground">
+                <span>پرزه‌های خارجی</span>
+                <span className="tabular-nums">{afn(totals.externalSubtotal)}</span>
+              </div>
+            )}
+            <div className="border-t border-border pt-3 flex items-center justify-between">
+              <span className="font-semibold">مبلغ کل</span>
+              <span className="text-xl font-bold text-primary tabular-nums">
+                {afn(totals.total)}
+              </span>
+            </div>
+
+            {error && (
+              <div className="text-destructive text-sm bg-destructive/10 p-3 rounded border border-destructive/40">
+                {error}
+              </div>
+            )}
+
+            <Button
+              onClick={handleSave}
+              disabled={isLoading || empty}
+              className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-4 w-4" />
+              )}
+              ذخیره و ایجاد بل
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ── External part dialog ─────────────────────────────────────── */}
       <Dialog open={externalDialogOpen} onOpenChange={setExternalDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-5xl max-h-[88vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <PackagePlus className="h-5 w-5 text-primary" />
-              افزودن پرزه از فروشگاه دیگر
+              پرزه‌های خارجی
+              {externalItems.length > 0 && (
+                <Badge className="bg-amber-500 hover:bg-amber-500 text-white">
+                  {externalItems.length} ردیف
+                </Badge>
+              )}
             </DialogTitle>
             <DialogDescription>
-              این پرزهها فقط در بل محاسبه میشوند و به موجودی انبار اضافه
-              نمیشوند.
+              هر ردیف یک قلم جدول است؛ در همان‌جا ویرایش کنید. این پرزه‌ها فقط
+              در بل محاسبه می‌شوند و به موجودی انبار افزوده نمی‌شوند.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-2">
-            <div className="sm:col-span-2 space-y-1">
-              <label className="text-sm font-medium">نام پرزه</label>
-              <Input
-                value={externalForm.itemName}
-                onChange={(e) =>
-                  setExternalForm((prev) => ({
-                    ...prev,
-                    itemName: e.target.value,
-                  }))
-                }
-                placeholder="نام پرزه"
-                disabled={isLoading}
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <SupplierSelectField
-                value={externalSupplier}
-                onChange={setExternalSupplier}
-                disabled={isLoading}
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium">تعداد</label>
-              <Input
-                type="number"
-                min="1"
-                value={externalForm.quantity}
-                onChange={(e) =>
-                  setExternalForm((prev) => ({
-                    ...prev,
-                    quantity: parseInt(e.target.value) || 1,
-                  }))
-                }
-                disabled={isLoading}
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium">قیمت واحد (افغانی)</label>
-              <Input
-                type="number"
-                min="0"
-                value={externalForm.unitPrice}
-                onChange={(e) =>
-                  setExternalForm((prev) => ({
-                    ...prev,
-                    unitPrice: e.target.value,
-                  }))
-                }
-                disabled={isLoading}
-              />
-            </div>
-            <div className="space-y-1 sm:col-span-2">
-              <label className="text-sm font-medium">
-                بهای خرید (فقط ذخیره، در بل نمایش داده نمیشود)
-              </label>
-              <Input
-                type="number"
-                min="0"
-                value={externalForm.itemCost}
-                onChange={(e) =>
-                  setExternalForm((prev) => ({
-                    ...prev,
-                    itemCost: e.target.value,
-                  }))
-                }
-                disabled={isLoading}
-              />
-            </div>
+          <div className="rounded-lg border border-border">
+            <Table>
+              <TableHeader className="bg-muted/60">
+                <TableRow>
+                  <TableHead className="w-8 text-center">#</TableHead>
+                  <TableHead>نام پرزه</TableHead>
+                  <TableHead className="w-44">تأمین‌کننده</TableHead>
+                  <TableHead className="text-center">تعداد</TableHead>
+                  <TableHead>قیمت واحد</TableHead>
+                  <TableHead>بهای خرید</TableHead>
+                  <TableHead>جمع</TableHead>
+                  <TableHead className="w-10"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {externalItems.length === 0 && (
+                  <TableRow>
+                    <TableCell
+                      colSpan={8}
+                      className="text-center text-muted-foreground py-6"
+                    >
+                      هنوز ردیفی ثبت نشده — از ردیف پایین اضافه کنید
+                    </TableCell>
+                  </TableRow>
+                )}
+
+                {externalItems.map((item, i) => (
+                  <TableRow
+                    key={item.tempId}
+                    className="bg-amber-50/40 dark:bg-amber-950/10"
+                  >
+                    <TableCell className="text-center text-muted-foreground">
+                      {i + 1}
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        value={item.itemName}
+                        onChange={(e) =>
+                          updateExternalItem(item.tempId, {
+                            itemName: e.target.value,
+                          })
+                        }
+                        disabled={isLoading}
+                        className="h-8 min-w-40"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <SupplierSelectField
+                        compact
+                        value={
+                          item.supplierName
+                            ? { id: item.supplierId ?? 0, name: item.supplierName }
+                            : null
+                        }
+                        onChange={(s) =>
+                          updateExternalItem(item.tempId, {
+                            supplierId: s?.id ?? null,
+                            supplierName: s?.name ?? null,
+                          })
+                        }
+                        disabled={isLoading}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={item.quantity}
+                        onChange={(e) =>
+                          updateExternalItem(item.tempId, {
+                            quantity: parseInt(e.target.value) || 1,
+                          })
+                        }
+                        disabled={isLoading}
+                        className="w-16 h-8 text-center tabular-nums"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={item.customPrice}
+                        onChange={(e) =>
+                          updateExternalItem(item.tempId, {
+                            customPrice: parseFloat(e.target.value) || 0,
+                          })
+                        }
+                        disabled={isLoading}
+                        className="w-24 h-8 tabular-nums"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={item.itemCost}
+                        onChange={(e) =>
+                          updateExternalItem(item.tempId, {
+                            itemCost: parseFloat(e.target.value) || 0,
+                          })
+                        }
+                        disabled={isLoading}
+                        className="w-24 h-8 tabular-nums"
+                      />
+                    </TableCell>
+                    <TableCell className="font-semibold tabular-nums">
+                      {afn(item.customPrice * item.quantity)}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => removeExternalItem(item.tempId)}
+                        disabled={isLoading}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+
+                {/* New-record row */}
+                <TableRow className="bg-primary/5 border-t-2 border-dashed border-primary/30">
+                  <TableCell className="text-center">
+                    <Plus className="h-4 w-4 text-primary mx-auto" />
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      value={externalForm.itemName}
+                      onChange={(e) =>
+                        setExternalForm((p) => ({
+                          ...p,
+                          itemName: e.target.value,
+                        }))
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleAddExternalFromForm();
+                        }
+                      }}
+                      placeholder="نام پرزه (Enter = افزودن)"
+                      disabled={isLoading}
+                      className="h-8 min-w-40"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <SupplierSelectField
+                      compact
+                      value={externalSupplier}
+                      onChange={setExternalSupplier}
+                      disabled={isLoading}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={externalForm.quantity}
+                      onChange={(e) =>
+                        setExternalForm((p) => ({
+                          ...p,
+                          quantity: parseInt(e.target.value) || 1,
+                        }))
+                      }
+                      disabled={isLoading}
+                      className="w-16 h-8 text-center tabular-nums"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={externalForm.unitPrice}
+                      onChange={(e) =>
+                        setExternalForm((p) => ({
+                          ...p,
+                          unitPrice: e.target.value,
+                        }))
+                      }
+                      disabled={isLoading}
+                      className="w-24 h-8 tabular-nums"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={externalForm.itemCost}
+                      onChange={(e) =>
+                        setExternalForm((p) => ({
+                          ...p,
+                          itemCost: e.target.value,
+                        }))
+                      }
+                      disabled={isLoading}
+                      className="w-24 h-8 tabular-nums"
+                    />
+                  </TableCell>
+                  <TableCell className="text-muted-foreground tabular-nums">
+                    {afn(
+                      (parseFloat(externalForm.unitPrice) || 0) *
+                        (externalForm.quantity || 0),
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={handleAddExternalFromForm}
+                      disabled={isLoading || !externalForm.itemName.trim()}
+                      title="افزودن"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+              <TableFooter className="bg-muted/40">
+                <TableRow>
+                  <TableCell colSpan={6} className="font-medium">
+                    جمع کل پرزه‌های خارجی
+                  </TableCell>
+                  <TableCell className="font-bold text-amber-600 tabular-nums">
+                    {afn(
+                      externalItems.reduce(
+                        (s, i) => s + i.customPrice * i.quantity,
+                        0,
+                      ),
+                    )}
+                  </TableCell>
+                  <TableCell />
+                </TableRow>
+              </TableFooter>
+            </Table>
           </div>
 
-          {externalItems.length > 0 && (
-            <div className="border border-border rounded-lg max-h-40 overflow-y-auto">
-              {externalItems.map((item) => (
-                <div
-                  key={item.tempId}
-                  className="flex items-center justify-between px-3 py-2 border-b border-border last:border-b-0 text-sm"
-                >
-                  <span className="font-medium">{item.itemName}</span>
-                  <span className="text-muted-foreground">
-                    {item.quantity} × {item.customPrice.toLocaleString()}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
+          <p className="text-xs text-muted-foreground">
+            نکته: «بهای خرید» فقط ذخیره می‌شود و در بل نمایش داده نمی‌شود.
+          </p>
 
-          <DialogFooter className="gap-2">
+          <DialogFooter>
             <Button
               type="button"
-              variant="outline"
               onClick={() => setExternalDialogOpen(false)}
+              className="gap-2"
             >
-              بستن
-            </Button>
-            <Button
-              type="button"
-              onClick={handleAddExternalFromForm}
-              disabled={isLoading}
-              className="gap-1"
-            >
-              <Plus className="h-4 w-4" />
-              افزودن به سبد
+              <CheckCircle2 className="h-4 w-4" />
+              بازگشت به سبد
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1013,274 +1241,4 @@ export function IssuePartsTable() {
   );
 }
 
-// Issue Records Table Component (keep existing)
-interface IssueRecord {
-  id: number;
-  saleIds?: number[];
-  invoiceNumber?: string;
-  customerName: string;
-  totalAmount: string;
-  issueDate: string;
-  itemCount: number;
-  status: "completed" | "pending" | "approved";
-  issuedBy: string;
-  partNumber?: string;
-  partName?: string;
-  partNames?: string[];
-  quantity?: number;
-}
-
-export function IssueRecordsTable() {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [records, setRecords] = useState<IssueRecord[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener("resize", checkMobile);
-    return () => window.removeEventListener("resize", checkMobile);
-  }, []);
-
-  useEffect(() => {
-    fetchRecords();
-  }, []);
-
-  const fetchRecords = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const response = await fetch("/api/parts/records");
-      const result = await response.json();
-
-      if (result.success) {
-        setRecords(result.data);
-      } else {
-        setError("خطا در بارگذاری سوابق");
-      }
-    } catch (error) {
-      console.error("Error fetching records:", error);
-      setError("خطا در اتصال به سرور");
-
-      // Fallback to empty array if API fails
-      setRecords([]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const filteredRecords = records.filter((record) =>
-    record.customerName.toLowerCase().includes(searchTerm.toLowerCase()),
-  );
-
-  const getStatusVariant = (status: string) => {
-    switch (status) {
-      case "completed":
-        return "default";
-      case "approved":
-        return "secondary";
-      case "pending":
-        return "outline";
-      default:
-        return "outline";
-    }
-  };
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case "completed":
-        return "تکمیل شده";
-      case "approved":
-        return "تأیید شده";
-      case "pending":
-        return "در انتظار";
-      default:
-        return status;
-    }
-  };
-
-  const handleDownloadPDF = async (record: IssueRecord) => {
-    // یک فاکتور با همهٔ قلم‌های همان صدور
-    const saleIds = record.saleIds?.length ? record.saleIds : [record.id];
-    try {
-      const response = await fetch(
-        `/api/issue-parts/${saleIds[0]}/pdf?saleIds=${saleIds.join(",")}`,
-      );
-      if (!response.ok) throw new Error("Failed to generate PDF");
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.style.display = "none";
-      a.href = url;
-      a.download = `${record.invoiceNumber || `invoice-${record.id}`}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (error) {
-      console.error("Error downloading PDF:", error);
-      alert("خطا در تولید فایل PDF");
-    }
-  };
-
-  const handleViewDetails = (recordId: number) => {
-    // Implement view details logic
-    console.log("View details for record:", recordId);
-  };
-
-  return (
-    <div className="space-y-6">
-      {/* View Toggle */}
-      <div className="flex items-center justify-end">
-        <div className="flex items-center gap-2 bg-muted/50 rounded-lg p-1">
-          <Button
-            variant={isMobile ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setIsMobile(true)}
-            className={`${isMobile ? "bg-primary text-primary-foreground" : "text-muted-foreground"} px-3`}
-          >
-            <Smartphone className="h-4 w-4" />
-          </Button>
-          <Button
-            variant={!isMobile ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setIsMobile(false)}
-            className={`${!isMobile ? "bg-primary text-primary-foreground" : "text-muted-foreground"} px-3`}
-          >
-            <Monitor className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-
-      <Card className="border-mechanical shadow-lg">
-        <CardHeader className="bg-mechanical/50 border-b border-border">
-          <CardTitle className="text-foreground flex flex-col sm:flex-row sm:items-center gap-4">
-            <span>همه سوابق صدور</span>
-            <Input
-              placeholder="جستجو بر اساس نام مشتری..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="max-w-sm border-border focus:border-primary focus:ring-primary/20"
-            />
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-4">
-          {error && (
-            <div className="text-destructive text-sm bg-destructive/10 p-3 rounded border border-destructive/50 mb-4">
-              {error}
-            </div>
-          )}
-
-          {isLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader
-                title="در حال بارگذاری سوابق..."
-                subtitle="لطفاً منتظر بمانید"
-                size="sm"
-              />
-            </div>
-          ) : filteredRecords.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>هیچ سابقه صدری یافت نشد</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {filteredRecords.map((record) => (
-                <div
-                  key={record.id}
-                  className={`flex ${isMobile ? "flex-col" : "items-center justify-between"} p-4 border border-border rounded-lg hover:bg-accent/30 transition-colors`}
-                >
-                  <div className="flex items-start gap-4 mb-3 sm:mb-0">
-                    <div className="p-2 rounded-lg bg-primary/10">
-                      <FileText className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-1">
-                        <div className="flex items-center gap-2">
-                          <User className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-semibold text-foreground">
-                            {record.customerName}
-                          </span>
-                          {record.invoiceNumber && (
-                            <span className="font-mono text-[11px] text-primary bg-primary/10 px-1.5 py-0.5 rounded">
-                              {record.invoiceNumber}
-                            </span>
-                          )}
-                        </div>
-                        <Badge
-                          variant={getStatusVariant(record.status)}
-                          className={
-                            record.status === "completed" ? "bg-primary" : ""
-                          }
-                        >
-                          {getStatusText(record.status)}
-                        </Badge>
-                      </div>
-                      <div
-                        className={`flex ${isMobile ? "flex-col gap-1" : "items-center gap-4"} text-sm text-muted-foreground`}
-                      >
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          {new Date(record.issueDate).toLocaleDateString(
-                            "fa-IR",
-                          )}
-                        </div>
-                        {record.partName && (
-                          <span
-                            className="min-w-0 max-w-[14rem] truncate"
-                            title={record.partName}
-                          >
-                            {record.partNames?.[0] || record.partName}
-                          </span>
-                        )}
-                        {record.itemCount > 1 && (
-                          <Badge variant="outline" className="text-[10px]">
-                            {record.itemCount} قلم
-                          </Badge>
-                        )}
-                        {record.quantity && (
-                          <span>تعداد: {record.quantity}</span>
-                        )}
-                        <span className="font-medium text-foreground">
-                          {parseFloat(record.totalAmount).toLocaleString()}{" "}
-                          افغانی
-                        </span>
-                        <span>صادر کننده: {record.issuedBy}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div
-                    className={`flex gap-2 ${isMobile ? "justify-end" : ""}`}
-                  >
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleViewDetails(record.id)}
-                      className="border-border text-foreground hover:bg-accent hover:text-accent-foreground"
-                    >
-                      <Eye className="ml-2 h-4 w-4" />
-                      مشاهده جزئیات
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDownloadPDF(record)}
-                      className="border-primary text-primary hover:bg-primary hover:text-primary-foreground"
-                    >
-                      <Download className="ml-2 h-4 w-4" />
-                      دریافت PDF
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
+export default IssuePartsTable;

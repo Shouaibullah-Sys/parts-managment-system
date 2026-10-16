@@ -10,17 +10,20 @@ export async function GET() {
     const today = startOfToday();
     const monthStart = startOfMonth(new Date());
 
+    // فروش خالص: پرزهٔ خارجی فقط سود مغازه است (فروش − بهای خرید قابل پرداخت به فروشگاه)
+    const netSale = sql`(${sales.totalAmount} - CASE WHEN ${sales.partId} IS NULL THEN COALESCE(${sales.itemCost}, ${sales.unitCost}, 0) * ${sales.quantity} ELSE 0 END)`;
+
     // Get total sales, paid, outstanding
     const salesData = await db
       .select({
-        totalSales: sql<number>`COALESCE(SUM(${sales.totalAmount}), 0)`,
+        totalSales: sql<number>`COALESCE(SUM(${netSale}), 0)`,
         totalPaid: sql<number>`COALESCE(SUM(${sales.paidAmount}), 0)`,
         totalOutstanding: sql<number>`COALESCE(SUM(${sales.outstanding}), 0)`,
         todaySales: sql<number>`
-          COALESCE(SUM(CASE WHEN ${sales.saleDate} >= ${today} THEN ${sales.totalAmount} ELSE 0 END), 0)
+          COALESCE(SUM(CASE WHEN ${sales.saleDate} >= ${today} THEN ${netSale} ELSE 0 END), 0)
         `,
         monthlySales: sql<number>`
-          COALESCE(SUM(CASE WHEN ${sales.saleDate} >= ${monthStart} THEN ${sales.totalAmount} ELSE 0 END), 0)
+          COALESCE(SUM(CASE WHEN ${sales.saleDate} >= ${monthStart} THEN ${netSale} ELSE 0 END), 0)
         `,
       })
       .from(sales)

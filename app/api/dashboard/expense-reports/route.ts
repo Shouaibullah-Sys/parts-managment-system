@@ -243,9 +243,10 @@ export async function GET(req: Request) {
         ),
 
       // Profit analysis - get revenue from sales (فروش‌های مرتجع خارج‌اند)
+      // درآمد خالص: پرزهٔ خارجی فقط سود مغازه است (بهای خرید به فروشگاه پرداخت می‌شود)
       db
         .select({
-          totalRevenue: sql<number>`coalesce(sum(${sales.totalAmount}), 0)`,
+          totalRevenue: sql<number>`coalesce(sum(${sales.totalAmount} - CASE WHEN ${sales.partId} IS NULL THEN COALESCE(${sales.itemCost}, ${sales.unitCost}, 0) * ${sales.quantity} ELSE 0 END), 0)`,
           totalPaid: sql<number>`coalesce(sum(${sales.paidAmount}), 0)`,
         })
         .from(sales)

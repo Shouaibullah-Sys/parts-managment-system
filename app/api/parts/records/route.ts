@@ -85,23 +85,35 @@ export async function GET(request: NextRequest) {
       .limit(limit)
       .offset(offset);
 
-    // نام همهٔ قلم‌های هر صدور (برای نمایش در ردیف/جزئیات و جستجوی سمت کلاینت)
+    // همهٔ قلم‌های هر صدور (یک ردیف = یک قلم) — برای جدول جزئیات و جدا کردن پرزهٔ خارجی
     const issueIds = groups.map((g) => g.issueId);
-    const nameRows = issueIds.length
+    const lineRows = issueIds.length
       ? await db
           .select({
             issueId: sales.issueId,
-            partName: sql<string | null>`string_agg(
-              coalesce(${parts.name}, ${sales.itemName}, 'نامشخص'),
-              '، ' ORDER BY ${sales.id})`,
-            partNumber: sql<string | null>`string_agg(${parts.partNumber}, '، ' ORDER BY ${sales.id})`,
+            saleId: sales.id,
+            partId: sales.partId,
+            partName: parts.name,
+            partNumber: parts.partNumber,
+            itemName: sales.itemName,
+            supplierName: sales.supplierName,
+            quantity: sales.quantity,
+            totalAmount: sales.totalAmount,
+            unitCost: sales.unitCost,
+            itemCost: sales.itemCost,
           })
           .from(sales)
           .leftJoin(parts, eq(sales.partId, parts.id))
           .where(inArray(sales.issueId, issueIds))
-          .groupBy(sales.issueId)
+          .orderBy(sales.id)
       : [];
-    const namesByIssue = new Map(nameRows.map((r) => [r.issueId, r]));
+
+    const linesByIssue = new Map<string, typeof lineRows>();
+    for (const row of lineRows) {
+      const list = linesByIssue.get(row.issueId);
+      if (list) list.push(row);
+      else linesByIssue.set(row.issueId, [row]);
+    }
 
     // تعداد کل صدورها (صفحه‌بندی روی گروه‌هاست، نه ردیف‌ها)
     const countRows = await db
@@ -116,8 +128,30 @@ export async function GET(request: NextRequest) {
 
     const formattedRecords = groups.map((record) => {
       const outstanding = Number(record.outstanding || 0);
-      const names = namesByIssue.get(record.issueId);
-      const partName = names?.partName || "نامشخص";
+      const lines = linesByIssue.get(record.issueId) ?? [];
+      const items = lines.map((l) => {
+        const qty = Number(l.quantity || 0);
+        const total = Number(l.totalAmount || 0);
+        const isExternal = l.partId == null;
+        const costRaw = isExternal ? l.itemCost : l.unitCost;
+        return {
+          id: l.saleId,
+          name: l.partName || l.itemName || "نامشخص",
+          partNumber: isExternal ? "" : l.partNumber || "",
+          isExternal,
+          supplierName: l.supplierName || null,
+          quantity: qty,
+          unitPrice: qty > 0 ? total / qty : total,
+          total,
+          cost: costRaw != null ? Number(costRaw) : null,
+        };
+      });
+      const partNames = items.map((i) => i.name);
+      const partName = partNames.join("، ") || "نامشخص";
+      const partNumber = items
+        .map((i) => i.partNumber)
+        .filter(Boolean)
+        .join("، ");
       return {
         id: record.saleId,
         issueId: record.issueId,
@@ -137,9 +171,10 @@ export async function GET(request: NextRequest) {
           : new Date().toISOString(),
         quantity: Number(record.quantity || 0),
         issuedBy: record.issuedBy || "نامشخص",
-        partNumber: names?.partNumber || "",
+        partNumber,
         partName,
-        partNames: partName.split("، "),
+        partNames,
+        items,
         itemCount: Number(record.itemCount || 1),
         status: outstanding <= 0 ? ("completed" as const) : ("pending" as const),
       };

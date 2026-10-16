@@ -4,7 +4,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, Loader2, Pencil, Plus, Store } from "lucide-react";
+import { Check, Loader2, Pencil, Plus, Store, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SupplierFormDialog, type Supplier } from "./supplier-form-dialog";
@@ -17,12 +17,15 @@ interface SupplierSelectFieldProps {
   value: Supplier | null;
   onChange: (supplier: Supplier | null) => void;
   disabled?: boolean;
+  /** نسخهٔ جمع‌وجور داخل جدول: بدون برچسب و بدون لینک مدیریت */
+  compact?: boolean;
 }
 
 export function SupplierSelectField({
   value,
   onChange,
   disabled,
+  compact = false,
 }: SupplierSelectFieldProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Supplier[]>([]);
@@ -118,14 +121,24 @@ export function SupplierSelectField({
   };
 
   return (
-    <div className="space-y-1" ref={containerRef}>
-      <Label className="text-sm">نام فروشگاه (تأمین‌کننده) — اختیاری</Label>
+    <div className={compact ? "relative" : "space-y-1"} ref={containerRef}>
+      {!compact && (
+        <Label className="text-sm">نام فروشگاه (تأمین‌کننده) — اختیاری</Label>
+      )}
 
       {/* نام انتخاب‌شده */}
       {value && (
-        <div className="flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/5 px-3 py-2 text-sm">
-          <Store className="h-4 w-4 text-primary shrink-0" />
-          <span className="font-medium flex-1">{value.name}</span>
+        <div
+          className={`flex items-center gap-2 border border-primary/40 bg-primary/5 ${
+            compact
+              ? "h-8 rounded-md px-2 text-xs text-primary"
+              : "rounded-lg px-3 py-2 text-sm"
+          }`}
+        >
+          <Store
+            className={`shrink-0 text-primary ${compact ? "h-3.5 w-3.5" : "h-4 w-4"}`}
+          />
+          <span className="font-medium flex-1 truncate">{value.name}</span>
           {value.phone && (
             <span className="text-muted-foreground text-xs" dir="ltr">
               {value.phone}
@@ -136,13 +149,15 @@ export function SupplierSelectField({
             onClick={() => onChange(null)}
             className="text-muted-foreground hover:text-destructive text-xs"
             disabled={disabled}
+            title="حذف انتخاب"
           >
-            حذف انتخاب
+            {compact ? <X className="h-3.5 w-3.5" /> : "حذف انتخاب"}
           </button>
         </div>
       )}
 
-      <div className="relative">
+      {(!compact || !value) && (
+        <div className="relative">
         <Input
           value={query}
           onChange={(e) => {
@@ -198,7 +213,8 @@ export function SupplierSelectField({
             )}
           </div>
         )}
-      </div>
+        </div>
+      )}
 
       <SupplierFormDialog
         open={createOpen}
@@ -207,17 +223,19 @@ export function SupplierSelectField({
         onCreated={handleCreated}
       />
 
-      <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={() => setManageOpen(true)}
-          disabled={disabled}
-          className="text-xs text-muted-foreground hover:text-primary inline-flex items-center gap-1"
-        >
-          <Pencil className="h-3 w-3" />
-          مدیریت فروشگاه‌ها
-        </button>
-      </div>
+      {!compact && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => setManageOpen(true)}
+            disabled={disabled}
+            className="text-xs text-muted-foreground hover:text-primary inline-flex items-center gap-1"
+          >
+            <Pencil className="h-3 w-3" />
+            مدیریت فروشگاه‌ها
+          </button>
+        </div>
+      )}
 
       <SupplierManageDialog
         open={manageOpen}

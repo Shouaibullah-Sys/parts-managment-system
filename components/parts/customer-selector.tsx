@@ -33,7 +33,11 @@ export function CustomerSelector({
   );
   const [isSearching, setIsSearching] = useState(false);
   const [showResults, setShowResults] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const searchRef = useRef<HTMLDivElement>(null);
+  // بعد از انتخاب مشتری، مقدار ورودی به نام مشتری تغییر می‌کند؛ این فلگ
+  // جلوی اجرای دوباره‌ی جستجو (و باز شدن مجدد منو) را می‌گیرد.
+  const skipNextSearch = useRef(false);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -53,9 +57,15 @@ export function CustomerSelector({
   // Search customers
   useEffect(() => {
     const searchCustomers = async () => {
+      if (skipNextSearch.current) {
+        skipNextSearch.current = false;
+        return;
+      }
+
       if (searchQuery.trim().length < 2) {
         setSearchResults([]);
         setShowResults(false);
+        setHighlightedIndex(-1);
         return;
       }
 
@@ -68,6 +78,7 @@ export function CustomerSelector({
 
         if (result.success) {
           setSearchResults(result.data);
+          setHighlightedIndex(result.data.length > 0 ? 0 : -1);
           setShowResults(true);
         }
       } catch (error) {
@@ -82,10 +93,42 @@ export function CustomerSelector({
   }, [searchQuery]);
 
   const handleSelectCustomer = (customer: Customer) => {
+    skipNextSearch.current = true;
     setSelectedCustomer(customer);
     setSearchQuery(customer.name);
     setShowResults(false);
+    setSearchResults([]);
+    setHighlightedIndex(-1);
     onCustomerSelect(customer);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Escape") {
+      setShowResults(false);
+      return;
+    }
+
+    if (!showResults || searchResults.length === 0) {
+      if (e.key === "ArrowDown" && searchResults.length > 0) {
+        e.preventDefault();
+        setShowResults(true);
+      }
+      return;
+    }
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightedIndex((i) => (i + 1) % searchResults.length);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightedIndex(
+        (i) => (i - 1 + searchResults.length) % searchResults.length
+      );
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const idx = highlightedIndex >= 0 ? highlightedIndex : 0;
+      handleSelectCustomer(searchResults[idx]);
+    }
   };
 
   const handleClearSelection = () => {
@@ -109,10 +152,14 @@ export function CustomerSelector({
             <Input
               placeholder="جستجو مشتری (نام، شماره تماس، یا شناسه)..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setHighlightedIndex(0);
+              }}
               onFocus={() => {
                 if (searchResults.length > 0) setShowResults(true);
               }}
+              onKeyDown={handleKeyDown}
               disabled={disabled}
               className="pr-10 border-border focus:border-primary focus:ring-primary/20"
             />
@@ -133,12 +180,15 @@ export function CustomerSelector({
           {/* Search Results Dropdown */}
           {showResults && searchResults.length > 0 && (
             <div className="absolute z-50 w-full mt-1 bg-background border border-border rounded-lg shadow-lg max-h-80 overflow-y-auto">
-              {searchResults.map((customer) => (
+              {searchResults.map((customer, index) => (
                 <button
                   key={customer.id}
                   type="button"
                   onClick={() => handleSelectCustomer(customer)}
-                  className="w-full text-right p-3 hover:bg-accent transition-colors border-b border-border last:border-b-0"
+                  onMouseEnter={() => setHighlightedIndex(index)}
+                  className={`w-full text-right p-3 transition-colors border-b border-border last:border-b-0 ${
+                    index === highlightedIndex ? "bg-accent" : "hover:bg-accent"
+                  }`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1">

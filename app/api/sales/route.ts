@@ -205,7 +205,11 @@ async function fetchSalesData(params: {
       id: sales.id,
       customerName: customers.name,
       normalizedName: customers.normalizedName,
-      totalAmount: sales.totalAmount,
+      // قابل وصول خالص: پرزهٔ خارجی فقط سود مغازه (فروش − بهای خرید) است
+      totalAmount: sql<string>`${sales.totalAmount} - CASE WHEN ${sales.partId} IS NULL THEN COALESCE(${sales.itemCost}, ${sales.unitCost}, 0) * ${sales.quantity} ELSE 0 END`,
+      grossAmount: sales.totalAmount,
+      externalCost: sql<string>`CASE WHEN ${sales.partId} IS NULL THEN COALESCE(${sales.itemCost}, ${sales.unitCost}, 0) * ${sales.quantity} ELSE 0 END`,
+      isExternal: sql<boolean>`(${sales.partId} IS NULL)`,
       paidAmount: sales.paidAmount,
       outstanding: sales.outstanding,
       isFullyPaid: sales.isFullyPaid,
@@ -238,6 +242,9 @@ async function fetchSalesData(params: {
       customers.name,
       customers.normalizedName,
       sales.totalAmount,
+      sales.itemCost,
+      sales.unitCost,
+      sales.partId,
       sales.paidAmount,
       sales.outstanding,
       sales.isFullyPaid,
@@ -270,9 +277,13 @@ async function fetchSalesData(params: {
   // فروش‌های مرتجع هرگز جمع‌های گزارش/کارت‌ها را شامل نمی‌شوند
   const summaryQuery = db
     .select({
-      totalSales: sql<string>`COALESCE(SUM(${sales.totalAmount}), 0)`,
+      // مجموع فروش ناخالص (ارزش فاکتور)
+      grossSales: sql<string>`COALESCE(SUM(${sales.totalAmount}), 0)`,
       totalPaid: sql<string>`COALESCE(SUM(${sales.paidAmount}), 0)`,
       totalOutstanding: sql<string>`COALESCE(SUM(${sales.outstanding}), 0)`,
+      // پرزهٔ خارجی (part_id IS NULL) — فروش و بهای خرید (قابل پرداخت به فروشگاه)
+      externalSale: sql<string>`COALESCE(SUM(CASE WHEN ${sales.partId} IS NULL THEN ${sales.totalAmount} ELSE 0 END), 0)`,
+      externalPayable: sql<string>`COALESCE(SUM(CASE WHEN ${sales.partId} IS NULL THEN COALESCE(${sales.itemCost}, ${sales.unitCost}, 0) * ${sales.quantity} ELSE 0 END), 0)`,
       count: count(),
     })
     .from(sales)
@@ -320,9 +331,18 @@ async function fetchSalesData(params: {
       totalPages,
     },
     summary: {
-      totalSales: Number(summaryResult[0]?.totalSales || 0),
+      // خالص = مجموع فروش ناخالص − بهای خرید پرزه‌های خارجی (قابل پرداخت به فروشگاه)
+      grossSales: Number(summaryResult[0]?.grossSales || 0),
+      totalSales:
+        Number(summaryResult[0]?.grossSales || 0) -
+        Number(summaryResult[0]?.externalPayable || 0),
       totalPaid: Number(summaryResult[0]?.totalPaid || 0),
       totalOutstanding: Number(summaryResult[0]?.totalOutstanding || 0),
+      externalSale: Number(summaryResult[0]?.externalSale || 0),
+      externalPayable: Number(summaryResult[0]?.externalPayable || 0),
+      netSales:
+        Number(summaryResult[0]?.grossSales || 0) -
+        Number(summaryResult[0]?.externalPayable || 0),
       count: summaryResult[0]?.count || 0,
       totalRefunds: Number(refundsResult[0]?.totalRefunds || 0),
       refundCount: refundsResult[0]?.refundCount || 0,
