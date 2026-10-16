@@ -1,0 +1,13 @@
+# Runs the nightly DB backup at 02:30. See diplomasi-backup.service.
+# Persistent=true also runs a missed backup after the machine was off.
+
+[Unit]
+Description=Run Diplomasi database backup daily
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+Persistent=true
+RandomizedDelaySec=5m
+
+[Install]
+WantedBy=timers.target

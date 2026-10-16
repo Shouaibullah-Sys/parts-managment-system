@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Public-site uptime probe on the shop Mac (every 5 minutes).
+  Replace SHOPUSER and the repo path, then:
+    cp com.diplomasi.uptime.plist ~/Library/LaunchAgents/
+    launchctl load -w ~/Library/LaunchAgents/com.diplomasi.uptime.plist
+  Logs: /tmp/diplomasi-uptime.{out,err}.log
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.diplomasi.uptime</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-lc</string>
+    <string>/Users/SHOPUSER/parts-managment-system/scripts/uptime-check.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/SHOPUSER/parts-managment-system</string>
+
+  <key>StartInterval</key>
+  <integer>300</integer>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/diplomasi-uptime.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/diplomasi-uptime.err.log</string>
+</dict>
+</plist>

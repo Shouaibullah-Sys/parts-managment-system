@@ -1,0 +1,25 @@
+# systemd unit for the Cloudflare Tunnel (Linux hosts / dev server).
+# Install:
+#   sudo cp cloudflared-tunnel.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now cloudflared-tunnel
+# Logs: journalctl -u cloudflared-tunnel -f
+#
+# Assumes credentials/tunnel config at /etc/cloudflared/config.yml (copy your
+# config.yml there and point credentials-file at the JSON you downloaded).
+
+[Unit]
+Description=Cloudflare Tunnel for Diplomasi parts system
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cloudflared
+ExecStart=/usr/local/bin/cloudflared --no-autoupdate --config /etc/cloudflared/config.yml tunnel run diplomasi
+Restart=always
+RestartSec=5
+LimitNOFILE=100000
+
+[Install]
+WantedBy=multi-user.target

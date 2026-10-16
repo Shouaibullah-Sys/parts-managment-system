@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Keeps the shop app running on the Mac (starts at login, restarts on exit).
+  Replace SHOPUSER and the repo path, then:
+    cp com.diplomasi.app.plist ~/Library/LaunchAgents/
+    launchctl load -w ~/Library/LaunchAgents/com.diplomasi.app.plist
+  Logs: /tmp/diplomasi-app.{out,err}.log
+  (The DB is Postgres.app; the tunnel is com.diplomasi.cloudflared; backups
+   are com.diplomasi.backup — see the other folders.)
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.diplomasi.app</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-lc</string>
+    <string>/Users/SHOPUSER/parts-managment-system/deploy/macbook/start-app.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/SHOPUSER/parts-managment-system</string>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/diplomasi-app.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/diplomasi-app.err.log</string>
+</dict>
+</plist>

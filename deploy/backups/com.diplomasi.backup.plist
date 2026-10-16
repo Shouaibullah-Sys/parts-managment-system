@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Nightly DB backup on the shop Mac (runs 02:30, local time).
+  Replace SHOPUSER and the repo path, then:
+    cp com.diplomasi.backup.plist ~/Library/LaunchAgents/
+    launchctl load -w ~/Library/LaunchAgents/com.diplomasi.backup.plist
+  Logs: /tmp/diplomasi-backup.{out,err}.log
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.diplomasi.backup</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-lc</string>
+    <string>/Users/SHOPUSER/parts-managment-system/scripts/backup-db.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/SHOPUSER/parts-managment-system</string>
+
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>2</integer>
+    <key>Minute</key>
+    <integer>30</integer>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/diplomasi-backup.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/diplomasi-backup.err.log</string>
+</dict>
+</plist>

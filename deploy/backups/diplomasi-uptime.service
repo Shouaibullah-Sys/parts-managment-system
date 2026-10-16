@@ -1,0 +1,13 @@
+# systemd service for the public-site uptime probe (Linux host).
+# Install:
+#   sudo cp diplomasi-uptime.{service,timer} /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now diplomasi-uptime.timer
+
+[Unit]
+Description=Diplomasi public-site uptime probe
+
+[Service]
+Type=oneshot
+User=diplomasi
+WorkingDirectory=/opt/parts-managment-system
+ExecStart=/opt/parts-managment-system/scripts/uptime-check.sh

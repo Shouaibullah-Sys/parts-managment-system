@@ -1,0 +1,29 @@
+# Cloudflare Tunnel config for the Diplomasi parts system.
+#
+# Copy to ~/.cloudflared/config.yml on the machine that runs the app
+# (the shop server / MacBook). Replace the credentials-file path with the
+# <tunnel-id>.json that `cloudflared tunnel create` writes for you.
+#
+# DNS for these hostnames is created automatically by:
+#   cloudflared tunnel route dns diplomasi diplmasiltd.net
+#   cloudflared tunnel route dns diplomasi www.diplmasiltd.net
+#
+# The app must be listening on the service below (localhost:3000 by default).
+
+tunnel: diplomasi
+credentials-file: /Users/SHOPUSER/.cloudflared/REPLACE-WITH-TUNNEL-ID.json
+
+ingress:
+  # Public host = READ-ONLY view (enforced by the app's middleware, which
+  # treats any host in NEXT_PUBLIC_REMOTE_HOSTS as view-only).
+  - hostname: diplmasiltd.net
+    service: http://localhost:3000
+  - hostname: www.diplmasiltd.net
+    service: http://localhost:3000
+
+  # Optional: expose a separate read-only reports hostname while testing.
+  # - hostname: report.diplmasiltd.net
+  #   service: http://localhost:3000
+
+  # Everything else -> 404
+  - service: http_status:404

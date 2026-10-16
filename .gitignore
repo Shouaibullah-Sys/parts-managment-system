@@ -46,5 +46,9 @@ next-env.d.ts
 # AI agent brief (contains credentials — never commit)
 AI_AGENT_BRIEF.md
 
-# Deploy artifacts (large binaries + seed data with real user hashes)
-/deploy/
+# Deploy kit is tracked so the shop Mac can get it via git clone.
+# Never commit the DB seed (contains real user password hashes) or archives.
+/deploy/macbook/seed.sql.gz
+/deploy/**/*.zip
+/deploy/**/*.tar.gz
+deploy/**/.env

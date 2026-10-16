@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  LaunchAgent for the Cloudflare Tunnel on the shop Mac.
+  1. Replace SHOPUSER with the macOS username.
+  2. Adjust the cloudflared path if installed elsewhere (e.g. /opt/homebrew/bin).
+  3. Install:
+       cp com.diplomasi.cloudflared.plist ~/Library/LaunchAgents/
+       launchctl load -w ~/Library/LaunchAgents/com.diplomasi.cloudflared.plist
+  Runs at login and is restarted if it exits.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.diplomasi.cloudflared</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/cloudflared</string>
+    <string>tunnel</string>
+    <string>--config</string>
+    <string>/Users/SHOPUSER/.cloudflared/config.yml</string>
+    <string>run</string>
+    <string>diplomasi</string>
+  </array>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/cloudflared.out.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/tmp/cloudflared.err.log</string>
+</dict>
+</plist>

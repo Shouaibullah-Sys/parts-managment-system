@@ -1,0 +1,14 @@
+# systemd timer for the nightly DB backup (Linux host).
+# Install:
+#   sudo cp diplomasi-backup.{service,timer} /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now diplomasi-backup.timer
+# Adjust User/WorkingDirectory/ExecStart to match the install path.
+
+[Unit]
+Description=Diplomasi nightly database backup
+
+[Service]
+Type=oneshot
+User=diplomasi
+WorkingDirectory=/opt/parts-managment-system
+ExecStart=/opt/parts-managment-system/scripts/backup-db.sh

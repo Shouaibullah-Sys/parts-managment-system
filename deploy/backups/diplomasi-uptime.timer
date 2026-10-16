@@ -1,0 +1,12 @@
+# Runs the uptime probe every 5 minutes. See diplomasi-uptime.service.
+
+[Unit]
+Description=Run Diplomasi uptime probe every 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
