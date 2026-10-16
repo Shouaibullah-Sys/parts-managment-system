@@ -30,11 +30,16 @@ What runs on the shop Mac:
 
 ## 3. Get the app and build it
 ```bash
-git clone <this repo> ~/parts-managment-system
+git clone https://github.com/Shouaibullah-Sys/parts-managment-system.git ~/parts-managment-system
 cd ~/parts-managment-system
-npm install
+npm install --no-audit --no-fund
 npm run build          # also assembles .next/standalone (postbuild)
 ```
+> The repo is **private**. If `git clone` asks for credentials, use a GitHub
+> **fine-grained personal access token** (read-only, this repo) as the password,
+> or clone over SSH (`git@github.com:...`) with an added deploy key. The whole
+> `deploy/` kit now ships in the repo; only `deploy/macbook/seed.sql.gz` is
+> delivered separately (step 4).
 
 ## 4. Create the database and import the data
 ```bash
