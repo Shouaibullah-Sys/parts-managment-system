@@ -48,7 +48,6 @@ export function EditPartForm({ partId }: EditPartFormProps) {
     defaultValues: {
       partNumber: "",
       name: "",
-      section: "E",
       minStock: 0,
       currentStock: 0,
       costPrice: "",
@@ -63,7 +62,6 @@ export function EditPartForm({ partId }: EditPartFormProps) {
       form.reset({
         partNumber: part.partNumber,
         name: part.name,
-        section: part.section,
         minStock: part.minStock,
         currentStock: part.currentStock || 0,
         costPrice: part.costPrice || "",
@@ -182,26 +180,6 @@ export function EditPartForm({ partId }: EditPartFormProps) {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <FormField
-                  control={form.control}
-                  name="section"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>بخش *</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="E, D, F, G, OLD, یا سفارشی"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        بخش دسته‌بندی برای قطعه (هر مقدار متنی مجاز است)
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
                 <FormField
                   control={form.control}
                   name="minStock"

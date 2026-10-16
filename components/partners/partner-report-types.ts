@@ -41,6 +41,7 @@ export interface PartnerTrendPoint {
 
 export interface PartnerPartRow {
   partnerId: number | null;
+  partnerName?: string | null;
   partId: number | null;
   partName: string;
   partNumber: string;
@@ -51,6 +52,7 @@ export interface PartnerPartRow {
 
 export interface PartnerCustomerRow {
   partnerId: number | null;
+  partnerName?: string | null;
   customerId: number | null;
   customerName: string | null;
   salesCount: number;
@@ -64,5 +66,7 @@ export interface PartnerReportData {
   trend: PartnerTrendPoint[];
   partsByPartner: Record<string, PartnerPartRow[]>;
   customersByPartner: Record<string, PartnerCustomerRow[]>;
+  parts: PartnerPartRow[];
+  customers: PartnerCustomerRow[];
   granularity: "day" | "month";
 }

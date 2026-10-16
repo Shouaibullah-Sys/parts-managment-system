@@ -2,7 +2,6 @@ import { pgTable, text, timestamp, foreignKey, unique, boolean, serial, varchar,
 import { sql } from "drizzle-orm"
 
 export const role = pgEnum("role", ['staff', 'admin'])
-export const section = pgEnum("section", ['E', 'D', 'F', 'G', 'OLD'])
 
 
 export const verification = pgTable("verification", {
@@ -112,7 +111,6 @@ export const parts = pgTable("parts", {
 	id: serial().primaryKey().notNull(),
 	partNumber: varchar("part_number", { length: 100 }).notNull(),
 	name: varchar({ length: 255 }).notNull(),
-	section: section().default('E'),
 	minStock: integer("min_stock").default(0).notNull(),
 	costPrice: numeric("cost_price", { precision: 12, scale:  2 }),
 	salePrice: numeric("sale_price", { precision: 12, scale:  2 }),

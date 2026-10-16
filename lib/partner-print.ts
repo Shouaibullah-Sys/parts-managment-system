@@ -46,16 +46,14 @@ export function printPartnerReport(
     from: string;
     to: string;
     partnerName?: string;
-    section?: string;
   },
 ) {
-  const { rows, totals, from, to, partnerName, section } = opts;
+  const { rows, totals, from, to, partnerName } = opts;
   const now = new Date();
 
   const chips = [
     `بازه: <b>${hijri(from)} — ${hijri(to)}</b>`,
     `شریک: <b>${esc(partnerName || "همه شرکا")}</b>`,
-    `بخش: <b>${esc(section || "همه")}</b>`,
   ];
   const chipsHTML = `<div class="chips">${chips
     .map((c) => `<span class="chip">${c}</span>`)

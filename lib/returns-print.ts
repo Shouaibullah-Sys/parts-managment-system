@@ -17,7 +17,6 @@ export interface ReturnsPrintRow {
   customerName: string;
   partName: string;
   partNumber: string | null;
-  section: string | null;
   quantity: number;
   issueDate: string;
   totalAmount: string;
@@ -42,10 +41,10 @@ export function printReturnsReport(
   let totalRefunded = 0;
   let totalQty = 0;
 
-  // Column widths (%) — 11 columns
+  // Column widths (%) — 10 columns
   const colgroup = `<colgroup>
     <col style="width:4%"><col style="width:10%"><col style="width:10%"><col style="width:14%">
-    <col style="width:14%"><col style="width:9%"><col style="width:5%"><col style="width:6%">
+    <col style="width:14%"><col style="width:9%"><col style="width:6%">
     <col style="width:9%"><col style="width:9%"><col style="width:10%">
   </colgroup>`;
 
@@ -64,7 +63,6 @@ export function printReturnsReport(
         <td class="wrap txt-r">${esc(r.customerName)}</td>
         <td class="wrap txt-r">${esc(r.partName)}</td>
         <td class="mono">${esc(r.partNumber || "—")}</td>
-        <td>${esc(r.section || "—")}</td>
         <td class="num">${r.quantity}</td>
         <td class="num">${money(amt)}</td>
         <td class="num amt-red">${refunded > 0 ? money(refunded) : "—"}</td>
@@ -102,13 +100,13 @@ ${
   <thead>
     <tr>
       <th>#</th><th>تاریخ فروش</th><th>تاریخ مرجوعی</th><th>مشتری</th><th>قطعه</th><th>نمبر پارچه</th>
-      <th>بخش</th><th>تعداد</th><th>مبلغ فروش</th><th>بازپرداخت</th><th>یادداشت</th>
+      <th>تعداد</th><th>مبلغ فروش</th><th>بازپرداخت</th><th>یادداشت</th>
     </tr>
   </thead>
   <tbody>${bodyRows}</tbody>
   <tfoot>
     <tr>
-      <td colspan="7">جمع کل</td>
+      <td colspan="6">جمع کل</td>
       <td class="num">${totalQty}</td>
       <td class="num">${money(totalAmount)}</td>
       <td class="num amt-red">${money(totalRefunded)}</td>

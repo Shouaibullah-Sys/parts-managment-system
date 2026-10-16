@@ -26,6 +26,8 @@ interface PartnerSelectFieldProps {
   /** نام شریک انتخاب‌شده (نمایش وقتی شریک در لیست فعال‌ها نیست) */
   selectedName?: string | null;
   disabled?: boolean;
+  /** حالت فشرده برای استفاده داخل سلول جدول (بدون کادر و برچسب) */
+  compact?: boolean;
 }
 
 /**
@@ -37,6 +39,7 @@ export function PartnerSelectField({
   onChange,
   selectedName,
   disabled,
+  compact,
 }: PartnerSelectFieldProps) {
   const [options, setOptions] = useState<PartnerOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -62,6 +65,48 @@ export function PartnerSelectField({
     };
   }, []);
 
+  const emptyHint = !isLoading && options.length === 0;
+
+  const select = (
+    <Select
+      value={value != null ? String(value) : NO_PARTNER}
+      onValueChange={(next) =>
+        onChange(next === NO_PARTNER ? null : Number(next))
+      }
+      disabled={disabled || isLoading}
+    >
+      <SelectTrigger className="border-border focus:border-primary">
+        <SelectValue
+          placeholder={isLoading ? "در حال بارگیری..." : "انتخاب شراکت"}
+        />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={NO_PARTNER}>— بدون شراکت —</SelectItem>
+        {value != null &&
+          selectedName &&
+          !options.some((option) => option.id === value) && (
+            <SelectItem value={String(value)}>{selectedName}</SelectItem>
+          )}
+        {options.map((option) => (
+          <SelectItem key={option.id} value={String(option.id)}>
+            {option.name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+
+  if (compact) {
+    return (
+      <div className="space-y-1">
+        {select}
+        {emptyHint && (
+          <p className="text-xs text-muted-foreground">شریکی ثبت نشده است</p>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-lg border border-border p-4 space-y-3">
       <div className="space-y-0.5">
@@ -71,34 +116,9 @@ export function PartnerSelectField({
         </p>
       </div>
 
-      <Select
-        value={value != null ? String(value) : NO_PARTNER}
-        onValueChange={(next) =>
-          onChange(next === NO_PARTNER ? null : Number(next))
-        }
-        disabled={disabled || isLoading}
-      >
-        <SelectTrigger className="border-border focus:border-primary">
-          <SelectValue
-            placeholder={isLoading ? "در حال بارگیری..." : "انتخاب شراکت"}
-          />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={NO_PARTNER}>— بدون شراکت —</SelectItem>
-          {value != null &&
-            selectedName &&
-            !options.some((option) => option.id === value) && (
-              <SelectItem value={String(value)}>{selectedName}</SelectItem>
-            )}
-          {options.map((option) => (
-            <SelectItem key={option.id} value={String(option.id)}>
-              {option.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {select}
 
-      {!isLoading && options.length === 0 && (
+      {emptyHint && (
         <p className="text-xs text-muted-foreground">
           هنوز شریکی ثبت نشده است. ابتدا از بخش «شرکا» یک شریک اضافه کنید.
         </p>

@@ -27,7 +27,6 @@ interface LowStockNotification {
   id: number;
   part_number: string;
   name: string;
-  section: string;
   min_stock: number;
   current_stock: number;
   deficit: number;

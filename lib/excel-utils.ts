@@ -4,7 +4,6 @@ import * as XLSX from "xlsx";
 export interface ExcelPart {
   part_number: string;
   name: string;
-  section: string;
   partner_name: string;
   min_stock: number;
   current_stock: number;
@@ -23,7 +22,6 @@ export const exportToExcel = (data: ExcelPart[]) => {
   const excelData = data.map((item) => ({
     "شماره قطعه": item.part_number,
     "نام قطعه": item.name,
-    بخش: item.section,
     شرکا: item.partner_name,
     "حداقل موجودی": item.min_stock,
     "موجودی فعلی": item.current_stock,
@@ -40,7 +38,6 @@ export const exportToExcel = (data: ExcelPart[]) => {
   const colWidths = [
     { wch: 15 }, // شماره قطعه
     { wch: 30 }, // نام قطعه
-    { wch: 10 }, // بخش
     { wch: 20 }, // شرکا
     { wch: 12 }, // حداقل موجودی
     { wch: 12 }, // موجودی فعلی
@@ -80,7 +77,6 @@ export const importFromExcel = (file: File): Promise<ExcelPart[]> => {
         const importedData: ExcelPart[] = jsonData.map((row: any) => ({
           part_number: row["شماره قطعه"] || row["part_number"],
           name: row["نام قطعه"] || row["name"],
-          section: row["بخش"] || row["section"],
           partner_name: String(
             row["شرکا"] || row["partner_name"] || ""
           ).trim(),
@@ -119,7 +115,6 @@ export const generateExcelTemplate = () => {
     {
       "شماره قطعه": "EXAMPLE-001",
       "نام قطعه": "نام قطعه نمونه",
-      بخش: "E",
       شرکا: "شریک نمونه",
       "حداقل موجودی": 10,
       "موجودی فعلی": 5,
@@ -136,7 +131,6 @@ export const generateExcelTemplate = () => {
   const colWidths = [
     { wch: 15 },
     { wch: 30 },
-    { wch: 10 },
     { wch: 20 },
     { wch: 12 },
     { wch: 12 },

@@ -40,7 +40,6 @@ export async function listParts(opts: {
   page?: number;
   limit?: number;
   search?: string | null;
-  section?: string | null;
   active?: string | null;
 }) {
   const page = opts.page && opts.page > 0 ? opts.page : 1;
@@ -56,11 +55,6 @@ export async function listParts(opts: {
         sql`LOWER(p.part_number) LIKE LOWER(${`%${q}%`}) OR LOWER(p.name) LIKE LOWER(${`%${q}%`})`,
       );
     }
-  }
-
-  if (opts.section) {
-    const s = opts.section.trim();
-    if (s.length) whereConditions.push(eq(parts.section, s as any));
   }
 
   if (opts.active !== undefined && opts.active !== null) {
@@ -81,7 +75,6 @@ export async function listParts(opts: {
         p.part_number AS "partNumber",
         p.name,
         p.shelf,
-        p.section,
         p.min_stock AS "minStock",
         p.cost_price AS "costPrice",
         p.sale_price AS "salePrice",
@@ -122,7 +115,6 @@ export async function getPartById(
       p.part_number AS "partNumber",
       p.name,
       p.shelf,
-      p.section,
       p.min_stock AS "minStock",
       p.cost_price AS "costPrice",
       p.sale_price AS "salePrice",
@@ -153,7 +145,6 @@ export async function lowStockParts() {
       p.part_number AS "partNumber",
       p.name,
       p.shelf,
-      p.section,
       p.min_stock AS "minStock",
       p.cost_price AS "costPrice",
       p.sale_price AS "salePrice",

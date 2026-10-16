@@ -40,7 +40,6 @@ export function CreatePartForm() {
     defaultValues: {
       partNumber: "",
       name: "",
-      section: "E",
       minStock: 0,
       currentStock: 0,
       active: true,
@@ -149,27 +148,6 @@ export function CreatePartForm() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Section */}
-                <FormField
-                  control={form.control}
-                  name="section"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Section *</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="E, D, F, G, OLD, or custom"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Category section for the part (any text value allowed)
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
                 {/* Minimum Stock */}
                 <FormField
                   control={form.control}

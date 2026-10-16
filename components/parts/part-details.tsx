@@ -114,14 +114,6 @@ export function PartDetails({ partId }: PartDetailsProps) {
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">
-                    بخش
-                  </label>
-                  <div>
-                    <Badge variant="outline">{part.section}</Badge>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">
                     حداقل موجودی
                   </label>
                   <p>{part.minStock}</p>

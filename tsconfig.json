@@ -25,6 +25,9 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "xlsx-js-style": [
+        "./node_modules/xlsx-js-style/types/index.d.ts"
       ]
     }
   },

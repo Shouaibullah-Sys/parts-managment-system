@@ -47,7 +47,6 @@ interface LowStockPart {
   id: number;
   part_number: string;
   name: string;
-  section: string;
   min_stock: number;
   current_stock: number;
   cost_price: string;
@@ -77,7 +76,6 @@ const fetchLowStockParts = async (): Promise<LowStockPart[]> => {
       id: part.id,
       part_number: part.part_number || part.partNumber,
       name: part.name,
-      section: part.section || "E",
       min_stock: part.min_stock || part.minStock || 0,
       current_stock: part.current_stock || part.currentStock || 0,
       cost_price: part.cost_price || part.costPrice || "0",
@@ -113,7 +111,6 @@ const bulkUpdateParts = async (data: LowStockPart[]) => {
 const updatePartDetails = async (
   partId: number,
   updates: {
-    section?: string;
     cost_price?: string;
     sale_price?: string;
     partner_id?: number | null;
@@ -341,50 +338,6 @@ export default function PriorityActionsPage() {
     );
   };
 
-  // Handle section change
-  const handleSectionChange = async (id: number, section: string) => {
-    const part = parts.find((p) => p.id === id);
-    if (!part) return;
-
-    // Update local state first
-    setParts((prev) =>
-      prev.map((p) => {
-        if (p.part_number === part.part_number) {
-          return { ...p, section };
-        }
-        return p;
-      })
-    );
-
-    // Find all parts with same part number to update in database
-    const samePartNumberParts = parts.filter(
-      (p) => p.part_number === part.part_number
-    );
-
-    try {
-      setUpdatingParts((prev) => new Set(prev).add(id));
-
-      // Update all parts with same part number in database
-      const updatePromises = samePartNumberParts.map((p) =>
-        updatePartDetails(p.id, { section })
-      );
-
-      await Promise.all(updatePromises);
-      toast.success(
-        `بخش برای ${samePartNumberParts.length} قطعه با شماره ${part.part_number} بروزرسانی شد`
-      );
-    } catch (error) {
-      console.error("Error updating section:", error);
-      toast.error("خطا در بروزرسانی بخش");
-    } finally {
-      setUpdatingParts((prev) => {
-        const newSet = new Set(prev);
-        newSet.delete(id);
-        return newSet;
-      });
-    }
-  };
-
   // Handle cost price change
   const handleCostPriceChange = async (id: number, cost_price: string) => {
     const part = parts.find((p) => p.id === id);
@@ -487,7 +440,6 @@ export default function PriorityActionsPage() {
       .map((part) => ({
         part_number: part.part_number,
         name: part.name,
-        section: part.section,
         partner_name: part.partner_name === "-" ? "" : part.partner_name,
         min_stock: part.min_stock,
         current_stock: part.current_stock,
@@ -930,7 +882,6 @@ export default function PriorityActionsPage() {
                 </TableHead>
                 <TableHead>شماره قطعه</TableHead>
                 <TableHead>نام قطعه</TableHead>
-                <TableHead>بخش</TableHead>
                 <TableHead>شرکا</TableHead>
                 <TableHead>حداقل موجودی</TableHead>
                 <TableHead>موجودی فعلی</TableHead>
@@ -990,21 +941,6 @@ export default function PriorityActionsPage() {
                     </TableCell>
                     <TableCell className="font-medium max-w-xs truncate">
                       {part.name}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <Input
-                          value={part.section}
-                          onChange={(e) =>
-                            handleSectionChange(part.id, e.target.value)
-                          }
-                          className="w-16 text-center"
-                          disabled={isUpdatingPart}
-                        />
-                        {isUpdatingPart && (
-                          <RefreshCw className="h-3 w-3 animate-spin text-muted-foreground" />
-                        )}
-                      </div>
                     </TableCell>
                     <TableCell className="whitespace-nowrap max-w-[160px] truncate">
                       {part.partner_name === "-" ? (

@@ -2,7 +2,6 @@ export type Part = {
   id: number;
   partNumber: string;
   name: string;
-  section: string; // Changed from enum to string for flexibility
   minStock: number;
   currentStock: number; // Added missing currentStock field
   costPrice: string | null;
@@ -14,7 +13,6 @@ export type Part = {
 export type CreatePartInput = {
   partNumber: string;
   name: string;
-  section?: string; // Changed from enum to string for flexibility
   minStock?: number;
   currentStock?: number; // Added missing currentStock field
   costPrice?: string;

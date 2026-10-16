@@ -70,13 +70,15 @@ import {
   RotateCcw,
   Store,
   Wallet,
+  FileSpreadsheet,
+  FileText,
 } from "lucide-react";
 import Loader from "@/components/loader";
 import HijriDatePicker from "@/components/hijri-date-picker";
 import { Checkbox } from "@/components/ui/checkbox";
-import { printSalesReport, SalesPrintSummary } from "@/lib/sales-print";
-import { printCustomerReport } from "@/lib/customer-print";
-import { printReturnsReport } from "@/lib/returns-print";
+import type { SalesPrintSummary } from "@/lib/sales-print";
+import { exportCustomerSummaryExcel } from "@/lib/customer-summary-excel";
+import type { CustomerSummaryData } from "@/components/sales/customer-summary-types";
 
 interface SaleRecord {
   id: number;
@@ -96,7 +98,6 @@ interface SaleRecord {
   issuedBy: string;
   partNumber: string;
   partName: string;
-  section: string | null;
   itemCount: number;
   status: "completed" | "pending" | "approved";
   returnedAt: string | null;
@@ -128,7 +129,6 @@ const fetchSalesData = async ({
   fromDate = "",
   toDate = "",
   period = "today",
-  section = "",
   paymentStatus = "",
 }: {
   page: number;
@@ -137,7 +137,6 @@ const fetchSalesData = async ({
   fromDate: string;
   toDate: string;
   period: DatePeriod;
-  section?: string;
   paymentStatus?: string;
 }): Promise<SalesResponse> => {
   const params = new URLSearchParams({
@@ -146,7 +145,6 @@ const fetchSalesData = async ({
     ...(search && { search }),
     ...(fromDate && { fromDate }),
     ...(toDate && { toDate }),
-    ...(section && { section }),
     ...(paymentStatus && paymentStatus !== "all" && { paymentStatus }),
     period,
   });
@@ -169,22 +167,8 @@ export default function AdminSalesPage() {
   });
   const [datePeriod, setDatePeriod] = useState<DatePeriod>("today");
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  // بخش (section) filter — options come from /api/parts/sections
-  const [sectionFilter, setSectionFilter] = useState<string>("all");
   // وضعیت پرداخت toggle — "all" | "paid" | "outstanding"
   const [paymentFilter, setPaymentFilter] = useState<string>("all");
-
-  // Distinct بخش options for the dropdown
-  const { data: sectionsData } = useQuery({
-    queryKey: ["part-sections"],
-    queryFn: async () => {
-      const res = await fetch("/api/parts/sections");
-      if (!res.ok) throw new Error("Failed to fetch sections");
-      return res.json() as Promise<{ success: boolean; data: { section: string }[] }>;
-    },
-    staleTime: 5 * 60 * 1000,
-  });
-  const sectionOptions = sectionsData?.data?.map((s) => s.section) ?? [];
 
   // React Query for sales data
   const {
@@ -200,7 +184,6 @@ export default function AdminSalesPage() {
         fromDate: dateRange.from,
         toDate: dateRange.to,
         period: datePeriod,
-        section: sectionFilter,
         paymentStatus: paymentFilter,
       },
     ],
@@ -214,10 +197,97 @@ export default function AdminSalesPage() {
         // "custom" means user picked an explicit range — API applies
         // only fromDate/toDate when period is "lifetime"
         period: datePeriod === "custom" ? "lifetime" : datePeriod,
-        section: sectionFilter === "all" ? "" : sectionFilter,
         paymentStatus: paymentFilter,
       }),
   });
+
+  // خلاصه مشتریان (تجمعی سرورساید — کامل و شامل تفکیک شرکا)
+  const summaryQueryParams = (): URLSearchParams => {
+    const params = new URLSearchParams({
+      period: datePeriod === "custom" ? "lifetime" : datePeriod,
+    });
+    if (datePeriod === "custom") {
+      if (dateRange.from) params.set("fromDate", dateRange.from);
+      if (dateRange.to) params.set("toDate", dateRange.to);
+    }
+    if (paymentFilter && paymentFilter !== "all")
+      params.set("paymentStatus", paymentFilter);
+    if (searchTerm) params.set("search", searchTerm);
+    return params;
+  };
+
+  const { data: customerSummaryData } = useQuery({
+    queryKey: [
+      "customer-summary",
+      {
+        search: searchTerm,
+        fromDate: dateRange.from,
+        toDate: dateRange.to,
+        period: datePeriod,
+        paymentStatus: paymentFilter,
+      },
+    ],
+    queryFn: async (): Promise<CustomerSummaryData> => {
+      const res = await fetch(
+        `/api/sales/customer-summary?${summaryQueryParams().toString()}`,
+      );
+      if (!res.ok) throw new Error("Failed to fetch customer summary");
+      const json = await res.json();
+      return json.data as CustomerSummaryData;
+    },
+  });
+
+  const [summaryExporting, setSummaryExporting] = useState(false);
+
+  const handleSummaryExcel = async () => {
+    if (!customerSummaryData) return;
+    setSummaryExporting(true);
+    try {
+      await exportCustomerSummaryExcel(customerSummaryData, {
+        period: datePeriod === "custom" ? "lifetime" : datePeriod,
+        from: dateRange.from,
+        to: dateRange.to,
+        paymentStatus: paymentFilter,
+        search: searchTerm,
+      });
+    } catch (error) {
+      console.error("Error exporting customer summary Excel:", error);
+      alert("خطا در تولید فایل اکسل");
+    } finally {
+      setSummaryExporting(false);
+    }
+  };
+
+  const handleSummaryPdf = async () => {
+    const qs = summaryQueryParams().toString();
+    const filename = `customer-summary-${dateRange.from || "all"}_${dateRange.to || "all"}.pdf`;
+
+    // تب جدید مستقیماً به خود PDF باز می‌شود (بدون blob → مطمئن‌تر)
+    window.open(`/api/sales/customer-summary/pdf?${qs}&inline=1`, "_blank");
+
+    setSummaryExporting(true);
+    try {
+      const res = await fetch(`/api/sales/customer-summary/pdf?${qs}`);
+      if (!res.ok) throw new Error("failed to generate PDF");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.style.display = "none";
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+    } catch (error) {
+      console.error("Error exporting customer summary PDF:", error);
+      alert("خطا در تولید فایل PDF");
+    } finally {
+      setSummaryExporting(false);
+    }
+  };
 
   // Payment dialog state
   const [paymentDialog, setPaymentDialog] = useState<{
@@ -308,10 +378,8 @@ export default function AdminSalesPage() {
     to: format(new Date(), "yyyy-MM-dd"),
   });
   // Per-report filters inside the print dialog (prefilled from the page's
-  // active بخش / وضعیت پرداخت filters, but adjustable for this report only)
-  const [printSection, setPrintSection] = useState<string>("all");
+  // active وضعیت پرداخت filter, but adjustable for this report only)
   const [printPayment, setPrintPayment] = useState<string>("all");
-  const [isPrinting, setIsPrinting] = useState(false);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -367,8 +435,7 @@ export default function AdminSalesPage() {
       from: dateRange.from || format(startOfMonth(new Date()), "yyyy-MM-dd"),
       to: dateRange.to || format(new Date(), "yyyy-MM-dd"),
     });
-    // prefill بخش / وضعیت پرداخت from the page's active filters
-    setPrintSection(sectionFilter);
+    // prefill وضعیت پرداخت from the page's active filters
     setPrintPayment(paymentFilter);
     setPrintDialogOpen(true);
   };
@@ -383,112 +450,37 @@ export default function AdminSalesPage() {
     });
   };
 
-  const handlePrintReport = async () => {
+  const handlePrintReport = () => {
     if (!printRange.from || !printRange.to) {
       alert("لطفاً تاریخ شروع و ختم را انتخاب کنید");
       return;
     }
-    // Open the window synchronously inside the click (async fetch afterwards
-    // would be blocked as a popup), show a loading page, fill it later.
-    const printWindow = window.open("", "_blank", "width=1000,height=800");
-    if (!printWindow) {
-      alert("لطفاً پاپ‌آپ بلاکر را غیرفعال کنید");
-      return;
-    }
-    printWindow.document.write(
-      '<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8"><title>در حال تهیه گزارش...</title></head>' +
-        '<body style="font-family:Tahoma,Arial,sans-serif;direction:rtl;text-align:center;padding:60px;color:#64748b">' +
-        "در حال تهیه راپور فروش، لطفاً صبر کنید...</body></html>",
-    );
-    printWindow.document.close();
-
-    setIsPrinting(true);
-    try {
-      const params = new URLSearchParams({
-        page: "1",
-        limit: "1000",
-        // "lifetime" ignores period and applies fromDate/toDate only
-        period: "lifetime",
-        fromDate: printRange.from,
-        toDate: printRange.to,
-        // فروش‌های مرتجع در راپور فروش چاپ نمی‌شوند
-        excludeReturned: "true",
-        // فیلترهای انتخابی داخل دیالوگ (بخش + وضعیت پرداخت) + جستجوی فعال صفحه
-        ...(printSection !== "all" && { section: printSection }),
-        ...(printPayment !== "all" && { paymentStatus: printPayment }),
-        ...(searchTerm && { search: searchTerm }),
-      });
-      const res = await fetch(`/api/sales?${params}`);
-      if (!res.ok) throw new Error("Failed to fetch sales for print");
-      const json: SalesResponse = await res.json();
-      if (!json.success || !json.data) throw new Error("Invalid response");
-
-      printSalesReport(printWindow, {
-        rows: json.data,
-        summary: json.summary ?? null,
-        total: json.pagination?.total ?? json.data.length,
-        from: printRange.from,
-        to: printRange.to,
-        filters: {
-          section: printSection !== "all" ? printSection : "",
-          paymentStatus: printPayment,
-          search: searchTerm,
-        },
-      });
-      setPrintDialogOpen(false);
-    } catch {
-      printWindow.close();
-      alert("تهیه راپور ناموفق بود — لطفاً دوباره تلاش کنید");
-    } finally {
-      setIsPrinting(false);
-    }
+    const params = new URLSearchParams({
+      fromDate: printRange.from,
+      toDate: printRange.to,
+    });
+    if (printPayment !== "all") params.set("paymentStatus", printPayment);
+    if (searchTerm) params.set("search", searchTerm);
+    // فقط نمایش PDF در تب جدید (بدون دانلود)
+    window.open(`/api/sales/report/pdf?${params.toString()}&inline=1`, "_blank");
+    setPrintDialogOpen(false);
   };
 
-  // چاپ راپور مرجوعیات در همان بازه تاریخ
-  const handlePrintReturns = async () => {
+  // راپور مرجوعیات در همان بازه تاریخ
+  const handlePrintReturns = () => {
     if (!printRange.from || !printRange.to) {
       alert("لطفاً تاریخ شروع و ختم را انتخاب کنید");
       return;
     }
-    const printWindow = window.open("", "_blank", "width=1000,height=800");
-    if (!printWindow) {
-      alert("لطفاً پاپ‌آپ بلاکر را غیرفعال کنید");
-      return;
-    }
-    printWindow.document.write(
-      '<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8"><title>در حال تهیه گزارش...</title></head>' +
-        '<body style="font-family:Tahoma,Arial,sans-serif;direction:rtl;text-align:center;padding:60px;color:#64748b">' +
-        "در حال تهیه راپور مرجوعیات، لطفاً صبر کنید...</body></html>",
+    const params = new URLSearchParams({
+      fromDate: printRange.from,
+      toDate: printRange.to,
+    });
+    window.open(
+      `/api/sales/returns-report/pdf?${params.toString()}&inline=1`,
+      "_blank",
     );
-    printWindow.document.close();
-
-    setIsPrinting(true);
-    try {
-      const params = new URLSearchParams({
-        page: "1",
-        limit: "1000",
-        period: "lifetime",
-        fromDate: printRange.from,
-        toDate: printRange.to,
-        returnedOnly: "true",
-      });
-      const res = await fetch(`/api/sales?${params}`);
-      if (!res.ok) throw new Error("Failed to fetch returns for print");
-      const json: SalesResponse = await res.json();
-      if (!json.success || !json.data) throw new Error("Invalid response");
-
-      printReturnsReport(printWindow, {
-        rows: json.data,
-        from: printRange.from,
-        to: printRange.to,
-      });
-      setPrintDialogOpen(false);
-    } catch {
-      printWindow.close();
-      alert("تهیه راپور مرجوعیات ناموفق بود — لطفاً دوباره تلاش کنید");
-    } finally {
-      setIsPrinting(false);
-    }
+    setPrintDialogOpen(false);
   };
 
   // Define columns for TanStack Table
@@ -523,15 +515,6 @@ export default function AdminSalesPage() {
             </span>
           )}
         </div>
-      ),
-    },
-    {
-      accessorKey: "section",
-      header: "بخش",
-      cell: ({ row }) => (
-        <span className="font-mono text-xs bg-secondary px-2 py-1 rounded">
-          {row.original.section || "—"}
-        </span>
       ),
     },
     {
@@ -760,72 +743,31 @@ export default function AdminSalesPage() {
     setBulkPaymentAmount(customer.totalOutstanding.toString());
   };
 
-  // چاپ راپور انفرادی هر مشتری (خلاصه مشتریان)
-  const openCustomerPrint = async (customer: {
+  // چاپ/نمایش راپور انفرادی هر مشتری به صورت PDF در تب جدید (بدون دانلود)
+  const openCustomerReport = (customer: {
+    customerId: number | null;
     customerName: string;
     normalizedName: string;
   }) => {
-    const win = window.open("", "_blank", "width=900,height=700");
-    if (!win) {
-      alert("پنجره چاپ مسدود شد — لطفاً اجازه pop-up را بدهید");
-      return;
+    const params = new URLSearchParams({
+      period: datePeriod === "custom" ? "lifetime" : datePeriod,
+    });
+    if (datePeriod === "custom") {
+      if (dateRange.from) params.set("fromDate", dateRange.from);
+      if (dateRange.to) params.set("toDate", dateRange.to);
     }
-    const safeName = customer.customerName.replace(/[<>&"]/g, "");
-    win.document.open();
-    win.document.write(`<!DOCTYPE html>
-<html lang="fa" dir="rtl">
-<head><meta charset="UTF-8"><title>در حال تهیه راپور...</title>
-<style>
-  body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; display:flex; align-items:center; justify-content:center; height:100vh; margin:0; direction:rtl; color:#334155; background:#f8fafc; }
-  .box { text-align:center; }
-  .spinner { width:36px; height:36px; border:4px solid #e2e8f0; border-top-color:#2563eb; border-radius:50%; margin:0 auto 14px; animation:spin 0.8s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .t { font-size:14px; font-weight:600; }
-  .s { font-size:11px; color:#64748b; margin-top:6px; }
-</style>
-</head>
-<body>
-  <div class="box">
-    <div class="spinner"></div>
-    <div class="t">در حال تهیه راپور مشتری</div>
-    <div class="s">${safeName}</div>
-  </div>
-</body>
-</html>`);
-    win.document.close();
+    if (paymentFilter && paymentFilter !== "all")
+      params.set("paymentStatus", paymentFilter);
+    if (searchTerm) params.set("search", searchTerm);
+    if (customer.customerId != null)
+      params.set("customerId", String(customer.customerId));
+    else if (customer.normalizedName)
+      params.set("normalizedName", customer.normalizedName);
 
-    try {
-      // Use the same active filters as the on-screen summary so the report
-      // matches what the user sees (period / custom dates / section / payment).
-      const params = new URLSearchParams({
-        page: "1",
-        limit: "1000",
-        period: datePeriod === "custom" ? "lifetime" : datePeriod,
-        excludeReturned: "true",
-        normalizedName: customer.normalizedName,
-      });
-      if (datePeriod === "custom") {
-        if (dateRange.from) params.set("fromDate", dateRange.from);
-        if (dateRange.to) params.set("toDate", dateRange.to);
-      }
-      if (sectionFilter !== "all") params.set("section", sectionFilter);
-      if (paymentFilter) params.set("paymentStatus", paymentFilter);
-      if (searchTerm) params.set("search", searchTerm);
-
-      const res = await fetch(`/api/sales?${params.toString()}`);
-      if (!res.ok) throw new Error("fetch failed");
-      const json = await res.json();
-      printCustomerReport(win, {
-        customerName: customer.customerName,
-        rows: json.data || [],
-        summary: json.summary ?? null,
-        total: json.pagination?.total ?? (json.data || []).length,
-      });
-    } catch (error) {
-      console.error("Error printing customer report:", error);
-      alert("خطا در تهیه راپور مشتری");
-      win.close();
-    }
+    window.open(
+      `/api/sales/customer-summary/detail/pdf?${params.toString()}&inline=1`,
+      "_blank",
+    );
   };
 
   const handleAddPayment = async () => {
@@ -1074,31 +1016,20 @@ export default function AdminSalesPage() {
       return matchesSearch && matchesCustomer;
     }) || [];
 
-  // Customer summary calculation (فروش‌های مرتجع در خلاصه مشتریان حساب نمی‌شوند)
-  const customerSummary = filteredRecords.reduce(
-    (acc, record) => {
-      if (record.returnedAt) return acc;
-      const key = record.normalizedName;
-      if (!acc[key]) {
-        acc[key] = {
-          customerName: record.customerName,
-          normalizedName: record.normalizedName,
-          totalSales: 0,
-          totalPaid: 0,
-          totalOutstanding: 0,
-          salesCount: 0,
-        };
-      }
-      acc[key].totalSales += parseFloat(record.totalAmount);
-      acc[key].totalPaid += parseFloat(record.paidAmount);
-      acc[key].totalOutstanding += parseFloat(record.outstanding);
-      acc[key].salesCount += 1;
-      return acc;
-    },
-    {} as Record<string, any>,
-  );
-
-  const customerSummaryArray = Object.values(customerSummary);
+  // خلاصه مشتریان از سرور (تجمعی و کامل — شامل شرکا)
+  // فروش‌های مرتجع در این گزارش لحاظ نمی‌شوند (در سمت سرور فیلتر شده‌اند)
+  const customerSummaryArray = (customerSummaryData?.customers ?? [])
+    .filter((c) => !selectedCustomer || c.normalizedName === selectedCustomer)
+    .map((c) => ({
+      customerId: c.customerId,
+      customerName: c.customerName,
+      normalizedName: c.normalizedName ?? "",
+      totalSales: c.netSales,
+      totalPaid: c.paid,
+      totalOutstanding: c.outstanding,
+      salesCount: c.salesCount,
+      partners: c.partners,
+    }));
 
   // Mobile Card Components
   const MobileSaleCard = ({ record }: { record: SaleRecord }) => (
@@ -1273,6 +1204,17 @@ export default function AdminSalesPage() {
           </div>
         </div>
 
+        {customer.partners?.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1 text-sm">
+            <span className="text-muted-foreground">شرکا:</span>
+            {customer.partners.map((p: string) => (
+              <Badge key={p} variant="outline" className="text-xs">
+                {p}
+              </Badge>
+            ))}
+          </div>
+        )}
+
         <div className="flex justify-between items-center pt-2 border-t border-border">
           <div>
             {customer.totalOutstanding <= 0 ? (
@@ -1292,7 +1234,7 @@ export default function AdminSalesPage() {
               size="sm"
               onClick={(e) => {
                 e.stopPropagation();
-                openCustomerPrint(customer);
+                openCustomerReport(customer);
               }}
               className="border-border text-foreground hover:bg-accent"
             >
@@ -1362,8 +1304,8 @@ export default function AdminSalesPage() {
             onClick={openPrintDialog}
             className="border-emerald-500 text-emerald-600 hover:bg-emerald-50"
           >
-            <Printer className="mr-2 h-4 w-4" />
-            چاپ راپور
+            <FileText className="mr-2 h-4 w-4" />
+            راپور
           </Button>
         </div>
       </div>
@@ -1471,28 +1413,8 @@ export default function AdminSalesPage() {
             </div>
           </div>
 
-          {/* Section + Payment Status filters */}
+          {/* Payment Status filter */}
           <div className="flex flex-col sm:flex-row gap-4 mt-4 pt-4 border-t border-border">
-            {/* بخش (section) dropdown */}
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-muted-foreground whitespace-nowrap">
-                بخش:
-              </label>
-              <Select value={sectionFilter} onValueChange={setSectionFilter}>
-                <SelectTrigger className="w-40 bg-background border-border">
-                  <SelectValue placeholder="همه بخش‌ها" />
-                </SelectTrigger>
-                <SelectContent className="border-border bg-popover">
-                  <SelectItem value="all">همه بخش‌ها</SelectItem>
-                  {sectionOptions.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {s}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
             {/* Payment status toggle */}
             <div className="flex items-center gap-2">
               <label className="text-sm text-muted-foreground whitespace-nowrap">
@@ -1540,13 +1462,12 @@ export default function AdminSalesPage() {
               </div>
             </div>
 
-            {/* Clear section/payment filters */}
-            {(sectionFilter !== "all" || paymentFilter !== "all") && (
+            {/* Clear payment filters */}
+            {paymentFilter !== "all" && (
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                  setSectionFilter("all");
                   setPaymentFilter("all");
                 }}
                 className="text-sm text-primary hover:text-primary/80 self-start"
@@ -1689,7 +1610,39 @@ export default function AdminSalesPage() {
       {/* Customer Summary */}
       <Card className="border-mechanical shadow-lg">
         <CardHeader className="bg-mechanical/50 border-b border-border">
-          <CardTitle className="text-foreground">خلاصه مشتریان</CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <CardTitle className="text-foreground">خلاصه مشتریان</CardTitle>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSummaryExcel}
+                disabled={!customerSummaryData || summaryExporting}
+                className="border-emerald-500 text-emerald-600 hover:bg-emerald-50"
+              >
+                {summaryExporting ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <FileSpreadsheet className="mr-2 h-4 w-4" />
+                )}
+                اکسل
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSummaryPdf}
+                disabled={!customerSummaryData || summaryExporting}
+                className="border-rose-500 text-rose-600 hover:bg-rose-50"
+              >
+                {summaryExporting ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <FileText className="mr-2 h-4 w-4" />
+                )}
+                PDF
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="p-4">
           {isLoading ? (
@@ -1719,6 +1672,7 @@ export default function AdminSalesPage() {
                 <TableHeader className="bg-muted/50">
                   <TableRow className="border-border">
                     <TableHead>نام مشتری</TableHead>
+                    <TableHead>شرکا</TableHead>
                     <TableHead>تعداد فروش</TableHead>
                     <TableHead>کل فروش</TableHead>
                     <TableHead>پرداخت شده</TableHead>
@@ -1762,6 +1716,23 @@ export default function AdminSalesPage() {
                           )}
                         </div>
                       </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {customer.partners.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {customer.partners.map((p) => (
+                              <Badge
+                                key={p}
+                                variant="outline"
+                                className="text-xs"
+                              >
+                                {p}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : (
+                          "بدون شراکت"
+                        )}
+                      </TableCell>
                       <TableCell className="text-center">
                         {customer.salesCount}
                       </TableCell>
@@ -1793,10 +1764,10 @@ export default function AdminSalesPage() {
                             size="sm"
                             onClick={(e) => {
                               e.stopPropagation();
-                              openCustomerPrint(customer);
+                              openCustomerReport(customer);
                             }}
                             className="border-border text-foreground hover:bg-accent"
-                            title="چاپ راپور انفرادی این مشتری"
+                            title="چاپ راپور انفرادی این مشتری (PDF در تب جدید)"
                           >
                             <Printer className="ml-2 h-3 w-3" />
                             چاپ راپور
@@ -2492,12 +2463,12 @@ export default function AdminSalesPage() {
         <DialogContent className="max-w-md border-mechanical bg-background">
           <DialogHeader>
             <DialogTitle className="text-center text-lg font-bold bg-linear-to-r from-primary to-primary/80 bg-clip-text text-transparent">
-              چاپ راپور فروش
+              راپور فروش
             </DialogTitle>
             <DialogDescription asChild>
               <div className="space-y-4">
                 <p className="text-center text-sm text-muted-foreground">
-                  بازه زمانی و فیلترها را انتخاب کنید و راپور را چاپ کنید
+                  بازه زمانی و فیلترها را انتخاب کنید و راپور در تب جدید باز می‌شود
                 </p>
                 {searchTerm && (
                   <p className="text-center text-xs text-primary">
@@ -2526,30 +2497,8 @@ export default function AdminSalesPage() {
                   </div>
                 </div>
 
-                {/* بخش + وضعیت پرداخت — فیلترهای اختیاری راپور */}
+                {/* وضعیت پرداخت — فیلتر اختیاری راپور */}
                 <div className="bg-mechanical/50 p-3 rounded-lg border border-border space-y-3">
-                  <div className="flex items-center gap-3">
-                    <label className="text-sm text-muted-foreground w-12">
-                      بخش:
-                    </label>
-                    <Select
-                      value={printSection}
-                      onValueChange={setPrintSection}
-                    >
-                      <SelectTrigger className="flex-1 bg-background border-border">
-                        <SelectValue placeholder="همه بخش‌ها" />
-                      </SelectTrigger>
-                      <SelectContent className="border-border bg-popover">
-                        <SelectItem value="all">همه بخش‌ها</SelectItem>
-                        {sectionOptions.map((s) => (
-                          <SelectItem key={s} value={s}>
-                            {s}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
                   <div className="flex items-center gap-3">
                     <label className="text-sm text-muted-foreground w-12">
                       پرداخت:
@@ -2604,25 +2553,14 @@ export default function AdminSalesPage() {
                 <div className="flex gap-2 pt-2">
                   <Button
                     onClick={handlePrintReport}
-                    disabled={isPrinting}
                     className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
                   >
-                    {isPrinting ? (
-                      <>
-                        <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                        در حال تهیه...
-                      </>
-                    ) : (
-                      <>
-                        <Printer className="ml-2 h-4 w-4" />
-                        چاپ راپور فروش
-                      </>
-                    )}
+                    <FileText className="ml-2 h-4 w-4" />
+                    چاپ راپور فروش
                   </Button>
                   <Button
                     variant="outline"
                     onClick={handlePrintReturns}
-                    disabled={isPrinting}
                     className="flex-1 border-rose-400 text-rose-600 hover:bg-rose-50"
                   >
                     <RotateCcw className="ml-2 h-4 w-4" />
@@ -2633,7 +2571,6 @@ export default function AdminSalesPage() {
                   <Button
                     variant="outline"
                     onClick={() => setPrintDialogOpen(false)}
-                    disabled={isPrinting}
                     className="flex-1 border-border text-foreground hover:bg-accent hover:text-accent-foreground"
                   >
                     انصراف

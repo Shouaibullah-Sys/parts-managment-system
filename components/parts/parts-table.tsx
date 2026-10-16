@@ -70,7 +70,6 @@ export function PartsTable() {
     pageIndex: 0,
     pageSize: isMobile ? 10 : 25,
   });
-  const [sectionFilter, setSectionFilter] = useState<string>("");
   const [activeFilter, setActiveFilter] = useState<string>("");
 
   // Fetch parts with current filters - always ensure user is authenticated
@@ -84,7 +83,6 @@ export function PartsTable() {
       page: pagination.pageIndex + 1,
       limit: pagination.pageSize,
       search: globalFilter || undefined,
-      section: sectionFilter || undefined,
       active: activeFilter ? activeFilter === "true" : undefined,
     },
     {
@@ -128,9 +126,6 @@ export function PartsTable() {
               </div>
             )}
             <div className="flex items-center gap-2">
-              <Badge variant="outline" className="text-xs">
-                {part.section}
-              </Badge>
               <Badge
                 variant={part.active ? "default" : "secondary"}
                 className="text-xs"
@@ -238,6 +233,22 @@ export function PartsTable() {
       ),
     },
     {
+      id: "partners",
+      header: "شرکا",
+      cell: ({ row }) => (
+        <Badge
+          variant="outline"
+          className={
+            row.original.partner
+              ? "capitalize border-primary/30"
+              : "border-primary/30 text-muted-foreground"
+          }
+        >
+          {row.original.partner?.name ?? "-"}
+        </Badge>
+      ),
+    },
+    {
       accessorKey: "shelf",
       header: "طاقچه",
       cell: ({ row }) => {
@@ -248,15 +259,6 @@ export function PartsTable() {
           </div>
         );
       },
-    },
-    {
-      accessorKey: "section",
-      header: "بخش",
-      cell: ({ row }) => (
-        <Badge variant="outline" className="capitalize border-primary/30">
-          {row.getValue("section")}
-        </Badge>
-      ),
     },
     {
       accessorKey: "minStock",
@@ -307,22 +309,6 @@ export function PartsTable() {
           </div>
         );
       },
-    },
-    {
-      id: "partners",
-      header: "شرکا",
-      cell: ({ row }) => (
-        <Badge
-          variant="outline"
-          className={
-            row.original.partner
-              ? "capitalize border-primary/30"
-              : "border-primary/30 text-muted-foreground"
-          }
-        >
-          {row.original.partner?.name ?? "-"}
-        </Badge>
-      ),
     },
     {
       accessorKey: "active",
@@ -499,15 +485,6 @@ export function PartsTable() {
           />
         </div>
 
-        <div className="relative w-full sm:w-40">
-          <Input
-            placeholder="فیلتر بخش..."
-            value={sectionFilter}
-            onChange={(event) => setSectionFilter(event.target.value)}
-            className="bg-background border-border"
-          />
-        </div>
-
         <Select
           value={activeFilter || "all-status"}
           onValueChange={(value) =>
@@ -524,12 +501,11 @@ export function PartsTable() {
           </SelectContent>
         </Select>
 
-        {(globalFilter || sectionFilter || activeFilter) && (
+        {(globalFilter || activeFilter) && (
           <Button
             variant="ghost"
             onClick={() => {
               setGlobalFilter("");
-              setSectionFilter("");
               setActiveFilter("");
             }}
             className="text-sm text-primary hover:text-primary/80"
@@ -608,7 +584,7 @@ export function PartsTable() {
                     <div>
                       <p className="font-medium">هیچ قطعه‌ای یافت نشد</p>
                       <p className="text-sm text-muted-foreground">
-                        {globalFilter || sectionFilter || activeFilter
+                        {globalFilter || activeFilter
                           ? "فیلترهای خود را تغییر دهید"
                           : "با ایجاد اولین قطعه خود شروع کنید"}
                       </p>

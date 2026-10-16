@@ -32,9 +32,7 @@ import type {
   PartnerReportData,
   PartnerSummaryRow,
 } from "./partner-report-types";
-import { printPartnerReport } from "@/lib/partner-print";
 import { exportPartnerReportExcel } from "@/lib/partner-excel";
-
 interface PartnerOption {
   id: number;
   name: string;
@@ -45,7 +43,6 @@ export function PartnerReportView() {
   const [from, setFrom] = useState(() => format(startOfMonth(new Date()), "yyyy-MM-dd"));
   const [to, setTo] = useState(todayIso);
   const [partnerId, setPartnerId] = useState<string>("all");
-  const [section, setSection] = useState<string>("all");
   const [includeReturned, setIncludeReturned] = useState(false);
   const [selectedRow, setSelectedRow] = useState<PartnerSummaryRow | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -63,23 +60,12 @@ export function PartnerReportView() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const { data: sectionsData } = useQuery({
-    queryKey: ["part-sections"],
-    queryFn: async () => {
-      const res = await fetch("/api/parts/sections");
-      if (!res.ok) throw new Error("fetch sections failed");
-      return res.json() as Promise<{ data: { section: string }[] }>;
-    },
-    staleTime: 5 * 60 * 1000,
-  });
-
   const params = useMemo(() => {
     const p = new URLSearchParams({ from, to });
     if (partnerId !== "all") p.set("partnerId", partnerId);
-    if (section !== "all") p.set("section", section);
     if (includeReturned) p.set("includeReturned", "true");
     return p.toString();
-  }, [from, to, partnerId, section, includeReturned]);
+  }, [from, to, partnerId, includeReturned]);
 
   const {
     data: report,
@@ -104,7 +90,6 @@ export function PartnerReportView() {
   });
 
   const partnerOptions = partnersData?.data ?? [];
-  const sectionOptions = sectionsData?.data?.map((s) => s.section) ?? [];
 
   const selectedPartnerName =
     partnerId === "all"
@@ -117,56 +102,64 @@ export function PartnerReportView() {
     setFrom(format(startOfMonth(new Date()), "yyyy-MM-dd"));
     setTo(todayIso);
     setPartnerId("all");
-    setSection("all");
     setIncludeReturned(false);
   };
 
-  const handlePrint = () => {
+  const handlePdfReport = async () => {
     if (!report) return;
-    const win = window.open("", "_blank", "width=1000,height=800");
-    if (!win) {
-      alert("لطفاً پاپ‌آپ بلاکر را غیرفعال کنید");
-      return;
-    }
-    win.document.write(
-      '<html lang="fa" dir="rtl"><head><meta charset="utf-8"><title>راپور سود شرکا</title></head><body></body></html>',
-    );
-    win.document.close();
+    // پنجره را همان لحظهٔ کلیک باز می‌کنیم تا مسدودکنندهٔ پاپ‌آپ جلوی آن را نگیرد
+    const tab = window.open("", "_blank");
+    setExporting(true);
+    try {
+      const res = await fetch(`/api/partners/report/pdf?${params}`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("تولید فایل PDF ناموفق بود");
 
-    printPartnerReport(win, {
-      rows: report.summary.map((r) => ({
-        name: r.name,
-        salesCount: r.salesCount,
-        units: r.units,
-        revenue: r.revenue,
-        cogs: r.cogs,
-        grossProfit: r.grossProfit,
-        percentage: r.percentage,
-        partnerShare: r.partnerShare,
-        shopShare: r.shopShare,
-        paid: r.paid,
-        outstanding: r.outstanding,
-      })),
-      totals: report.totals,
-      from,
-      to,
-      partnerName: selectedPartnerName,
-      section: section === "all" ? undefined : section,
-    });
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+
+      // ۱) دانلود فایل
+      const a = document.createElement("a");
+      a.style.display = "none";
+      a.href = url;
+      a.download = `partner-report-${from}_${to}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      // ۲) نمایش در تب جدید (مثل چاپ سوابق قطعات)
+      if (tab) tab.location.href = url;
+      else window.open(url, "_blank");
+
+      // فرصت کافی برای بارگذاری تب پیش از آزادسازی
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+    } catch (e) {
+      if (tab) tab.close();
+      console.error("Error exporting partner report PDF:", e);
+    } finally {
+      setExporting(false);
+    }
   };
 
-  const handleExcel = () => {
+  const handleExcel = async () => {
     if (!report) return;
     setExporting(true);
     try {
-      exportPartnerReportExcel({
+      await exportPartnerReportExcel({
         rows: report.summary,
         totals: report.totals,
+        parts: report.parts,
+        customers: report.customers,
+        trend: report.trend,
+        granularity: report.granularity,
         from,
         to,
         partnerName: selectedPartnerName,
-        section: section === "all" ? undefined : section,
+        includeReturned,
       });
+    } catch (e) {
+      console.error("Error exporting partner report:", e);
     } finally {
       setExporting(false);
     }
@@ -202,22 +195,6 @@ export function PartnerReportView() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1">
-              <Label className="text-xs">بخش</Label>
-              <Select value={section} onValueChange={setSection}>
-                <SelectTrigger className="w-32">
-                  <SelectValue placeholder="همه" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">همه</SelectItem>
-                  {sectionOptions.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {s}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
             <label className="flex items-center gap-2 pb-2 text-sm cursor-pointer select-none">
               <Checkbox
                 checked={includeReturned}
@@ -245,8 +222,8 @@ export function PartnerReportView() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handlePrint}
-                disabled={!report}
+                onClick={handlePdfReport}
+                disabled={!report || exporting}
               >
                 <Printer className="h-4 w-4" />
                 چاپ

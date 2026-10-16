@@ -8,7 +8,6 @@ interface Part {
   id: number;
   partNumber: string;
   name: string;
-  section: "E" | "D" | "F" | "G" | "OLD";
   minStock: number;
   costPrice: string | null;
   salePrice: string | null;
@@ -29,7 +28,6 @@ export function PartsList({ initialParts, initialPagination }: PartsListProps) {
   const [userRole, setUserRole] = useState<string | null>(null);
   const [filters, setFilters] = useState({
     search: "",
-    section: "",
     active: "",
   });
 
@@ -133,18 +131,6 @@ export function PartsList({ initialParts, initialPagination }: PartsListProps) {
           className="px-3 py-2 border rounded-md w-64"
         />
         <select
-          value={filters.section}
-          onChange={(e) => handleFilterChange("section", e.target.value)}
-          className="px-3 py-2 border rounded-md"
-        >
-          <option value="">All Sections</option>
-          <option value="E">Section E</option>
-          <option value="D">Section D</option>
-          <option value="F">Section F</option>
-          <option value="G">Section G</option>
-          <option value="OLD">OLD</option>
-        </select>
-        <select
           value={filters.active}
           onChange={(e) => handleFilterChange("active", e.target.value)}
           className="px-3 py-2 border rounded-md"
@@ -176,9 +162,6 @@ export function PartsList({ initialParts, initialPagination }: PartsListProps) {
                     Name
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Section
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Min Stock
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -205,9 +188,6 @@ export function PartsList({ initialParts, initialPagination }: PartsListProps) {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {part.name}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {part.section}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {part.minStock}

@@ -197,7 +197,6 @@ export const fetchLowStockItems = async (): Promise<LowStockItem[]> => {
         name: part.name,
         min_stock: part.min_stock || part.minStock || 0,
         current_stock: part.current_stock || part.currentStock || 0,
-        section: part.section || "E",
         cost_price: part.cost_price || part.costPrice || "0",
         sale_price: part.sale_price || part.salePrice || "0",
       }));
@@ -210,14 +209,13 @@ export const fetchLowStockItems = async (): Promise<LowStockItem[]> => {
         p.part_number,
         p.name,
         p.min_stock,
-        p.section,
         p.cost_price,
         p.sale_price,
         COALESCE(SUM(i.change), 0) as current_stock
       FROM parts p
       LEFT JOIN inventory_transactions i ON p.id = i.part_id
       WHERE p.active != false
-      GROUP BY p.id, p.part_number, p.name, p.min_stock, p.section, p.cost_price, p.sale_price
+      GROUP BY p.id, p.part_number, p.name, p.min_stock, p.cost_price, p.sale_price
       HAVING COALESCE(SUM(i.change), 0) < p.min_stock
       ORDER BY current_stock ASC
       LIMIT 100
@@ -229,7 +227,6 @@ export const fetchLowStockItems = async (): Promise<LowStockItem[]> => {
       name: part.name,
       min_stock: part.min_stock || 0,
       current_stock: parseFloat(part.current_stock?.toString() || "0"),
-      section: part.section || "E",
       cost_price: part.cost_price?.toString() || "0",
       sale_price: part.sale_price?.toString() || "0",
     }));

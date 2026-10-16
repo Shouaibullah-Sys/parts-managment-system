@@ -85,7 +85,6 @@ interface LowStockItem {
   name: string;
   min_stock: number;
   current_stock: number;
-  section: string;
   cost_price: string;
   sale_price: string;
 }
@@ -198,7 +197,6 @@ const fetchLowStockItems = async (): Promise<LowStockItem[]> => {
     name: part.name,
     min_stock: part.min_stock || part.minStock || 0,
     current_stock: part.current_stock || part.currentStock || 0,
-    section: part.section || "E",
     cost_price: part.cost_price || part.costPrice || "0",
     sale_price: part.sale_price || part.salePrice || "0",
   }));
@@ -735,9 +733,6 @@ const MobileLowStockTable = ({ items }: { items: LowStockItem[] }) => {
                     {item.part_number}
                   </p>
                 </div>
-                <Badge variant="outline" className="text-xs">
-                  {item.section}
-                </Badge>
               </div>
 
               <div className="grid grid-cols-2 gap-2 text-sm">
@@ -1672,9 +1667,6 @@ export default function AdminDashboard() {
                               نام
                             </TableHead>
                             <TableHead className="whitespace-nowrap">
-                              بخش
-                            </TableHead>
-                            <TableHead className="whitespace-nowrap">
                               حداقل موجودی
                             </TableHead>
                             <TableHead className="whitespace-nowrap">
@@ -1704,11 +1696,6 @@ export default function AdminDashboard() {
                                 </TableCell>
                                 <TableCell className="font-medium whitespace-nowrap">
                                   {item.name}
-                                </TableCell>
-                                <TableCell>
-                                  <Badge variant="outline" className="text-xs">
-                                    {item.section}
-                                  </Badge>
                                 </TableCell>
                                 <TableCell className="whitespace-nowrap">
                                   {item.min_stock.toLocaleString("fa-IR")}

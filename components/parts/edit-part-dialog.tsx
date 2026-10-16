@@ -11,24 +11,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
+import { Form } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2 } from "lucide-react";
 import { partFormSchema } from "@/lib/validations/part";
 import { z } from "zod";
 import { Part } from "@/types/parts";
-import { PartnerSelectField } from "./partner-select-field";
+import { PartsFormTable } from "./parts-form-table";
 
 interface EditPartDialogProps {
   part: Part | null;
@@ -53,7 +43,6 @@ export function EditPartDialog({
       partNumber: "",
       name: "",
       shelf: "",
-      section: "E",
       minStock: 0,
       currentStock: 0,
       costPrice: "",
@@ -69,7 +58,6 @@ export function EditPartDialog({
         partNumber: part.partNumber,
         name: part.name,
         shelf: part.shelf || "",
-        section: part.section,
         minStock: part.minStock,
         currentStock: part.currentStock || 0,
         costPrice: part.costPrice || "",
@@ -133,7 +121,7 @@ export function EditPartDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto border-mechanical bg-background">
+      <DialogContent className="sm:max-w-[95vw] max-h-[90vh] overflow-y-auto border-mechanical bg-background">
         <DialogHeader>
           <DialogTitle className="bg-linear-to-r from-primary to-primary/80 bg-clip-text text-transparent text-xl">
             ویرایش قطعه
@@ -156,171 +144,12 @@ export function EditPartDialog({
               </Alert>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="partNumber"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>شماره قطعه *</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="ABC-123"
-                        {...field}
-                        className="border-border focus:border-primary focus:ring-primary/20"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>نام قطعه *</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="فیلتر هوا"
-                        {...field}
-                        className="border-border focus:border-primary focus:ring-primary/20"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="shelf"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>طاقچه</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="مثلاً A-1"
-                        {...field}
-                        value={field.value ?? ""}
-                        className="border-border focus:border-primary focus:ring-primary/20"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="section"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>بخش *</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="E, D, F, G, OLD, یا سفارشی"
-                        {...field}
-                        className="border-border focus:border-primary focus:ring-primary/20"
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      دسته‌بندی بخش برای قطعه (هر مقدار متنی مجاز است)
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="minStock"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>حداقل موجودی</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        min="0"
-                        placeholder="0"
-                        {...field}
-                        value={field.value as number}
-                        className="border-border focus:border-primary focus:ring-primary/20"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="currentStock"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>موجودی فعلی</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        min="0"
-                        placeholder="0"
-                        {...field}
-                        value={field.value as number}
-                        className="border-border focus:border-primary focus:ring-primary/20"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="costPrice"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>قیمت خرید</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        {...field}
-                        value={field.value || ""}
-                        className="border-border focus:border-primary focus:ring-primary/20"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="salePrice"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>قیمت فروش</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        {...field}
-                        value={field.value || ""}
-                        className="border-border focus:border-primary focus:ring-primary/20"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+            <PartsFormTable
+              control={form.control}
+              partnerId={partnerId}
+              onPartnerChange={setPartnerId}
+              selectedPartnerName={part?.partner?.name ?? null}
+            />
 
             {costPrice &&
               salePrice &&
@@ -334,35 +163,6 @@ export function EditPartDialog({
                   </AlertDescription>
                 </Alert>
               )}
-
-            {/* --- شراکت قطعه --- */}
-            <PartnerSelectField
-              value={partnerId}
-              onChange={setPartnerId}
-              selectedName={part?.partner?.name ?? null}
-            />
-
-            <FormField
-              control={form.control}
-              name="active"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border border-border p-4">
-                  <div className="space-y-0.5">
-                    <FormLabel className="text-base">فعال</FormLabel>
-                    <FormDescription className="text-muted-foreground">
-                      قطعات غیرفعال در فروش و واردات نمایش داده نمی‌شوند
-                    </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                      className="data-[state=checked]:bg-primary"
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
 
             <div className="flex gap-4 justify-end pt-4">
               <Button

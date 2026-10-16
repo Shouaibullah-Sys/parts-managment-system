@@ -27,7 +27,7 @@ const persianToLatin = (value: string): string =>
   value.replace(/[۰-۹]/g, (d) => String(PERSIAN_DIGITS.indexOf(d)));
 
 // Numbers on the invoice: Latin digits, no decimals, thousands separator
-const toEnglishNumber = (value: number | string): string => {
+export const toEnglishNumber = (value: number | string): string => {
   const n =
     typeof value === "number"
       ? value
@@ -40,7 +40,7 @@ const toEnglishCurrency = (amount: number): string =>
   `${toEnglishNumber(amount)} افغانی`;
 
 // Solar Hijri date with Latin digits (۱۴۰۵/۷/۲۳ → 1405/7/23)
-const toEnglishDate = (date: Date): string =>
+export const toEnglishDate = (date: Date): string =>
   persianToLatin(date.toLocaleDateString("fa-IR"));
 
 // ----------------------
@@ -200,7 +200,7 @@ const initializeCache = async (): Promise<void> => {
 // ----------------------
 // Get cached assets
 // ----------------------
-const getCachedAssets = async () => {
+export const getCachedAssets = async () => {
   await initializeCache();
   return {
     font: cachedFont || "",

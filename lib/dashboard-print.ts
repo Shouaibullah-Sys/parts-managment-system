@@ -46,7 +46,6 @@ interface DashboardPrintData {
     name: string;
     min_stock: number;
     current_stock: number;
-    section: string;
   }[];
 }
 
@@ -204,9 +203,9 @@ ${lowStockItems.length > 0 ? `
 <div class="sec-title">هشدار کمبود موجودی (${lowStockItems.length} مورد)</div>
 <div class="card">
   <table class="rpt">
-    <colgroup><col style="width:5%"><col style="width:16%"><col style="width:22%"><col style="width:8%"><col style="width:11%"><col style="width:13%"><col style="width:11%"><col style="width:14%"></colgroup>
+    <colgroup><col style="width:5%"><col style="width:16%"><col style="width:22%"><col style="width:11%"><col style="width:13%"><col style="width:11%"><col style="width:14%"></colgroup>
     <thead>
-      <tr><th>#</th><th>شماره قطعه</th><th>نام</th><th>بخش</th><th>حداقل</th><th>موجودی فعلی</th><th>کمبود</th><th>وضعیت</th></tr>
+      <tr><th>#</th><th>شماره قطعه</th><th>نام</th><th>حداقل</th><th>موجودی فعلی</th><th>کمبود</th><th>وضعیت</th></tr>
     </thead>
     <tbody>
       ${lowStockItems.map((item, i) => {
@@ -217,7 +216,6 @@ ${lowStockItems.length > 0 ? `
           <td class="num">${i + 1}</td>
           <td class="mono">${esc(item.part_number)}</td>
           <td class="wrap txt-r">${esc(item.name)}</td>
-          <td><span class="badge badge-neutral">${esc(item.section)}</span></td>
           <td class="num">${fmt(item.min_stock)}</td>
           <td class="num" style="font-weight:700;color:${item.current_stock === 0 ? "#C0392B" : "#B45309"}">${fmt(item.current_stock)}</td>
           <td class="num amt-red">-${fmt(deficit)}</td>

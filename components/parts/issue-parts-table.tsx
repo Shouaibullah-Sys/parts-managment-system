@@ -67,7 +67,6 @@ interface Part {
   id: number;
   partNumber: string;
   name: string;
-  section: "E" | "D" | "F" | "G" | "OLD";
   currentStock: number;
   salePrice: string | null;
   minStock: number;
@@ -140,6 +139,12 @@ export function IssuePartsTable() {
 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [externalItems, setExternalItems] = useState<ExternalItem[]>([]);
+
+  // Two-step add dialog: pick quantity, then selling price.
+  const [addPart, setAddPart] = useState<Part | null>(null);
+  const [addStep, setAddStep] = useState<"quantity" | "price">("quantity");
+  const [addQuantity, setAddQuantity] = useState("1");
+  const [addPrice, setAddPrice] = useState("");
 
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [isNewCustomer, setIsNewCustomer] = useState(false);
@@ -240,34 +245,61 @@ export function IssuePartsTable() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const addToCart = useCallback(
+  const openAddDialog = useCallback(
     (part: Part) => {
+      if (part.currentStock <= 0) {
+        toast.warning("موجودی این قطعه تمام است");
+        return;
+      }
+      const existing = cart.find((i) => i.part.id === part.id);
+      setAddPart(part);
+      setAddQuantity(String(existing?.quantity ?? 1));
+      setAddPrice(
+        String(
+          existing?.customPrice ?? (parseFloat(part.salePrice || "0") || 0),
+        ),
+      );
+      setAddStep("quantity");
       setQuery("");
       setShowDropdown(false);
-      searchRef.current?.focus();
-      setCart((prev) => {
-        const existing = prev.find((i) => i.part.id === part.id);
-        if (existing) {
-          if (existing.quantity + 1 > part.currentStock) {
-            toast.warning(`موجودی کافی نیست (${part.currentStock})`);
-            return prev;
-          }
-          return prev.map((i) =>
-            i.part.id === part.id ? { ...i, quantity: i.quantity + 1 } : i,
-          );
-        }
-        return [
-          ...prev,
-          {
-            part,
-            quantity: 1,
-            customPrice: parseFloat(part.salePrice || "0") || 0,
-          },
-        ];
-      });
     },
-    [],
+    [cart],
   );
+
+  const confirmAddQuantity = () => {
+    if (!addPart) return;
+    const q = parseInt(addQuantity) || 0;
+    if (q < 1) {
+      toast.error("تعداد باید حداقل ۱ باشد");
+      return;
+    }
+    if (q > addPart.currentStock) {
+      toast.warning(`حداکثر موجودی: ${addPart.currentStock}`);
+      return;
+    }
+    setAddQuantity(String(q));
+    setAddStep("price");
+  };
+
+  const confirmAddPrice = () => {
+    if (!addPart) return;
+    const q = parseInt(addQuantity) || 0;
+    const price = parseFloat(addPrice) || 0;
+    setCart((prev) => {
+      const existing = prev.find((i) => i.part.id === addPart.id);
+      if (existing) {
+        return prev.map((i) =>
+          i.part.id === addPart.id
+            ? { ...i, part: addPart, quantity: q, customPrice: price }
+            : i,
+        );
+      }
+      return [...prev, { part: addPart, quantity: q, customPrice: price }];
+    });
+    toast.success("به سبد صدور افزوده شد");
+    setAddPart(null);
+    setTimeout(() => searchRef.current?.focus(), 50);
+  };
 
   const updateQuantity = (partId: number, q: number) => {
     if (q < 1) return removeFromCart(partId);
@@ -483,7 +515,7 @@ export function IssuePartsTable() {
       setActiveIndex((i) => Math.max(i - 1, 0));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      addToCart(results[activeIndex] ?? results[0]);
+      openAddDialog(results[activeIndex] ?? results[0]);
     } else if (e.key === "Escape") {
       setShowDropdown(false);
     }
@@ -541,7 +573,7 @@ export function IssuePartsTable() {
                         type="button"
                         onMouseDown={(e) => {
                           e.preventDefault();
-                          addToCart(part);
+                          openAddDialog(part);
                         }}
                         onMouseEnter={() => setActiveIndex(idx)}
                         className={`w-full flex items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors ${
@@ -553,9 +585,6 @@ export function IssuePartsTable() {
                             <span className="font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">
                               {part.partNumber}
                             </span>
-                            <Badge variant="outline" className="text-[10px]">
-                              {part.section}
-                            </Badge>
                           </div>
                           <p className="font-medium truncate mt-0.5">{part.name}</p>
                         </div>
@@ -613,7 +642,6 @@ export function IssuePartsTable() {
                       <TableHead className="w-8 text-center">#</TableHead>
                       <TableHead>کد قطعه</TableHead>
                       <TableHead>نام قطعه</TableHead>
-                      <TableHead>بخش</TableHead>
                       <TableHead>موجودی</TableHead>
                       <TableHead className="text-center">تعداد</TableHead>
                       <TableHead>قیمت واحد</TableHead>
@@ -638,9 +666,6 @@ export function IssuePartsTable() {
                             <span className="font-medium line-clamp-1">
                               {item.part.name}
                             </span>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{item.part.section}</Badge>
                           </TableCell>
                           <TableCell>
                             <StockPill part={item.part} />
@@ -1233,6 +1258,186 @@ export function IssuePartsTable() {
             >
               <CheckCircle2 className="h-4 w-4" />
               بازگشت به سبد
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Add step 1: quantity ─────────────────────────────────────── */}
+      <Dialog
+        open={!!addPart && addStep === "quantity"}
+        onOpenChange={(o) => !o && setAddPart(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <PackagePlus className="h-5 w-5 text-primary" />
+              تعداد قطعه
+            </DialogTitle>
+            <DialogDescription>
+              تعداد مورد نظر را وارد کنید؛ سپس قیمت فروش پرسیده می‌شود.
+            </DialogDescription>
+          </DialogHeader>
+
+          {addPart && (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-border p-3 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+                    {addPart.partNumber}
+                  </span>
+                  <span className="font-medium">{addPart.name}</span>
+                </div>
+                <div className="mt-2 flex items-center justify-between text-muted-foreground">
+                  <span>موجودی انبار</span>
+                  <StockPill part={addPart} />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">تعداد</label>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="outline"
+                    className="h-9 w-9"
+                    onClick={() =>
+                      setAddQuantity(
+                        String(Math.max(1, (parseInt(addQuantity) || 1) - 1)),
+                      )
+                    }
+                  >
+                    <Minus className="h-4 w-4" />
+                  </Button>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={addPart.currentStock}
+                    value={addQuantity}
+                    autoFocus
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => setAddQuantity(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        confirmAddQuantity();
+                      }
+                    }}
+                    className="h-9 text-center tabular-nums"
+                  />
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="outline"
+                    className="h-9 w-9"
+                    onClick={() =>
+                      setAddQuantity(
+                        String(
+                          Math.min(
+                            addPart.currentStock,
+                            (parseInt(addQuantity) || 0) + 1,
+                          ),
+                        ),
+                      )
+                    }
+                    disabled={(parseInt(addQuantity) || 0) >= addPart.currentStock}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  حداکثر {addPart.currentStock} عدد
+                </p>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setAddPart(null)}
+            >
+              انصراف
+            </Button>
+            <Button type="button" onClick={confirmAddQuantity}>
+              بعدی
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Add step 2: selling price ────────────────────────────────── */}
+      <Dialog
+        open={!!addPart && addStep === "price"}
+        onOpenChange={(o) => !o && setAddPart(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShoppingCart className="h-5 w-5 text-primary" />
+              قیمت فروش
+            </DialogTitle>
+            <DialogDescription>
+              قیمت فروش واحد این قطعه را وارد کنید.
+            </DialogDescription>
+          </DialogHeader>
+
+          {addPart && (
+            <div className="space-y-4">
+              <div className="space-y-2 rounded-lg border border-border p-3 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+                    {addPart.partNumber}
+                  </span>
+                  <span className="font-medium">{addPart.name}</span>
+                </div>
+                <div className="flex items-center justify-between text-muted-foreground">
+                  <span>تعداد</span>
+                  <span className="font-mono">{parseInt(addQuantity) || 0}</span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">قیمت واحد (افغانی)</label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={addPrice}
+                  autoFocus
+                  onFocus={(e) => e.target.select()}
+                  onChange={(e) => setAddPrice(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      confirmAddPrice();
+                    }
+                  }}
+                  className="h-9 tabular-nums"
+                />
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2 text-sm">
+                <span className="text-muted-foreground">جمع</span>
+                <span className="font-semibold tabular-nums">
+                  {afn((parseFloat(addPrice) || 0) * (parseInt(addQuantity) || 0))}
+                </span>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setAddStep("quantity")}
+            >
+              قبلی
+            </Button>
+            <Button type="button" onClick={confirmAddPrice} className="gap-2">
+              <CheckCircle2 className="h-4 w-4" />
+              افزودن به سبد
             </Button>
           </DialogFooter>
         </DialogContent>

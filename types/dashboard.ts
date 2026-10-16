@@ -16,7 +16,6 @@ export interface LowStockItem {
   name: string;
   min_stock: number;
   current_stock: number;
-  section: string;
   cost_price: string;
   sale_price: string;
 }

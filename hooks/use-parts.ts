@@ -13,7 +13,6 @@ export function useParts(
     page?: number;
     limit?: number;
     search?: string;
-    section?: string;
     active?: boolean;
   },
   options?: any
@@ -28,7 +27,6 @@ export function useParts(
       if (params?.page) searchParams.append("page", params.page.toString());
       if (params?.limit) searchParams.append("limit", params.limit.toString());
       if (params?.search) searchParams.append("search", params.search);
-      if (params?.section) searchParams.append("section", params.section);
       if (params?.active !== undefined)
         searchParams.append("active", params.active.toString());
 

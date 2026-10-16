@@ -34,9 +34,6 @@ export const LowStockTable = ({ items }: LowStockTableProps) => {
                     {item.part_number}
                   </p>
                 </div>
-                <Badge variant="outline" className="text-xs">
-                  {item.section}
-                </Badge>
               </div>
 
               <div className="grid grid-cols-2 gap-2 text-sm">
@@ -110,7 +107,6 @@ export const DesktopLowStockTable = ({ items }: LowStockTableProps) => {
             <TableRow>
               <TableHead className="whitespace-nowrap">شماره قطعه</TableHead>
               <TableHead className="whitespace-nowrap">نام</TableHead>
-              <TableHead className="whitespace-nowrap">بخش</TableHead>
               <TableHead className="whitespace-nowrap">حداقل موجودی</TableHead>
               <TableHead className="whitespace-nowrap">موجودی فعلی</TableHead>
               <TableHead className="whitespace-nowrap">کمبود</TableHead>
@@ -128,11 +124,6 @@ export const DesktopLowStockTable = ({ items }: LowStockTableProps) => {
                   </TableCell>
                   <TableCell className="font-medium whitespace-nowrap">
                     {item.name}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="text-xs">
-                      {item.section}
-                    </Badge>
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
                     {item.min_stock.toLocaleString("fa-IR")}

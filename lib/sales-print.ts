@@ -18,7 +18,6 @@ export interface SalesPrintRow {
   customerName: string;
   partName: string;
   partNumber: string | null;
-  section: string | null;
   quantity: number;
   issueDate: string;
   totalAmount: string;
@@ -43,7 +42,6 @@ export interface SalesPrintSummary {
 
 // Active filters shown as chips in the report header (self-describing report).
 export interface SalesPrintFilters {
-  section?: string;
   paymentStatus?: string; // "paid" | "outstanding" | "all"
   search?: string;
 }
@@ -77,7 +75,6 @@ export function printSalesReport(
         : "همه";
   const chips = [
     `بازه: <b>${hijri(from)} — ${hijri(to)}</b>`,
-    `بخش: <b>${esc(filters?.section || "همه")}</b>`,
     `وضعیت پرداخت: <b>${paymentStatusLabel}</b>`,
   ];
   if (filters?.search) chips.push(`جستجو: <b>${esc(filters.search)}</b>`);
@@ -85,11 +82,11 @@ export function printSalesReport(
     .map((c) => `<span class="chip">${c}</span>`)
     .join("")}</div>`;
 
-  // Column widths (% of A4 content width) — 12 columns
+  // Column widths (% of A4 content width) — 11 columns
   const colgroup = `<colgroup>
     <col style="width:4%"><col style="width:14%"><col style="width:15%"><col style="width:9%">
-    <col style="width:5%"><col style="width:5%"><col style="width:10%"><col style="width:8%">
-    <col style="width:8%"><col style="width:8%"><col style="width:7%"><col style="width:7%">
+    <col style="width:5%"><col style="width:10%"><col style="width:9%">
+    <col style="width:9%"><col style="width:9%"><col style="width:8%"><col style="width:8%">
   </colgroup>`;
 
   const bodyRows =
@@ -101,7 +98,6 @@ export function printSalesReport(
         <td class="wrap txt-r">${esc(r.customerName)}</td>
         <td class="wrap txt-r">${esc(r.partName)}</td>
         <td class="mono">${esc(r.partNumber || "—")}</td>
-        <td>${esc(r.section || "—")}</td>
         <td class="num">${money(r.quantity)}</td>
         <td class="num">${hijri(r.issueDate)}</td>
         <td class="num">${money(r.totalAmount)}</td>
@@ -112,7 +108,7 @@ export function printSalesReport(
       </tr>`
           )
           .join("")
-      : `<tr><td colspan="12" class="empty">داده‌ای در این بازه زمانی یافت نشد</td></tr>`;
+      : `<tr><td colspan="11" class="empty">داده‌ای در این بازه زمانی یافت نشد</td></tr>`;
 
   const html = `<!DOCTYPE html>
 <html lang="fa" dir="rtl">
@@ -143,14 +139,14 @@ ${
   ${colgroup}
   <thead>
     <tr>
-      <th>#</th><th>مشتری</th><th>قطعه</th><th>شماره قطعه</th><th>بخش</th><th>تعداد</th>
+      <th>#</th><th>مشتری</th><th>قطعه</th><th>شماره قطعه</th><th>تعداد</th>
       <th>تاریخ</th><th>مبلغ کل</th><th>پرداخت شده</th><th>باقیمانده</th><th>وضعیت</th><th>صادر کننده</th>
     </tr>
   </thead>
   <tbody>${bodyRows}</tbody>
   <tfoot>
     <tr>
-      <td colspan="7">مجموع کل</td>
+      <td colspan="6">مجموع کل</td>
       <td class="num">${money(sumSales)}</td>
       <td class="num amt-green">${money(sumPaid)}</td>
       <td class="num amt-amber">${money(sumOutstanding)}</td>

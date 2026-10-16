@@ -161,11 +161,10 @@ export async function PATCH(
     if (!numericId) return bad("Invalid ID");
 
     const body = await request.json();
-    const { section, cost_price, sale_price, partner_id } = body;
+    const { cost_price, sale_price, partner_id } = body;
 
     // Build update object
     const updateData: any = {};
-    if (section !== undefined) updateData.section = section;
     if (cost_price !== undefined) updateData.costPrice = cost_price;
     if (sale_price !== undefined) updateData.salePrice = sale_price;
 

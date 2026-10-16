@@ -7,7 +7,6 @@ export interface LowStockNotification {
   id: number;
   part_number: string;
   name: string;
-  section: string;
   min_stock: number;
   current_stock: number;
   deficit: number;
@@ -24,7 +23,6 @@ export async function checkLowStockNotifications() {
         id: parts.id,
         part_number: parts.partNumber,
         name: parts.name,
-        section: parts.section,
         min_stock: parts.minStock,
         current_stock: parts.currentStock,
       })

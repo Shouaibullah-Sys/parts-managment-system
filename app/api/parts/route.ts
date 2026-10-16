@@ -13,7 +13,6 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search");
-    const section = searchParams.get("section");
     const active = searchParams.get("active");
     const limit = parseInt(searchParams.get("limit") || "100");
     const page = parseInt(searchParams.get("page") || "1");
@@ -30,9 +29,6 @@ export async function GET(request: NextRequest) {
         )
       );
     }
-    if (section) {
-      whereConditions.push(eq(parts.section, section));
-    }
     if (active !== null && active !== undefined) {
       whereConditions.push(eq(parts.active, active === "true"));
     } else {
@@ -43,9 +39,6 @@ export async function GET(request: NextRequest) {
     let whereClause = "WHERE p.active = true";
     if (search) {
       whereClause += ` AND (LOWER(p.part_number) LIKE LOWER('%${search}%') OR LOWER(p.name) LIKE LOWER('%${search}%'))`;
-    }
-    if (section) {
-      whereClause += ` AND p.section = '${section}'`;
     }
     if (active !== null && active !== undefined) {
       whereClause += ` AND p.active = ${active === "true"}`;
@@ -58,7 +51,6 @@ export async function GET(request: NextRequest) {
         p.part_number AS "partNumber",
         p.name,
         p.shelf,
-        p.section,
         p.min_stock AS "minStock",
         p.cost_price AS "costPrice",
         p.sale_price AS "salePrice",
@@ -124,7 +116,6 @@ export async function POST(request: NextRequest) {
       partNumber,
       name,
       shelf,
-      section,
       minStock,
       currentStock,
       costPrice,
@@ -199,7 +190,6 @@ export async function POST(request: NextRequest) {
           partNumber,
           name,
           shelf: shelf || null,
-          section: section || "E",
           minStock: minStock || 0,
           currentStock: currentStock || 0,
           costPrice: costPrice || null,

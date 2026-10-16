@@ -58,7 +58,6 @@ interface SaleRecord {
   issuedBy: string;
   partNumber: string;
   partName: string;
-  section: string | null;
 }
 
 interface SalesSummary {
@@ -80,11 +79,6 @@ interface SalesResponse {
   summary: SalesSummary;
 }
 
-interface SectionOption {
-  section: string;
-  salesCount: number;
-}
-
 type QuickPeriod = "today" | "week" | "month" | "all" | "custom";
 
 const PAGE_SIZE = 20;
@@ -92,7 +86,6 @@ const PAGE_SIZE = 20;
 const fetchSales = async (params: {
   fromDate: string;
   toDate: string;
-  section: string;
   page: number;
 }): Promise<SalesResponse> => {
   const searchParams = new URLSearchParams({
@@ -102,7 +95,6 @@ const fetchSales = async (params: {
   });
   if (params.fromDate) searchParams.set("fromDate", params.fromDate);
   if (params.toDate) searchParams.set("toDate", params.toDate);
-  if (params.section) searchParams.set("section", params.section);
 
   const response = await fetch(`/api/sales?${searchParams.toString()}`, {
     credentials: "include",
@@ -111,29 +103,12 @@ const fetchSales = async (params: {
   return response.json();
 };
 
-const fetchSections = async (params: {
-  fromDate: string;
-  toDate: string;
-}): Promise<SectionOption[]> => {
-  const searchParams = new URLSearchParams();
-  if (params.fromDate) searchParams.set("fromDate", params.fromDate);
-  if (params.toDate) searchParams.set("toDate", params.toDate);
-
-  const response = await fetch(`/api/parts/sections?${searchParams.toString()}`, {
-    credentials: "include",
-  });
-  if (!response.ok) throw new Error("Failed to fetch sections");
-  const json = await response.json();
-  return json.data || [];
-};
-
 export default function SalesTab() {
   const todayStr = format(startOfToday(), "yyyy-MM-dd");
   const nowStr = format(new Date(), "yyyy-MM-dd");
 
   const [dateRange, setDateRange] = useState({ from: todayStr, to: nowStr });
   const [quickPeriod, setQuickPeriod] = useState<QuickPeriod>("today");
-  const [section, setSection] = useState<string>("all");
   const [page, setPage] = useState(1);
 
   const applyPeriod = (period: QuickPeriod) => {
@@ -165,25 +140,17 @@ export default function SalesTab() {
     setPage(1);
   };
 
-  const { data: sections } = useQuery({
-    queryKey: ["sales-sections", dateRange.from, dateRange.to],
-    queryFn: () =>
-      fetchSections({ fromDate: dateRange.from, toDate: dateRange.to }),
-  });
-
   const { data, isLoading, isFetching, error } = useQuery({
     queryKey: [
       "dashboard-sales",
       dateRange.from,
       dateRange.to,
-      section,
       page,
     ],
     queryFn: () =>
       fetchSales({
         fromDate: dateRange.from,
         toDate: dateRange.to,
-        section: section === "all" ? "" : section,
         page,
       }),
     placeholderData: (prev) => prev,
@@ -269,30 +236,6 @@ export default function SalesTab() {
                 onChange={(e) => handleDateChange("to", e.target.value)}
                 className="w-36"
               />
-            </div>
-
-            {/* Section filter */}
-            <div className="flex items-center gap-2">
-              <Package className="h-4 w-4 text-muted-foreground" />
-              <Select
-                value={section}
-                onValueChange={(value) => {
-                  setSection(value);
-                  setPage(1);
-                }}
-              >
-                <SelectTrigger className="w-44">
-                  <SelectValue placeholder="بخش" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">همه بخش‌ها</SelectItem>
-                  {sections?.map((s) => (
-                    <SelectItem key={s.section} value={s.section}>
-                      {s.section} ({s.salesCount})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
           </div>
         </CardContent>
@@ -404,7 +347,6 @@ export default function SalesTab() {
                   <TableRow>
                     <TableHead>مشتری</TableHead>
                     <TableHead>قطعه</TableHead>
-                    <TableHead>بخش</TableHead>
                     <TableHead>تعداد</TableHead>
                     <TableHead>مبلغ کل</TableHead>
                     <TableHead>پرداخت شده</TableHead>
@@ -434,11 +376,6 @@ export default function SalesTab() {
                             </span>
                           )}
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-xs">
-                          {sale.section || "E"}
-                        </Badge>
                       </TableCell>
                       <TableCell className="text-center">
                         {sale.quantity}

@@ -9,7 +9,6 @@ export type Part = {
   partNumber: string;
   name: string;
   shelf: string | null; // طاقچه — shelf location
-  section: string; // Changed from enum to string for flexibility
   minStock: number;
   costPrice: string | null;
   salePrice: string | null;
@@ -24,7 +23,6 @@ export type CreatePartInput = {
   partNumber: string;
   name: string;
   shelf?: string | null; // طاقچه — shelf location
-  section?: string; // Changed from enum to string for flexibility
   minStock?: number;
   currentStock?: number;
   costPrice?: string;
