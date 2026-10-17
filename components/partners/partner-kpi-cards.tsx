@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import type { PartnerReportTotals } from "./partner-report-types";
 
-const fmt = (n: number) => n.toLocaleString("fa-IR");
+const fmt = (n: number) => n.toLocaleString("fa-IR-u-nu-latn");
 
 interface Props {
   totals: PartnerReportTotals;

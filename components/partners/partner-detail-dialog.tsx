@@ -23,7 +23,7 @@ import type {
   PartnerReportData,
 } from "./partner-report-types";
 
-const fmt = (n: number | string) => Number(n).toLocaleString("fa-IR");
+const fmt = (n: number | string) => Number(n).toLocaleString("fa-IR-u-nu-latn");
 
 interface Props {
   open: boolean;

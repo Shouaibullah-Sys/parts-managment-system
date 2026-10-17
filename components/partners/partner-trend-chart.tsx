@@ -5,7 +5,7 @@ import { useMemo } from "react";
 import { BarChart3 } from "lucide-react";
 import type { PartnerTrendPoint } from "./partner-report-types";
 
-const fmt = (n: number) => n.toLocaleString("fa-IR");
+const fmt = (n: number) => n.toLocaleString("fa-IR-u-nu-latn");
 
 // پالت ثابت برای شرکا (برای ردیف «بدون شراکت» رنگ کهربایی)
 const PALETTE = [

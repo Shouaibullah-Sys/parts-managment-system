@@ -52,7 +52,7 @@ interface Pagination {
 const formatDate = (value?: string | null) => {
   if (!value) return "—";
   try {
-    return new Date(value).toLocaleDateString("fa-IR");
+    return new Date(value).toLocaleDateString("fa-IR-u-nu-latn");
   } catch {
     return "—";
   }
@@ -62,7 +62,7 @@ const formatPercentage = (value?: number | string | null) => {
   if (value === null || value === undefined || value === "") return "—";
   const n = typeof value === "string" ? Number(value) : value;
   if (Number.isNaN(n)) return "—";
-  return `${n.toLocaleString("fa-IR")}٪`;
+  return `${n.toLocaleString("fa-IR-u-nu-latn")}٪`;
 };
 
 export function PartnersTable({ isAdmin }: { isAdmin: boolean }) {
@@ -353,7 +353,7 @@ export function PartnersTable({ isAdmin }: { isAdmin: boolean }) {
 
         <div className="flex items-center justify-between gap-2">
           <span className="text-sm text-muted-foreground">
-            مجموع: {pagination.total.toLocaleString("fa-IR")} شریک
+              مجموع: {pagination.total.toLocaleString("fa-IR-u-nu-latn")} شریک
           </span>
           <div className="flex items-center gap-2">
             <Button
