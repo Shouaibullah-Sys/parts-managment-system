@@ -9,8 +9,16 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
 if [ ! -f .next/standalone/server.js ]; then
   echo "First run: installing dependencies and building (this takes a few minutes)..."
-  npm install --no-audit --no-fund
-  npm run build
+  # The repo is locked with pnpm (pnpm-lock.yaml). Corepack ships with Node 20+
+  # and activates the version pinned in package.json ("packageManager").
+  corepack enable >/dev/null 2>&1 || true
+  if command -v pnpm >/dev/null 2>&1; then
+    pnpm install --frozen-lockfile
+    pnpm build
+  else
+    npx --yes pnpm@10.27.0 install --frozen-lockfile
+    npx --yes pnpm@10.27.0 build
+  fi
 fi
 
 # Bind all interfaces so LAN clients get full read/write; the Cloudflare
