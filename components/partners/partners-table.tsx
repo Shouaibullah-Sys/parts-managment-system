@@ -352,9 +352,10 @@ export function PartnersTable({ isAdmin }: { isAdmin: boolean }) {
         </div>
 
         <div className="flex items-center justify-between gap-2">
-          <span className="text-sm text-muted-foreground">
-              مجموع: {pagination.total.toLocaleString("fa-IR-u-nu-latn")} شریک
-          </span>
+            <span className="text-sm text-muted-foreground">
+              مجموع: {pagination.total.toLocaleString("fa-IR-u-nu-latn")}{" "}
+              شریک
+            </span>
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
@@ -364,10 +365,10 @@ export function PartnersTable({ isAdmin }: { isAdmin: boolean }) {
             >
               قبلی
             </Button>
-            <span className="text-sm text-muted-foreground">
-              صفحه {pagination.page.toLocaleString("fa-IR")} از{" "}
-              {pagination.totalPages.toLocaleString("fa-IR")}
-            </span>
+          <span className="text-sm text-muted-foreground">
+            صفحه {pagination.page.toLocaleString("fa-IR-u-nu-latn")} از{" "}
+            {pagination.totalPages.toLocaleString("fa-IR-u-nu-latn")}
+          </span>
             <Button
               variant="outline"
               size="sm"

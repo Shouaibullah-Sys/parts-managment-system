@@ -602,7 +602,7 @@ export async function generateInvoicePDF(
     const tbX = M;
     const hasExternal = externalPayable > 0;
     const netAmount = Math.max(0, totalAmount - externalPayable);
-    const tbH = hasExternal ? 92 : 44;
+    const tbH = hasExternal ? 40 : 38;
 
     doc.setFillColor(...LIGHT_GRAY);
     doc.rect(tbX, ty, tbW, tbH, "F");
@@ -626,33 +626,6 @@ export async function generateInvoicePDF(
       doc.text(toEnglishCurrency(totalAmount), tbX + 14, ty + 22, {
         align: "left",
       });
-
-      // منها: بهای خرید پرزه‌های خارجی (قابل پرداخت به فروشگاه‌ها)
-      doc.setTextColor(...MUTED);
-      doc.text("منها: بهای خرید پرزه‌های خارجی", tbX + tbW - 14, ty + 46, {
-        align: "right",
-      });
-      doc.text(`- ${toEnglishCurrency(externalPayable)}`, tbX + 14, ty + 46, {
-        align: "left",
-      });
-
-      // جداکننده
-      doc.setDrawColor(...BORDER);
-      doc.line(tbX + 10, ty + 60, tbX + tbW - 10, ty + 60);
-
-      // خالص قابل پرداخت (سود مغازه + قطعات انبار)
-      doc.setFontSize(13);
-      doc.setTextColor(...BRAND_RED);
-      doc.text("خالص قابل پرداخت", tbX + tbW - 14, ty + 82, {
-        align: "right",
-      });
-      if (fontBoldLoaded) doc.setFont(FONT_BOLD, "bold");
-      doc.setFontSize(13);
-      doc.setTextColor(...INK);
-      doc.text(toEnglishCurrency(netAmount), tbX + 14, ty + 82, {
-        align: "left",
-      });
-      doc.setFont(FONT, "normal");
     }
 
     ty += tbH + 22;
