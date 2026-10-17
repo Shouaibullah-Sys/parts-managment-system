@@ -31,12 +31,10 @@ export async function GET(request: NextRequest) {
     }
     if (active !== null && active !== undefined) {
       whereConditions.push(eq(parts.active, active === "true"));
-    } else {
-      whereConditions.push(eq(parts.active, true));
     }
 
-    // Build SQL WHERE clause
-    let whereClause = "WHERE p.active = true";
+    // Build SQL WHERE clause — no status filter means all parts
+    let whereClause = "WHERE 1=1";
     if (search) {
       whereClause += ` AND (LOWER(p.part_number) LIKE LOWER('%${search}%') OR LOWER(p.name) LIKE LOWER('%${search}%'))`;
     }
@@ -72,6 +70,25 @@ export async function GET(request: NextRequest) {
 
     const total = Number(countResult[0]?.count || 0);
 
+    // Aggregate inventory value over the same filtered set (all pages, not just current page)
+    const summaryResult = await db.execute(sql`
+      SELECT
+        COALESCE(SUM(p.cost_price * p.current_stock), 0) AS "totalCostValue",
+        COALESCE(SUM(p.sale_price * p.current_stock), 0) AS "totalSaleValue"
+      FROM parts p
+      ${sql`${sql.raw(whereClause)}`}
+    `);
+    const summaryRow = (
+      (summaryResult.rows || summaryResult) as Array<{
+        totalCostValue?: string | number | null;
+        totalSaleValue?: string | number | null;
+      }>
+    )[0];
+    const summary = {
+      totalCostValue: Number(summaryRow?.totalCostValue || 0),
+      totalSaleValue: Number(summaryRow?.totalSaleValue || 0),
+    };
+
     const rows = (partsData.rows || partsData) as Array<{
       id: number;
       partnerId?: number | null;
@@ -97,6 +114,7 @@ export async function GET(request: NextRequest) {
         total,
         totalPages: Math.ceil(total / limit),
       },
+      summary,
     });
   } catch (error) {
     console.error("Error in parts API:", error);

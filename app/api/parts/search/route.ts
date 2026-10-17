@@ -3,7 +3,7 @@ export const runtime = "nodejs";
 
 import { NextRequest } from "next/server";
 import { db } from "@/db/drizzle";
-import { parts, inventory } from "@/db/schema";
+import { parts, inventory, partners } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
 
 export async function GET(request: NextRequest) {
@@ -30,8 +30,12 @@ export async function GET(request: NextRequest) {
           active: parts.active,
           createdAt: parts.createdAt,
           currentStock: parts.currentStock, // Use direct column
+          partnerId: parts.partnerId,
+          partnerName: partners.name,
+          partnerPercentage: partners.percentage,
         })
         .from(parts)
+        .leftJoin(partners, eq(parts.partnerId, partners.id))
         .where(eq(parts.active, true))
         .orderBy(parts.partNumber)
         .limit(limit);
@@ -53,9 +57,13 @@ export async function GET(request: NextRequest) {
           active: parts.active,
           createdAt: parts.createdAt,
           currentStock: sql<number>`COALESCE(SUM(${inventory.change}), 0)`,
+          partnerId: parts.partnerId,
+          partnerName: partners.name,
+          partnerPercentage: partners.percentage,
         })
         .from(parts)
         .leftJoin(inventory, eq(parts.id, inventory.partId))
+        .leftJoin(partners, eq(parts.partnerId, partners.id))
         .where(eq(parts.active, true))
         .groupBy(
           parts.id,
@@ -65,7 +73,10 @@ export async function GET(request: NextRequest) {
           parts.costPrice,
           parts.salePrice,
           parts.active,
-          parts.createdAt
+          parts.createdAt,
+          parts.partnerId,
+          partners.name,
+          partners.percentage
         )
         .orderBy(parts.partNumber)
         .limit(limit);

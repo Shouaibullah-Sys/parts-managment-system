@@ -36,6 +36,14 @@ const money = (v: number | string) =>
 const int = (v: number | string) => Math.round(num(v)).toLocaleString("en-US");
 const pct = (v: number) => `${(Math.round(v * 10) / 10).toFixed(1)}%`;
 
+// "yyyy-MM-dd" -> شمسی (Hijri Shamsi); avoids UTC off-by-one of new Date(string)
+const hijri = (d: string) => {
+  if (!d) return "…";
+  const [y, m, day] = d.split("-").map(Number);
+  if (!y) return d;
+  return toEnglishDate(new Date(y, (m || 1) - 1, day || 1));
+};
+
 type Align = "right" | "center" | "left";
 interface Col<T> {
   label: string;
@@ -66,7 +74,7 @@ export async function generateCustomerSummaryPdf(
   const bottomLimit = () => H - 44;
   const rangeLabel =
     from || to
-      ? `${from || "…"} — ${to || "…"}`
+      ? `${hijri(from)} — ${hijri(to)}`
       : period === "lifetime"
         ? "همه سوابق"
         : period;

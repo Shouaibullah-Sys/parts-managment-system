@@ -2,7 +2,7 @@
 // راپور انفرادی یک مشتری — فقط سرور
 // شامل: خلاصهٔ مشتری، تفکیک شرکا و جزئیات کامل معاملات (هماهنگ با فیلترهای فعال)
 import { db } from "@/db/drizzle";
-import { sales, customers, parts, partners, user } from "@/db/schema";
+import { sales, customers, parts, partners, payments, user } from "@/db/schema";
 import { and, eq, gte, lte, sql, isNull, type SQL } from "drizzle-orm";
 import {
   startOfToday,
@@ -15,6 +15,7 @@ import { buildCustomerSummary } from "./customer-summary";
 import type {
   CustomerDetailData,
   CustomerDetailRow,
+  CustomerDetailPaymentRow,
 } from "@/components/sales/customer-summary-types";
 
 export interface CustomerDetailParams {
@@ -110,6 +111,8 @@ export async function buildCustomerDetail(
 
   // مرجوعی‌ها هرگز در راپور مشتری نمایش داده نمی‌شوند
   conditions.push(isNull(sales.returnedAt));
+  // پیش‌نویس‌ها در راپور مشتری نمایش داده نمی‌شوند
+  conditions.push(eq(sales.status, "final"));
 
   const whereClause = conditions.length ? and(...conditions) : undefined;
 
@@ -153,6 +156,37 @@ export async function buildCustomerDetail(
     isExternal: Boolean(r.isExternal),
   }));
 
+  // پرداخت‌های مشتری — تاریخ و مبلغ هر پرداخت (روی همان فاکتورهای این راپور)
+  const rawPayments = await db
+    .select({
+      id: payments.id,
+      paymentDate: payments.paymentDate,
+      amount: payments.amount,
+      note: payments.note,
+      saleId: payments.saleId,
+      invoiceNumber: sales.invoiceNumber,
+      partName: sql<string | null>`coalesce(${parts.name}, ${sales.itemName})`,
+      receivedBy: user.name,
+    })
+    .from(payments)
+    .innerJoin(sales, eq(payments.saleId, sales.id))
+    .leftJoin(customers, eq(sales.customerId, customers.id))
+    .leftJoin(parts, eq(sales.partId, parts.id))
+    .leftJoin(user, eq(payments.receivedBy, user.id))
+    .where(whereClause)
+    .orderBy(sql`${payments.paymentDate} DESC`);
+
+  const paymentRows: CustomerDetailPaymentRow[] = rawPayments.map((p) => ({
+    id: p.id,
+    paymentDate: p.paymentDate ? new Date(p.paymentDate).toISOString() : "",
+    amount: Number(p.amount) || 0,
+    note: p.note,
+    saleId: p.saleId,
+    invoiceNumber: p.invoiceNumber,
+    partName: p.partName,
+    receivedBy: p.receivedBy,
+  }));
+
   const totals = rows.reduce(
     (a, r) => ({
       salesCount: a.salesCount + 1,
@@ -176,6 +210,7 @@ export async function buildCustomerDetail(
     customer,
     partners: partnerRows,
     rows,
+    payments: paymentRows,
     totals,
     filters: {
       period,

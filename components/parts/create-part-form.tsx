@@ -266,7 +266,7 @@ export function CreatePartForm() {
                     <div className="space-y-0.5">
                       <FormLabel className="text-base">Active</FormLabel>
                       <FormDescription>
-                        Inactive parts won't appear in sales and imports
+                        Inactive parts won&apos;t appear in sales and imports
                       </FormDescription>
                     </div>
                     <FormControl>

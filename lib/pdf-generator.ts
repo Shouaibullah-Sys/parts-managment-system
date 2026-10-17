@@ -432,7 +432,7 @@ export async function generateInvoicePDF(
     // ----------------------
     // INVOICE META
     // ----------------------
-    let y = 140;
+    const y = 140;
     doc.setFontSize(10);
     doc.setTextColor(...INK);
     doc.text(

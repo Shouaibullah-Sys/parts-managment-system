@@ -19,12 +19,15 @@ interface CustomerSelectorProps {
   onCustomerSelect: (customer: Customer | null) => void;
   onNewCustomer: () => void;
   disabled?: boolean;
+  // پیش‌پرکردن مشتری هنگام بارگذاری یک پیش‌نویس
+  initialCustomer?: Customer | null;
 }
 
 export function CustomerSelector({
   onCustomerSelect,
   onNewCustomer,
   disabled = false,
+  initialCustomer = null,
 }: CustomerSelectorProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Customer[]>([]);
@@ -53,6 +56,24 @@ export function CustomerSelector({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // هم‌گام‌سازی با مشتری پیش‌پر‌شده (بارگذاری پیش‌نویس از والد)
+  useEffect(() => {
+    if (initialCustomer) {
+      skipNextSearch.current = true;
+      setSelectedCustomer(initialCustomer);
+      setSearchQuery(initialCustomer.name);
+      setShowResults(false);
+      setSearchResults([]);
+      setHighlightedIndex(-1);
+    } else {
+      setSelectedCustomer(null);
+      setSearchQuery("");
+      setShowResults(false);
+      setSearchResults([]);
+      setHighlightedIndex(-1);
+    }
+  }, [initialCustomer]);
 
   // Search customers
   useEffect(() => {

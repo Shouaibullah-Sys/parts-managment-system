@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db/drizzle";
 import { expenses, sales } from "@/db/schema";
-import { sql, and, gte, lte, isNull } from "drizzle-orm";
+import { sql, and, eq, gte, lte, isNull } from "drizzle-orm";
 
 interface DateRange {
   from: Date;
@@ -254,7 +254,8 @@ export async function GET(req: Request) {
           and(
             gte(sales.saleDate, dateRange.from),
             lte(sales.saleDate, dateRange.to),
-            isNull(sales.returnedAt)
+            isNull(sales.returnedAt),
+            eq(sales.status, "final")
           )
         ),
     ]);

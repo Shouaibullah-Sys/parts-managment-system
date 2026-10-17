@@ -17,6 +17,7 @@ export async function GET() {
                outstanding,
                total_amount - CASE WHEN part_id IS NULL THEN COALESCE(item_cost, unit_cost, 0) * quantity ELSE 0 END AS net_total
         FROM sales
+        WHERE status = 'final'
       ) s
     `);
 

@@ -44,11 +44,13 @@ import {
   Search,
   X,
   Pencil,
+  Save,
   Phone,
   MapPin,
   MessageSquare,
   CheckCircle2,
   AlertTriangle,
+  Users,
 } from "lucide-react";
 import { CustomerSelector } from "./customer-selector";
 import { SupplierSelectField } from "./supplier-select-field";
@@ -72,6 +74,9 @@ interface Part {
   minStock: number;
   costPrice?: string | null;
   active?: boolean;
+  partnerId?: number | null;
+  partnerName?: string | null;
+  partnerPercentage?: string | null;
 }
 
 interface CartItem {
@@ -88,6 +93,42 @@ interface ExternalItem {
   itemCost: number;
   supplierId?: number | null;
   supplierName?: string | null;
+}
+
+// پیش‌نویس ذخیره‌شده (فهرست کنار فرم صدور)
+interface DraftSummary {
+  issueId: string;
+  customerId: number | null;
+  customerName: string;
+  invoiceNumber: string | null;
+  createdAt: string;
+  totalAmount: string;
+  itemCount: number;
+}
+
+interface DraftDetailItem {
+  saleId: number;
+  partId: number | null;
+  partNumber: string;
+  name: string;
+  isExternal: boolean;
+  itemName: string | null;
+  itemCost: number;
+  supplierId: number | null;
+  supplierName: string | null;
+  quantity: number;
+  unitPrice: number;
+}
+
+interface DraftDetail {
+  issueId: string;
+  customerId: number | null;
+  customerName: string;
+  customerPhone: string;
+  customerAddress: string;
+  invoiceNumber: string;
+  invoiceDate: string;
+  items: DraftDetailItem[];
 }
 
 const afn = (n: number) =>
@@ -169,6 +210,14 @@ export function IssuePartsTable() {
   });
   const [externalSupplier, setExternalSupplier] = useState<Supplier | null>(null);
 
+  // پیش‌نویس‌ها: فهرست، شناسهٔ پیش‌نویس در حال ویرایش، و مشتری پیش‌پر
+  const [drafts, setDrafts] = useState<DraftSummary[]>([]);
+  const [draftsLoading, setDraftsLoading] = useState(false);
+  const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
+  const [loadingDraftId, setLoadingDraftId] = useState<string | null>(null);
+  const [prefillCustomer, setPrefillCustomer] = useState<Customer | null>(null);
+  const [draftsDialogOpen, setDraftsDialogOpen] = useState(false);
+
   const loadParts = useCallback(async () => {
     try {
       setPartsLoading(true);
@@ -204,6 +253,25 @@ export function IssuePartsTable() {
   useEffect(() => {
     loadParts();
   }, [loadParts]);
+
+  const loadDrafts = useCallback(async () => {
+    try {
+      setDraftsLoading(true);
+      const res = await fetch("/api/issue-parts/drafts");
+      const json = await res.json();
+      if (json.success && Array.isArray(json.data)) {
+        setDrafts(json.data);
+      }
+    } catch (e) {
+      console.error("Error loading drafts:", e);
+    } finally {
+      setDraftsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadDrafts();
+  }, [loadDrafts]);
 
   // Instant client-side search over the loaded catalog.
   useEffect(() => {
@@ -412,6 +480,8 @@ export function IssuePartsTable() {
     setInvoiceNumber("");
     setNotes("");
     setError(null);
+    setActiveDraftId(null);
+    setPrefillCustomer(null);
   };
 
   const generateAndDownloadPDF = async (customerId: number, salesIds?: number[]) => {
@@ -449,7 +519,7 @@ export function IssuePartsTable() {
     return true;
   };
 
-  const handleSave = async () => {
+  const submitIssue = async (mode: "draft" | "finalize") => {
     if (!validate()) return;
     setIsLoading(true);
     setError(null);
@@ -465,18 +535,33 @@ export function IssuePartsTable() {
           invoiceNumber: invoiceNumber.trim(),
           notes: notes.trim(),
           items: buildItemsPayload(),
-          action: "save",
+          action: mode,
+          issueId: activeDraftId ?? undefined,
         }),
       });
       const result = await response.json();
-      if (result.success) {
-        await generateAndDownloadPDF(result.data.customerId, result.data.salesIds);
-        toast.success("بل ذخیره شد");
-        resetForm();
-        router.push("/parts/records");
+      if (!result.success) {
+        const msg =
+          result.message ||
+          (mode === "draft" ? "خطا در ذخیره پیش‌نویس" : "خطا در ایجاد سند");
+        setError(msg);
+        toast.error(msg);
+        return;
+      }
+
+      if (mode === "draft") {
+        setActiveDraftId(result.data.issueId);
+        toast.success("پیش‌نویس ذخیره شد");
+        await loadDrafts();
       } else {
-        setError(result.message || "خطا در ایجاد سند");
-        toast.error(result.message || "خطا در ایجاد سند");
+        await generateAndDownloadPDF(
+          result.data.customerId,
+          result.data.salesIds,
+        );
+        toast.success("بل ثبت شد");
+        resetForm();
+        await loadDrafts();
+        router.push("/parts/records");
       }
     } catch (e) {
       console.error("Error submitting issue:", e);
@@ -484,6 +569,106 @@ export function IssuePartsTable() {
       toast.error("خطا در اتصال به سرور");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSave = () => submitIssue("finalize");
+  const handleSaveDraft = () => submitIssue("draft");
+
+  // بارگذاری یک پیش‌نویس در فرم (سبد + مشتری + فاکتور) برای ویرایش/ثبت نهایی.
+  const loadDraft = async (draft: DraftSummary) => {
+    setLoadingDraftId(draft.issueId);
+    try {
+      const res = await fetch(`/api/issue-parts/drafts/${draft.issueId}`);
+      const json = await res.json();
+      if (!json.success) {
+        toast.error(json.message || "خطا در بارگذاری پیش‌نویس");
+        return;
+      }
+
+      const detail: DraftDetail = json.data;
+      const nextCart: CartItem[] = [];
+      const nextExternal: ExternalItem[] = [];
+
+      for (const it of detail.items) {
+        if (it.isExternal) {
+          nextExternal.push({
+            tempId: `${it.saleId}-${Math.random().toString(36).slice(2)}`,
+            itemName: it.itemName || it.name || "",
+            quantity: it.quantity,
+            customPrice: it.unitPrice,
+            itemCost: it.itemCost || 0,
+            supplierId: it.supplierId ?? null,
+            supplierName: it.supplierName ?? null,
+          });
+        } else if (it.partId != null) {
+          const part: Part =
+            parts.find((p) => p.id === it.partId) ??
+            ({
+              id: it.partId,
+              partNumber: it.partNumber || "",
+              name: it.name || "",
+              currentStock: it.quantity,
+              salePrice: String(it.unitPrice),
+              minStock: 0,
+            } satisfies Part);
+          nextCart.push({
+            part,
+            quantity: it.quantity,
+            customPrice: it.unitPrice,
+          });
+        }
+      }
+
+      const cust: Customer | null =
+        detail.customerId != null
+          ? {
+              id: detail.customerId,
+              name: detail.customerName,
+              normalizedName: "",
+              phone: detail.customerPhone || null,
+              address: detail.customerAddress || null,
+            }
+          : null;
+
+      setCart(nextCart);
+      setExternalItems(nextExternal);
+      setIsNewCustomer(false);
+      setCustomerName(detail.customerName);
+      setCustomerPhone(detail.customerPhone);
+      setCustomerAddress(detail.customerAddress);
+      setSelectedCustomer(cust);
+      setPrefillCustomer(cust);
+      setInvoiceNumber(detail.invoiceNumber || "");
+      setInvoiceDate(detail.invoiceDate);
+      setNotes("");
+      setActiveDraftId(detail.issueId);
+      setError(null);
+      toast.success("پیش‌نویس باز شد");
+    } catch (e) {
+      console.error("Error loading draft:", e);
+      toast.error("خطا در بارگذاری پیش‌نویس");
+    } finally {
+      setLoadingDraftId(null);
+    }
+  };
+
+  const deleteDraft = async (issueId: string) => {
+    try {
+      const res = await fetch(`/api/issue-parts/drafts/${issueId}`, {
+        method: "DELETE",
+      });
+      const json = await res.json();
+      if (!json.success) {
+        toast.error(json.message || "خطا در حذف پیش‌نویس");
+        return;
+      }
+      toast.success("پیش‌نویس حذف شد");
+      if (activeDraftId === issueId) resetForm();
+      await loadDrafts();
+    } catch (e) {
+      console.error("Error deleting draft:", e);
+      toast.error("خطا در حذف پیش‌نویس");
     }
   };
 
@@ -498,6 +683,7 @@ export function IssuePartsTable() {
   };
 
   const handleNewCustomer = () => {
+    setPrefillCustomer(null);
     setIsNewCustomer(true);
     setSelectedCustomer(null);
     setCustomerName("");
@@ -527,6 +713,25 @@ export function IssuePartsTable() {
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
       {/* ── Main: search + basket grid ───────────────────────────────── */}
       <div className="lg:col-span-2 space-y-4">
+        {activeDraftId && (
+          <div className="flex items-center justify-between gap-2 rounded-lg border border-amber-400/50 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+            <span className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              در حال ویرایش پیش‌نویس — پس از تکمیل، «ثبت و صدور بل» را بزنید.
+            </span>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-7 text-amber-800 hover:text-amber-900 dark:text-amber-200"
+              onClick={resetForm}
+              disabled={isLoading}
+            >
+              <X className="mr-1 h-4 w-4" />
+              پیش‌نویس جدید
+            </Button>
+          </div>
+        )}
         <div className="relative">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -587,6 +792,26 @@ export function IssuePartsTable() {
                             </span>
                           </div>
                           <p className="font-medium truncate mt-0.5">{part.name}</p>
+                          <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                            <Users className="h-3 w-3 shrink-0" />
+                            {part.partnerName ? (
+                              <>
+                                <span>{part.partnerName}</span>
+                                {part.partnerPercentage != null &&
+                                  Number(part.partnerPercentage) > 0 && (
+                                    <span className="text-primary font-medium">
+                                      {Number(part.partnerPercentage).toLocaleString(
+                                        "en-US",
+                                        { maximumFractionDigits: 2 },
+                                      )}
+                                      ٪
+                                    </span>
+                                  )}
+                              </>
+                            ) : (
+                              <span>بدون شریک</span>
+                            )}
+                          </p>
                         </div>
                         <div className="flex items-center gap-4 shrink-0">
                           <StockPill part={part} />
@@ -877,6 +1102,27 @@ export function IssuePartsTable() {
 
       {/* ── Sidebar: checkout ────────────────────────────────────────── */}
       <div className="space-y-4 lg:sticky lg:top-6">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => {
+            setDraftsDialogOpen(true);
+            loadDrafts();
+          }}
+          disabled={isLoading}
+          className="w-full justify-between gap-2 border-amber-400 text-amber-700 hover:bg-amber-50 hover:text-amber-800 dark:text-amber-300 dark:hover:bg-amber-950/30"
+        >
+          <span className="flex items-center gap-2">
+            <FileText className="h-4 w-4" />
+            پیش‌نویس‌ها
+          </span>
+          {drafts.length > 0 && (
+            <Badge className="bg-amber-500 hover:bg-amber-500 text-white">
+              {drafts.length}
+            </Badge>
+          )}
+        </Button>
+
         <Card className="shadow-sm">
           <CardHeader className="border-b border-border py-3">
             <CardTitle className="flex items-center gap-2 text-base">
@@ -889,6 +1135,7 @@ export function IssuePartsTable() {
               onCustomerSelect={handleCustomerSelect}
               onNewCustomer={handleNewCustomer}
               disabled={isLoading}
+              initialCustomer={prefillCustomer}
             />
 
             {isNewCustomer && (
@@ -973,18 +1220,30 @@ export function IssuePartsTable() {
               </div>
             )}
 
-            <Button
-              onClick={handleSave}
-              disabled={isLoading || empty}
-              className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
-            >
-              {isLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <CheckCircle2 className="h-4 w-4" />
-              )}
-              ذخیره و ایجاد بل
-            </Button>
+            <div className="grid grid-cols-1 gap-2">
+              <Button
+                onClick={handleSave}
+                disabled={isLoading || empty}
+                className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                {isLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4" />
+                )}
+                {activeDraftId ? "ثبت نهایی و صدور بل" : "ثبت و صدور بل"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleSaveDraft}
+                disabled={isLoading || empty}
+                className="w-full gap-2 border-amber-400 text-amber-700 hover:bg-amber-50 hover:text-amber-800 dark:text-amber-300 dark:hover:bg-amber-950/30"
+              >
+                <Save className="h-4 w-4" />
+                {activeDraftId ? "ذخیره تغییرات پیش‌نویس" : "ذخیره پیش‌نویس"}
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -1292,6 +1551,29 @@ export function IssuePartsTable() {
                   <span>موجودی انبار</span>
                   <StockPill part={addPart} />
                 </div>
+                <div className="mt-2 flex items-center justify-between text-muted-foreground">
+                  <span>شریک</span>
+                  <span className="flex items-center gap-1 text-foreground">
+                    <Users className="h-3 w-3 shrink-0" />
+                    {addPart.partnerName ? (
+                      <>
+                        <span>{addPart.partnerName}</span>
+                        {addPart.partnerPercentage != null &&
+                          Number(addPart.partnerPercentage) > 0 && (
+                            <span className="text-primary font-medium">
+                              {Number(addPart.partnerPercentage).toLocaleString(
+                                "en-US",
+                                { maximumFractionDigits: 2 },
+                              )}
+                              ٪
+                            </span>
+                          )}
+                      </>
+                    ) : (
+                      <span className="text-muted-foreground">بدون شریک</span>
+                    )}
+                  </span>
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -1438,6 +1720,124 @@ export function IssuePartsTable() {
             <Button type="button" onClick={confirmAddPrice} className="gap-2">
               <CheckCircle2 className="h-4 w-4" />
               افزودن به سبد
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Drafts dialog ────────────────────────────────────────────── */}
+      <Dialog open={draftsDialogOpen} onOpenChange={setDraftsDialogOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-amber-600" />
+              پیش‌نویس‌ها
+              {drafts.length > 0 && (
+                <Badge className="bg-amber-500 hover:bg-amber-500 text-white">
+                  {drafts.length}
+                </Badge>
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              برای ویرایش، روی هر ردیف کلیک کنید؛ سبد و مشخصات آن در فرم
+              بارگذاری می‌شود.
+            </DialogDescription>
+          </DialogHeader>
+
+          {draftsLoading && drafts.length === 0 ? (
+            <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              در حال بارگذاری…
+            </div>
+          ) : drafts.length === 0 ? (
+            <div className="py-10 text-center text-sm text-muted-foreground">
+              <FileText className="mx-auto mb-2 h-8 w-8 opacity-40" />
+              هیچ پیش‌نویسی ذخیره نشده است
+            </div>
+          ) : (
+            <ul className="divide-y divide-border rounded-lg border border-border">
+              {drafts.map((d) => (
+                <li
+                  key={d.issueId}
+                  className={`flex items-center gap-2 px-3 py-3 transition-colors hover:bg-muted/50 ${
+                    activeDraftId === d.issueId
+                      ? "bg-amber-50/60 dark:bg-amber-950/20"
+                      : ""
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDraftsDialogOpen(false);
+                      loadDraft(d);
+                    }}
+                    disabled={isLoading || loadingDraftId !== null}
+                    className="flex min-w-0 flex-1 flex-col items-start gap-1 text-right disabled:opacity-60"
+                  >
+                    <span className="flex w-full items-center gap-2">
+                      <span className="truncate font-medium text-foreground">
+                        {d.customerName}
+                      </span>
+                      {activeDraftId === d.issueId && (
+                        <Badge
+                          variant="outline"
+                          className="border-amber-400 text-[10px] text-amber-700 dark:text-amber-300"
+                        >
+                          در حال ویرایش
+                        </Badge>
+                      )}
+                      <span className="ms-auto whitespace-nowrap text-sm font-semibold text-foreground tabular-nums">
+                        {afn(parseFloat(d.totalAmount || "0"))}
+                      </span>
+                    </span>
+                    <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span>{d.itemCount} قلم</span>
+                      {d.invoiceNumber && <span>• {d.invoiceNumber}</span>}
+                    </span>
+                  </button>
+                  <div className="flex items-center gap-1">
+                    {loadingDraftId === d.issueId ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    ) : (
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8"
+                        onClick={() => {
+                          setDraftsDialogOpen(false);
+                          loadDraft(d);
+                        }}
+                        disabled={isLoading}
+                        title="باز کردن و ویرایش"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => deleteDraft(d.issueId)}
+                      disabled={isLoading}
+                      title="حذف پیش‌نویس"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDraftsDialogOpen(false)}
+            >
+              بستن
             </Button>
           </DialogFooter>
         </DialogContent>

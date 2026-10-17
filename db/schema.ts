@@ -162,6 +162,8 @@ export const sales = pgTable("sales", {
   issueId: uuid("issue_id").notNull(),
   // شماره فاکتور تایپ‌شده هنگام صدور (اختیاری) — خالی = INV-{customerId}
   invoiceNumber: varchar("invoice_number", { length: 100 }),
+  // وضعیت سند: draft = پیش‌نویس (بدون اثر روی موجودی/بل)، final = فروش نهایی
+  status: varchar("status", { length: 50 }).default("final").notNull(),
 });
 
 // --- جدول پرداخت‌های بعدی مشتری ---

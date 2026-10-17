@@ -342,7 +342,11 @@ export async function addBulkPayment(input: AddBulkPaymentInput) {
       .from(sales)
       .leftJoin(parts, eq(sales.partId, parts.id))
       .where(
-        and(eq(sales.customerId, customer.id), gt(sales.outstanding, "0")),
+        and(
+          eq(sales.customerId, customer.id),
+          gt(sales.outstanding, "0"),
+          eq(sales.status, "final"),
+        ),
       );
 
     allOutstandingSales = [...allOutstandingSales, ...customerSpecificSales];

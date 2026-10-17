@@ -47,8 +47,8 @@ export async function GET(request: NextRequest) {
         ),
       );
     }
-    const where =
-      searchConditions.length > 0 ? and(...searchConditions) : undefined;
+    // پیش‌نویس‌ها در سوابق/بل نمایش داده نمی‌شوند؛ فقط اسناد نهایی.
+    const where = and(eq(sales.status, "final"), ...searchConditions);
 
     // یک ردیف = یک صدور (issue)؛ همهٔ قلم‌های یک بل با هم
     const groups = await db

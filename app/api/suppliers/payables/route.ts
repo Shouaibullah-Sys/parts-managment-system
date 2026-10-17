@@ -5,7 +5,7 @@ import { requireAuth } from "@/lib/auth-session";
 import { ok, unauthorized, serverError } from "@/lib/api-response";
 import { db } from "@/db/drizzle";
 import { sales } from "@/db/schema";
-import { and, isNull, gte, lte, sql } from "drizzle-orm";
+import { and, isNull, eq, gte, lte, sql } from "drizzle-orm";
 import { parseISO, isValid } from "date-fns";
 
 export const runtime = "nodejs";
@@ -66,6 +66,7 @@ export async function GET(request: NextRequest) {
         and(
           isNull(sales.partId),
           isNull(sales.returnedAt),
+          eq(sales.status, "final"),
           ...dateConditions(url)
         )
       )

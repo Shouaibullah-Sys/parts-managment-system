@@ -32,6 +32,17 @@ const money = (v: unknown) =>
   });
 const int = (v: unknown) => Math.round(num(v)).toLocaleString("en-US");
 
+// "yyyy-MM-dd" -> شمسی (Hijri Shamsi); avoids UTC off-by-one of new Date(string)
+const hijri = (d: string) => {
+  if (!d) return "…";
+  const [y, m, day] = d.split("-").map(Number);
+  if (!y) return d;
+  return toEnglishDate(new Date(y, (m || 1) - 1, day || 1));
+};
+
+const hijriRange = (from: string, to: string) =>
+  `${hijri(from)} — ${hijri(to)}`;
+
 export interface ReportCol<T> {
   label: string;
   w: number;
@@ -316,7 +327,7 @@ export async function generateSalesReportPdf(
   data: SalesReportData,
 ): Promise<Uint8Array> {
   const { rows, summary, from, to, filters } = data;
-  const rangeLabel = `${from || "…"} — ${to || "…"}`;
+  const rangeLabel = hijriRange(from, to);
 
   const metrics: ReportMetric[] = [
     { label: "تعداد معاملات", value: int(summary.count), color: NAVY },
@@ -400,7 +411,7 @@ export async function generateReturnsReportPdf(
   data: ReturnsReportData,
 ): Promise<Uint8Array> {
   const { rows, from, to } = data;
-  const rangeLabel = `${from || "…"} — ${to || "…"}`;
+  const rangeLabel = hijriRange(from, to);
 
   const totalQty = rows.reduce((s, r) => s + (Number(r.quantity) || 0), 0);
   const totalAmount = rows.reduce((s, r) => s + num(r.grossAmount), 0);

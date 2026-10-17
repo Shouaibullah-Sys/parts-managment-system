@@ -1,12 +1,22 @@
 import js from "@eslint/js";
 import globals from "globals";
-import pluginJs from "@eslint/js";
 import tseslint from "typescript-eslint";
 import pluginReact from "eslint-plugin-react";
 import pluginReactHooks from "eslint-plugin-react-hooks";
 import pluginNext from "@next/eslint-plugin-next";
 
 export default [
+  {
+    ignores: [
+      ".next/**",
+      "node_modules/**",
+      "dist/**",
+      "build/**",
+      "public/**",
+      "migrations/**",
+      "next-env.d.ts",
+    ],
+  },
   { files: ["**/*.{js,mjs,cjs,ts,tsx}"] },
   {
     languageOptions: {
@@ -15,16 +25,32 @@ export default [
       globals: globals.browser,
     },
   },
-  pluginJs.configs.recommended,
-  ...tseslint.configs.recommended,
-  ...pluginReact.configs.recommended,
-  ...pluginReactHooks.configs.recommended,
-  ...pluginNext.configs.recommended,
   {
+    // Node scripts (migrations/verification helpers) run under Node, not the browser
+    files: ["**/*.{js,mjs,cjs}"],
+    languageOptions: {
+      globals: { ...globals.node },
+    },
+  },
+  js.configs.recommended,
+  ...tseslint.configs.recommended,
+  pluginReact.configs.flat.recommended,
+  pluginReact.configs.flat["jsx-runtime"],
+  {
+    plugins: { "react-hooks": pluginReactHooks },
+    rules: {
+      "react-hooks/rules-of-hooks": "error",
+      "react-hooks/exhaustive-deps": "warn",
+    },
+  },
+  pluginNext.configs.recommended,
+  {
+    settings: { react: { version: "detect" } },
     rules: {
       // Next.js specific rules
       "@next/next/no-html-link-for-pages": "off",
       "react/jsx-key": "warn",
+      "react/prop-types": "off",
       "react-hooks/exhaustive-deps": "warn",
 
       // TypeScript specific rules
@@ -45,6 +71,14 @@ export default [
     files: ["**/*.test.{js,ts,tsx}", "**/*.spec.{js,ts,tsx}"],
     rules: {
       "no-console": "off",
+    },
+  },
+  {
+    // CommonJS Node scripts use require() by design
+    files: ["**/*.{js,cjs,mjs}"],
+    rules: {
+      "@typescript-eslint/no-var-requires": "off",
+      "@typescript-eslint/no-require-imports": "off",
     },
   },
   {

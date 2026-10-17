@@ -113,7 +113,7 @@ export const fetchDashboardStats = async (
         `,
       })
       .from(sales)
-      .where(sql`${sales.returnedAt} IS NULL`);
+      .where(sql`${sales.returnedAt} IS NULL AND ${sales.status} = 'final'`);
 
     // Get total customers
     const customersData = await db
@@ -297,6 +297,9 @@ export const fetchSalesTrend = async (
       paymentsFilter = sql`WHERE p.payment_date <= ${dateRange.to.toISOString()}`;
     }
 
+    // پیش‌نویس‌ها در نمودار فروش حساب نمی‌شوند
+    salesFilter = salesFilter.append(sql` AND s.status = 'final'`);
+
     const query = sql`
       SELECT
         COALESCE(sa.day, pa.day) as date,
@@ -364,20 +367,21 @@ export const fetchPaymentStatus = async (
         COUNT(CASE WHEN is_fully_paid = false AND outstanding < total_amount AND outstanding > 0 THEN 1 END) as partially_paid,
         COUNT(CASE WHEN is_fully_paid = false AND outstanding = total_amount THEN 1 END) as not_paid
       FROM sales
+      WHERE status = 'final'
     `;
 
     // Add WHERE clause based on date parameters
     if (dateRange?.from && dateRange?.to) {
       query = query.append(
-        sql` WHERE sale_date >= ${dateRange.from.toISOString()} AND sale_date <= ${dateRange.to.toISOString()}`
+        sql` AND sale_date >= ${dateRange.from.toISOString()} AND sale_date <= ${dateRange.to.toISOString()}`
       );
     } else if (dateRange?.from) {
       query = query.append(
-        sql` WHERE sale_date >= ${dateRange.from.toISOString()}`
+        sql` AND sale_date >= ${dateRange.from.toISOString()}`
       );
     } else if (dateRange?.to) {
       query = query.append(
-        sql` WHERE sale_date <= ${dateRange.to.toISOString()}`
+        sql` AND sale_date <= ${dateRange.to.toISOString()}`
       );
     }
 
@@ -642,7 +646,8 @@ export const fetchExpenseReports = async (
           and(
             gte(sales.saleDate, dateRange.from),
             lte(sales.saleDate, dateRange.to),
-            isNull(sales.returnedAt)
+            isNull(sales.returnedAt),
+            sql`${sales.status} = 'final'`
           )
         ),
     ]);

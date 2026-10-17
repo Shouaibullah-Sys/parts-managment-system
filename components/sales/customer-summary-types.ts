@@ -114,11 +114,25 @@ export interface CustomerDetailTotals {
   outstanding: number;
 }
 
+/** یک پرداخت ثبت‌شدهٔ مشتری (روی یک فاکتور) */
+export interface CustomerDetailPaymentRow {
+  id: number;
+  /** تاریخ پرداخت */
+  paymentDate: string;
+  amount: number;
+  note: string | null;
+  saleId: number | null;
+  invoiceNumber: string | null;
+  partName: string | null;
+  receivedBy: string | null;
+}
+
 /** دادهٔ کامل راپور انفرادی یک مشتری */
 export interface CustomerDetailData {
   customer: CustomerSummaryRow | null;
   partners: CustomerPartnerRow[];
   rows: CustomerDetailRow[];
+  payments: CustomerDetailPaymentRow[];
   totals: CustomerDetailTotals;
   filters: {
     period: string;

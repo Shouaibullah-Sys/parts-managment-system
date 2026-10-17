@@ -1,6 +1,6 @@
 // lib/customer-detail-pdf.ts
 // راپور انفرادی مشتری — سرورساید (jsPDF)، راست‌چین و افقی
-// بخش‌ها: سرصفحه، شاخص‌ها، خلاصهٔ شرکای مشتری، جزئیات معاملات، مشخصات
+// بخش‌ها: سرصفحه، شاخص‌ها، خلاصهٔ شرکای مشتری، جزئیات معاملات، پرداخت‌ها، مشخصات
 import { jsPDF } from "jspdf";
 import {
   getCachedAssets,
@@ -10,6 +10,7 @@ import {
 import type {
   CustomerDetailData,
   CustomerDetailRow,
+  CustomerDetailPaymentRow,
   CustomerPartnerRow,
 } from "@/components/sales/customer-summary-types";
 
@@ -35,6 +36,14 @@ const money = (v: number | string) =>
   });
 const int = (v: number | string) => Math.round(num(v)).toLocaleString("en-US");
 const pct = (v: number) => `${(Math.round(v * 10) / 10).toFixed(1)}%`;
+
+// "yyyy-MM-dd" -> شمسی (Hijri Shamsi); avoids UTC off-by-one of new Date(string)
+const hijri = (d: string) => {
+  if (!d) return "…";
+  const [y, m, day] = d.split("-").map(Number);
+  if (!y) return d;
+  return toEnglishDate(new Date(y, (m || 1) - 1, day || 1));
+};
 
 type Align = "right" | "center" | "left";
 interface Col<T> {
@@ -65,7 +74,7 @@ export async function generateCustomerDetailPdf(
   const bottomLimit = () => H - 44;
   const rangeLabel =
     from || to
-      ? `${from || "…"} — ${to || "…"}`
+      ? `${hijri(from)} — ${hijri(to)}`
       : period === "lifetime"
         ? "همه سوابق"
         : period;
@@ -387,8 +396,29 @@ export async function generateCustomerDetailPdf(
     "",
   ]);
 
-  /* ۳) مشخصات */
-  sectionBar("۳) مشخصات گزارش");
+  /* ۳) پرداخت‌ها — تاریخ و مبلغ هر پرداخت */
+  const paymentCols: Col<CustomerDetailPaymentRow>[] = [
+    { label: "#", w: 3, align: "center", get: (_r, i) => int(i + 1) },
+    { label: "تاریخ پرداخت", w: 12, align: "center", get: (r) => (r.paymentDate ? toEnglishDate(new Date(r.paymentDate)) : "—") },
+    { label: "مبلغ پرداخت", w: 12, align: "center", color: GREEN, get: (r) => money(r.amount) },
+    { label: "شماره فاکتور", w: 12, align: "center", get: (r) => r.invoiceNumber || "—" },
+    { label: "قطعه", w: 20, align: "right", get: (r) => r.partName || "—" },
+    { label: "یادداشت", w: 20, align: "right", get: (r) => r.note || "—" },
+    { label: "دریافت‌کننده", w: 12, align: "right", get: (r) => r.receivedBy || "نامشخص" },
+  ];
+  const paymentsTotal = data.payments.reduce((s, p) => s + p.amount, 0);
+  renderTable("۳) پرداخت‌ها", paymentCols, data.payments, [
+    "",
+    "مجموع کل",
+    money(paymentsTotal),
+    "",
+    "",
+    "",
+    "",
+  ]);
+
+  /* ۴) مشخصات */
+  sectionBar("۴) مشخصات گزارش");
   const paymentLabel =
     paymentStatus === "paid"
       ? "فقط پرداخت‌شده"
@@ -398,7 +428,7 @@ export async function generateCustomerDetailPdf(
   const metaLines = [
     `مشتری: ${customerName}    بازه: ${rangeLabel}    دوره: ${period}`,
     `فیلتر پرداخت: ${paymentLabel}${search ? `    جستجو: ${search}` : ""}`,
-    `تعداد فاکتور: ${int(data.totals.salesCount)}    تعداد قطعه: ${int(data.totals.quantity)}    شرکا: ${int(data.partners.length)}`,
+    `تعداد فاکتور: ${int(data.totals.salesCount)}    تعداد قطعه: ${int(data.totals.quantity)}    تعداد پرداخت: ${int(data.payments.length)}    شرکا: ${int(data.partners.length)}`,
     "سود ناخالص = فروش ناخالص − بهای تمام‌شده    •    سهم شریک = سود ناخالص × درصد شریک",
     "سهم مغازه = سود ناخالص − سهم شریک    •    باقی‌مانده = مبلغ پرداخت‌نشده",
     "فروش‌های مرتجع در این راپور لحاظ نشده‌اند.",

@@ -98,6 +98,8 @@ export async function buildCustomerSummary(
 
   // مرجوعی‌ها همیشه از خلاصه مشتریان حذف می‌شوند (مثل نمای فعلی)
   conditions.push(isNull(sales.returnedAt));
+  // پیش‌نویس‌ها در خلاصه مشتریان حساب نمی‌شوند
+  conditions.push(eq(sales.status, "final"));
 
   const whereClause = conditions.length ? and(...conditions) : undefined;
 

@@ -19,7 +19,7 @@ export const partsQueries = {
     const { page = 1, limit = 25, search, active } = options;
     const offset = (page - 1) * limit;
 
-    let whereConditions = [];
+    const whereConditions = [];
 
     if (search) {
       whereConditions.push(

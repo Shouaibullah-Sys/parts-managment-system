@@ -38,6 +38,8 @@ export async function buildPartnerReport(
   }
 
   const baseConditions = [];
+  // پیش‌نویس‌ها در گزارش شرکا نمی‌آیند
+  baseConditions.push(eq(sales.status, "final"));
   if (dateConditions.length) baseConditions.push(and(...dateConditions));
   if (!includeReturned) baseConditions.push(isNull(sales.returnedAt));
   if (partnerId) {

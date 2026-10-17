@@ -38,6 +38,8 @@ import {
   Package,
   Smartphone,
   Monitor,
+  Coins,
+  Wallet,
 } from "lucide-react";
 import { Part, PartsResponse } from "@/types/parts";
 import { useParts } from "@/hooks/use-parts";
@@ -103,6 +105,13 @@ export function PartsTable() {
   const totalParts = paginationData.total || 0;
   const activeParts = partsData.filter((part) => part.active).length;
   const inactiveParts = totalParts - activeParts;
+
+  const summaryData = (partsResponse as PartsResponse)?.summary || {
+    totalCostValue: 0,
+    totalSaleValue: 0,
+  };
+  const afn = (n: number) =>
+    n.toLocaleString("en-US", { maximumFractionDigits: 2 });
 
   // Define columns for mobile and desktop
   const mobileColumns: ColumnDef<Part>[] = [
@@ -425,7 +434,7 @@ export function PartsTable() {
       </div>
 
       {/* Summary Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="bg-mechanical border-mechanical rounded-lg p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
@@ -468,6 +477,38 @@ export function PartsTable() {
             </div>
             <div className="p-2 rounded-full bg-amber-100 dark:bg-amber-950">
               <div className="h-3 w-3 rounded-full bg-amber-600"></div>
+            </div>
+          </div>
+        </div>
+        <div className="bg-mechanical border-mechanical rounded-lg p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-muted-foreground">
+                مجموع قیمت خرید
+              </p>
+              <p className="text-2xl font-bold text-foreground truncate">
+                {afn(summaryData.totalCostValue)}{" "}
+                <span className="text-sm font-normal">افغانی</span>
+              </p>
+            </div>
+            <div className="p-2 rounded-full bg-primary/10 shrink-0">
+              <Coins className="h-5 w-5 text-primary" />
+            </div>
+          </div>
+        </div>
+        <div className="bg-mechanical border-mechanical rounded-lg p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-muted-foreground">
+                مجموع قیمت فروش
+              </p>
+              <p className="text-2xl font-bold text-green-600 truncate">
+                {afn(summaryData.totalSaleValue)}{" "}
+                <span className="text-sm font-normal">افغانی</span>
+              </p>
+            </div>
+            <div className="p-2 rounded-full bg-green-100 dark:bg-green-950 shrink-0">
+              <Wallet className="h-5 w-5 text-green-600" />
             </div>
           </div>
         </div>

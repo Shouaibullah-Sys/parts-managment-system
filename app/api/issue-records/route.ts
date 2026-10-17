@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     const offset = (page - 1) * limit;
 
     // Build where conditions
-    const whereConditions = [];
+    const whereConditions = [eq(sales.status, "final")];
     if (search) {
       whereConditions.push(like(customers.name, `%${search}%`));
     }

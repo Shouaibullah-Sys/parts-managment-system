@@ -43,6 +43,9 @@ export async function GET(request: Request) {
       salesFilter = sql`WHERE s.returned_at IS NULL`;
     }
 
+    // پیش‌نویس‌ها در روند فروش حساب نمی‌شوند
+    salesFilter = salesFilter.append(sql` AND s.status = 'final'`);
+
     const query = sql`
       SELECT
         COALESCE(sa.day, pa.day) as date,

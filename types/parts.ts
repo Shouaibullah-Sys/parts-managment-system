@@ -44,6 +44,11 @@ export type PartsResponse = {
   success: boolean;
   data: Part[];
   pagination: PaginationInfo;
+  /** ارزش انبار: مجموع (قیمت × موجودی) روی همهٔ ردیف‌های فیلترشده */
+  summary?: {
+    totalCostValue: number;
+    totalSaleValue: number;
+  };
 };
 
 export type PartDetailsResponse = {

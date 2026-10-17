@@ -632,9 +632,28 @@ export default function AdminSalesPage() {
     },
   ];
 
+  // Filter records for the sales details table — empty until a customer is
+  // selected from the customer summary list.
+  const filteredRecords =
+    salesData?.data?.filter((record) => {
+      const matchesSearch =
+        !searchTerm ||
+        record.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        record.normalizedName
+          ?.toLowerCase()
+          .includes(searchTerm.toLowerCase()) ||
+        record.partName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        record.partNumber?.toLowerCase().includes(searchTerm.toLowerCase());
+
+      const matchesCustomer =
+        !!selectedCustomer && record.normalizedName === selectedCustomer;
+
+      return matchesSearch && matchesCustomer;
+    }) || [];
+
   // TanStack Table instance
   const table = useReactTable({
-    data: salesData?.data || [],
+    data: filteredRecords,
     columns: salesColumns,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
@@ -997,24 +1016,6 @@ export default function AdminSalesPage() {
       setIsProcessingBulkPayment(false);
     }
   };
-
-  // Filter records for customer summary
-  const filteredRecords =
-    salesData?.data?.filter((record) => {
-      const matchesSearch =
-        !searchTerm ||
-        record.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        record.normalizedName
-          ?.toLowerCase()
-          .includes(searchTerm.toLowerCase()) ||
-        record.partName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        record.partNumber?.toLowerCase().includes(searchTerm.toLowerCase());
-
-      const matchesCustomer =
-        !selectedCustomer || record.normalizedName === selectedCustomer;
-
-      return matchesSearch && matchesCustomer;
-    }) || [];
 
   // خلاصه مشتریان از سرور (تجمعی و کامل — شامل شرکا)
   // فروش‌های مرتجع در این گزارش لحاظ نمی‌شوند (در سمت سرور فیلتر شده‌اند)
@@ -1613,6 +1614,18 @@ export default function AdminSalesPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <CardTitle className="text-foreground">خلاصه مشتریان</CardTitle>
             <div className="flex items-center gap-2">
+              {selectedCustomer && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedCustomer(null)}
+                  className="border-amber-500 text-amber-600 hover:bg-amber-50"
+                  title="حذف فیلتر مشتری و نمایش همه مشتریان"
+                >
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  حذف فیلتر
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
@@ -1825,10 +1838,14 @@ export default function AdminSalesPage() {
                 size="sm"
               />
             </div>
-          ) : !salesData?.data || salesData.data.length === 0 ? (
+          ) : filteredRecords.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <DollarSign className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>هیچ سابقه فروشی یافت نشد</p>
+              <p>
+                {selectedCustomer
+                  ? "هیچ سابقه فروشی برای این مشتری یافت نشد"
+                  : "برای مشاهده جزئیات فروش، یک مشتری را از «خلاصه مشتریان» انتخاب کنید"}
+              </p>
             </div>
           ) : isMobile ? (
             // Mobile Card View

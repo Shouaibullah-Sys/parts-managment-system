@@ -37,7 +37,13 @@ export async function getCustomerBalance(id: number) {
       totalSales: sql<string>`COALESCE(SUM(${sales.totalAmount}), 0)`,
     })
     .from(sales)
-    .where(and(eq(sales.customerId, id), isNull(sales.returnedAt)));
+    .where(
+      and(
+        eq(sales.customerId, id),
+        isNull(sales.returnedAt),
+        eq(sales.status, "final"),
+      ),
+    );
 
   const totalSales = Number(salesResult[0]?.totalSales ?? 0);
 

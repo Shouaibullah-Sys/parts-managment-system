@@ -58,7 +58,7 @@ export async function fetchSalesData(params: FetchSalesDataParams) {
   }
 
   // Apply custom date range if provided
-  let dateConditions = [];
+  const dateConditions = [];
   if (fromDate) {
     const fromDateObj = parseISO(fromDate);
     if (isValid(fromDateObj)) {
@@ -77,6 +77,9 @@ export async function fetchSalesData(params: FetchSalesDataParams) {
 
   // Build query conditions
   const baseConditions = [];
+
+  // پیش‌نویس‌ها هرگز در لیست فروش/گزارش‌ها/جمع‌ها ظاهر نمی‌شوند
+  baseConditions.push(eq(sales.status, "final"));
 
   if (Object.keys(dateFilter).length > 0) {
     baseConditions.push(dateFilter as any);

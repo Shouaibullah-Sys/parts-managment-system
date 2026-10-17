@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
       .from(parts)
       .where(eq(parts.active, true));
 
-    let results = [];
+    const results = [];
 
     // Add initial inventory for each part
     for (const part of allParts) {

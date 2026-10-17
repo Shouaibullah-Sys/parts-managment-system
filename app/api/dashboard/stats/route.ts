@@ -27,7 +27,7 @@ export async function GET() {
         `,
       })
       .from(sales)
-      .where(sql`${sales.returnedAt} IS NULL`);
+      .where(sql`${sales.returnedAt} IS NULL AND ${sales.status} = 'final'`);
 
     // Get total customers
     const customersData = await db

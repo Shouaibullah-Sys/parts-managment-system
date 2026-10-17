@@ -7,7 +7,7 @@ import { requireAuth } from "@/lib/auth-session";
 import { ok, bad, unauthorized, serverError } from "@/lib/api-response";
 import { db } from "@/db/drizzle";
 import { parts, inventory, sales } from "@/db/schema";
-import { sql, eq, desc } from "drizzle-orm";
+import { sql, eq, and, desc } from "drizzle-orm";
 
 export async function GET(request: NextRequest) {
   try {
@@ -41,7 +41,7 @@ async function getPopularParts() {
       currentStock: sql<number>`COALESCE(SUM(${inventory.change}), 0)`,
     })
     .from(parts)
-    .leftJoin(sales, eq(parts.id, sales.partId))
+    .leftJoin(sales, and(eq(parts.id, sales.partId), eq(sales.status, "final")))
     .leftJoin(inventory, eq(parts.id, inventory.partId))
     .groupBy(parts.id)
     .orderBy(desc(sql`COUNT(${sales.id})`))
@@ -59,6 +59,7 @@ async function getFrequentlyIssuedParts() {
       issueDate: sales.saleDate,
     })
     .from(sales)
+    .where(eq(sales.status, "final"))
     .orderBy(sales.saleDate)
     .limit(1000);
 
